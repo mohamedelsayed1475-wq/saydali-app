@@ -122,15 +122,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 16),
 
-                // اسم الدواء مع اقتراحات
-                Autocomplete<String>(
-                  optionsBuilder: (v) => suggestions.where((s) => s.contains(v.text)),
-                  onSelected: (s) => nameCtrl.text = s,
-                  fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                    if (existing != null) ctrl.text = existing.name;
-                    return AppTextField(hint: 'اسم الدواء *', controller: ctrl);
-                  },
-                ),
+                AppTextField(hint: 'اسم الدواء *', controller: nameCtrl),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة المصنعة', controller: companyCtrl),
                 const SizedBox(height: 10),
