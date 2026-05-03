@@ -22,6 +22,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
   bool _loading = true;
   bool _sending = false;
   String? _generatedLink;
+  String? _sessionCode;
 
   @override
   void initState() {
@@ -33,12 +34,10 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
     final data = await DatabaseHelper.instance.getShortages();
     if (mounted) {
       setState(() {
-        // فقط الأصناف pending أو stubborn
         _shortages = data
             .map(Shortage.fromMap)
             .where((s) => s.status == 'pending' || s.status == 'stubborn')
             .toList();
-        // اختيار كل الـ pending تلقائياً
         _selected = _shortages
             .where((s) => s.status == 'pending' && !s.isUrgent)
             .map((s) => s.id!)
@@ -77,6 +76,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       setState(() => _sending = false);
       if (code != null) {
         setState(() {
+          _sessionCode = code;
           _generatedLink = SupabaseService.instance.buildRepLink(code);
         });
         _showLinkSheet();
@@ -185,7 +185,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                   Navigator.pop(ctx);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const RepResponseScreen()),
+                    MaterialPageRoute(builder: (_) => RepResponseScreen(initialCode: _sessionCode)),
                   );
                 },
                 style: OutlinedButton.styleFrom(

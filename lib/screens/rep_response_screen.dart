@@ -8,17 +8,29 @@ import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
 class RepResponseScreen extends StatefulWidget {
-  const RepResponseScreen({super.key});
+  final String? initialCode;
+  const RepResponseScreen({super.key, this.initialCode});
 
   @override
   State<RepResponseScreen> createState() => _RepResponseScreenState();
 }
 
 class _RepResponseScreenState extends State<RepResponseScreen> {
-  final _codeCtrl = TextEditingController();
+  late final TextEditingController _codeCtrl;
   bool _loading = false;
   String? _error;
   RepResponse? _response;
+
+  @override
+  void initState() {
+    super.initState();
+    _codeCtrl = TextEditingController(text: widget.initialCode ?? '');
+    if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fetchResponse();
+      });
+    }
+  }
 
   @override
   void dispose() {
