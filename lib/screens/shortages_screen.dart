@@ -158,7 +158,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     bool isUrgent = existing?.isUrgent ?? false;
     String status = existing?.status ?? 'pending';
 
-    final suggestions = ['أوجمنتين', 'برونكوسول', 'فلاجيل', 'فنتولين', 'كونكور', 'زيثروماكس', 'بنادول', 'فولتارين', 'ريزولين', 'بريدنيزون'];
+
 
     await showModalBottomSheet(
       context: context,
@@ -261,7 +261,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 // عاجل
                 Row(
                   children: [
-                    Switch(value: isUrgent, onChanged: (v) => setBS(() => isUrgent = v), activeColor: AppColors.danger),
+                    Switch(value: isUrgent, onChanged: (v) => setBS(() => isUrgent = v), activeThumbColor: AppColors.danger),
                     const Text('عاجل 🚨', style: TextStyle(color: AppColors.textLight)),
                   ],
                 ),

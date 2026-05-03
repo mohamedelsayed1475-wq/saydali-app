@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'dart:convert';
 import 'dart:math';
 import '../database/database_helper.dart';
 import '../models/models.dart';
@@ -130,12 +128,6 @@ class _RepsScreenState extends State<RepsScreen> {
       context,
       MaterialPageRoute(builder: (_) => SendToRepScreen(rep: rep)),
     );
-  }
-
-  String _generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rand = Random.secure();
-    return List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
   }
 
   @override

@@ -94,7 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('تفعيل الإشعارات', style: TextStyle(color: AppColors.textColor)),
             subtitle: const Text('تنبيهات النواقص والديون', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
             value: _notificationsEnabled,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
             onChanged: (v) => setState(() => _notificationsEnabled = v),
             contentPadding: EdgeInsets.zero,
           ),

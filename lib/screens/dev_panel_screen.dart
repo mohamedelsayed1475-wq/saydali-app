@@ -419,7 +419,7 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                           ),
                           Switch(
                             value: isActive,
-                            activeColor: AppColors.primary,
+                            activeThumbColor: AppColors.primary,
                             onChanged: (v) async {
                               final db = await DatabaseHelper.instance.database;
                               await db.update('ads', {'is_active': v ? 1 : 0}, where: 'id = ?', whereArgs: [ad['id']]);

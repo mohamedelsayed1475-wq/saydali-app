@@ -22,7 +22,6 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
   bool _loading = true;
   bool _sending = false;
   String? _generatedLink;
-  String? _sessionCode;
 
   @override
   void initState() {

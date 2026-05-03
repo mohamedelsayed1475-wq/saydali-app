@@ -200,8 +200,6 @@ class _DebtsScreenState extends State<DebtsScreen> {
                             amountCtrl.clear();
                             descCtrl.clear();
                             await _loadCustomers();
-                            final updated = await DatabaseHelper.instance.getCustomers();
-                            final updatedCustomer = updated.firstWhere((c) => c['id'] == customer.id);
                             final newTransactions = await DatabaseHelper.instance.getCustomerTransactions(customer.id!);
                             setBS(() {
                               txList.clear();

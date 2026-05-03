@@ -17,7 +17,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, int> _stats = {};
   double _totalDebt = 0;
-  String _pharmacyName = 'صيدليتي';
   bool _loading = true;
 
   @override
