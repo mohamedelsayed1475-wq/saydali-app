@@ -111,9 +111,14 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     final pdf = pw.Document();
     final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
 
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+
     pdf.addPage(pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(32),
+      theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+      textDirection: pw.TextDirection.rtl,
       build: (pw.Context context) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
