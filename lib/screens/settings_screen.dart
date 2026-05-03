@@ -1,0 +1,194 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import '../utils/app_theme.dart';
+import '../database/database_helper.dart';
+import '../widgets/common_widgets.dart';
+import 'subscription_screen.dart';
+import 'dev_panel_screen.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _nameCtrl = TextEditingController();
+  final _pharmacistCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  bool _notificationsEnabled = true;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final settings = await DatabaseHelper.instance.getAllSettings();
+    if (mounted) {
+      setState(() {
+        _nameCtrl.text = settings['pharmacy_name'] ?? 'صيدليتي';
+        _pharmacistCtrl.text = settings['pharmacist_name'] ?? 'الصيدلي';
+        _phoneCtrl.text = settings['pharmacy_phone'] ?? '';
+        _notificationsEnabled = (settings['notifications_enabled'] ?? '1') == '1';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    await DatabaseHelper.instance.setSetting('pharmacy_name', _nameCtrl.text.trim());
+    await DatabaseHelper.instance.setSetting('pharmacist_name', _pharmacistCtrl.text.trim());
+    await DatabaseHelper.instance.setSetting('pharmacy_phone', _phoneCtrl.text.trim());
+    await DatabaseHelper.instance.setSetting('notifications_enabled', _notificationsEnabled ? '1' : '0');
+    if (mounted) showSnack(context, 'تم حفظ الإعدادات ✅');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Pharmacy Info
+        _sectionTitle('🏥 بيانات الصيدلية'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: Column(
+            children: [
+              AppTextField(hint: 'اسم الصيدلية', controller: _nameCtrl),
+              const SizedBox(height: 10),
+              AppTextField(hint: 'اسم الصيدلي', controller: _pharmacistCtrl),
+              const SizedBox(height: 10),
+              AppTextField(hint: 'رقم الهاتف', controller: _phoneCtrl, keyboardType: TextInputType.phone),
+              const SizedBox(height: 14),
+              PrimaryButton(text: 'حفظ البيانات', onTap: _saveSettings, icon: Icons.save_rounded),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Notifications
+        _sectionTitle('🔔 الإشعارات'),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: SwitchListTile(
+            title: const Text('تفعيل الإشعارات', style: TextStyle(color: AppColors.textColor)),
+            subtitle: const Text('تنبيهات النواقص والديون', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            value: _notificationsEnabled,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _notificationsEnabled = v),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Subscription
+        _sectionTitle('💳 الاشتراك'),
+        _settingsTile(
+          emoji: '🥈',
+          title: 'باقة احترافي',
+          subtitle: 'اشتراكك الحالي - اضغط للتجديد أو الترقية',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 16),
+
+        // App Info
+        _sectionTitle('ℹ️ عن التطبيق'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: Column(
+            children: [
+              _infoRow('الإصدار', '1.0.0'),
+              const Divider(color: AppColors.darkBorder),
+              _infoRow('المطور', 'د. محمد السيد'),
+              const Divider(color: AppColors.darkBorder),
+              _infoRow('التواصل', 'Telegram: @Mohamed07Elsayed'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Developer Panel - debug only
+        if (kDebugMode) ...[
+          const SizedBox(height: 8),
+          _settingsTile(
+            emoji: '🛠️',
+            title: 'لوحة المطور',
+            subtitle: 'للمطور فقط - مقيدة بكلمة مرور',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DevPanelScreen())),
+            trailing: const Icon(Icons.lock_rounded, color: AppColors.textMuted, size: 18),
+          ),
+        ],
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  Widget _sectionTitle(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(title, style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+  );
+
+  Widget _settingsTile({required String emoji, required String title, required String subtitle, required VoidCallback onTap, Widget? trailing}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.darkBorder),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+                  Text(subtitle, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                ],
+              ),
+            ),
+            trailing ?? const SizedBox(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+        Text(value, style: const TextStyle(color: AppColors.textLight, fontSize: 13, fontWeight: FontWeight.w600)),
+      ],
+    ),
+  );
+}

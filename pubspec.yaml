@@ -1,0 +1,63 @@
+name: saydali_pro
+description: تطبيق صيدلي - نظام إدارة متكامل
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # قاعدة البيانات المحلية
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+
+  # State Management
+  provider: ^6.1.2
+
+  # خطوط
+  google_fonts: ^6.2.1
+
+  # HTTP للاتصال بـ Supabase
+  http: ^1.2.2
+
+  # التاريخ
+  intl: ^0.19.0
+
+  # PDF
+  pdf: ^3.10.8
+  printing: ^5.13.1
+
+  # Excel
+  excel: ^4.0.2
+  file_picker: ^8.3.7
+
+  # مشاركة
+  share_plus: ^7.2.2
+  path_provider: ^2.1.4
+
+  # الإشعارات
+  flutter_local_notifications: ^18.0.1
+
+  # الباركود
+  mobile_scanner: ^5.2.3
+  qr_flutter: ^4.1.0
+
+  # رسوم بيانية
+  fl_chart: ^0.68.0
+
+  # تمرير البطاقات
+  flutter_slidable: ^3.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
