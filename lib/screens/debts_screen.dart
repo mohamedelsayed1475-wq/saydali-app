@@ -73,7 +73,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   showSnack(ctx, 'أدخل اسم العميل', isError: true);
                   return;
                 }
-                final data = {'name': name, 'phone': phoneCtrl.text.trim(), 'address': addressCtrl.text.trim()};
+                final Map<String, dynamic> data = {'name': name, 'phone': phoneCtrl.text.trim(), 'address': addressCtrl.text.trim()};
                 if (existing == null) {
                   await DatabaseHelper.instance.insertCustomer(data);
                 } else {
