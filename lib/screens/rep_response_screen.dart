@@ -96,6 +96,9 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       }
     }
 
+    // حذف الجلسة فوراً من السحابة بعد استقبالها
+    await SupabaseService.instance.deleteSession(_response!.sessionId);
+
     if (mounted) {
       showSnack(context, 'تم إنهاء اليوم ✅');
       Navigator.pop(context);

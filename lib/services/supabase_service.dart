@@ -42,7 +42,7 @@ class SupabaseService {
           'rep_phone': repPhone,
           'pharmacy_name': pharmacyName,
           'status': 'pending',
-          'expires_at': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+          'expires_at': DateTime.now().add(const Duration(hours: 4)).toIso8601String(),
         }),
       ).timeout(const Duration(seconds: 10));
 
@@ -118,6 +118,7 @@ class SupabaseService {
       final items = jsonDecode(itemsRes.body) as List;
 
       return RepResponse(
+        sessionId: session['id'].toString(),
         repName: session['rep_name'] ?? '',
         repPhone: session['rep_phone'] ?? '',
         pharmacyName: session['pharmacy_name'] ?? '',
@@ -136,6 +137,20 @@ class SupabaseService {
     } catch (e) {
       debugPrint('❌ fetchResponseByCode error: $e');
       return null;
+    }
+  }
+
+  // ── حذف الجلسة ──────────────────────────────────────────────────
+  Future<void> deleteSession(String sessionId) async {
+    if (!isConfigured) return;
+    try {
+      await http.delete(
+        Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+      debugPrint('✅ تم حذف الجلسة بنجاح من السحابة');
+    } catch (e) {
+      debugPrint('❌ deleteSession error: $e');
     }
   }
 
@@ -173,6 +188,7 @@ class SupabaseService {
 
 // ── نماذج البيانات ──────────────────────────────────────────────────
 class RepResponse {
+  final String sessionId;
   final String repName;
   final String repPhone;
   final String pharmacyName;
@@ -181,6 +197,7 @@ class RepResponse {
   final List<ResponseItem> unavailableItems;
 
   RepResponse({
+    required this.sessionId,
     required this.repName,
     required this.repPhone,
     required this.pharmacyName,
