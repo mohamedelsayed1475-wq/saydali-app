@@ -359,6 +359,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         ),
                       );
                       }).toList(),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
