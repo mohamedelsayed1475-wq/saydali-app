@@ -380,11 +380,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   void _openLink(String urlStr) async {
     final url = Uri.parse(urlStr);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not launch');
+      }
+    } catch (e) {
       await Clipboard.setData(ClipboardData(text: urlStr));
-      if (mounted) showSnack(context, 'تم نسخ الرابط - افتحه في المتصفح ✅');
+      if (mounted) showSnack(context, 'لم نتمكن من فتح التطبيق - تم نسخ الرابط ✅');
     }
   }
 }

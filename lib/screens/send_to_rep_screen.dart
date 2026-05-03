@@ -147,9 +147,11 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                           ? 'https://wa.me/$phone?text=${Uri.encodeComponent(msg)}'
                           : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
                       final url = Uri.parse(urlStr);
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      } else {
+                      try {
+                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                          throw Exception('Could not launch');
+                        }
+                      } catch (e) {
                         Clipboard.setData(ClipboardData(text: msg));
                         if (ctx.mounted) showSnack(ctx, 'تم نسخ الرسالة - افتح واتساب يدويًا');
                       }
