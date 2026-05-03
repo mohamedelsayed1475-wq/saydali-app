@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
@@ -214,7 +218,23 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text('سجل المعاملات', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('سجل المعاملات', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                          TextButton.icon(
+                            onPressed: () => _printReceipt(customer, txList),
+                            icon: const Icon(Icons.receipt_long, size: 16),
+                            label: const Text('مشاركة الإيصال', style: TextStyle(fontSize: 12)),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -272,6 +292,86 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _printReceipt(Customer customer, List<DebtTransaction> txList) async {
+    showSnack(context, 'جاري توليد الإيصال...');
+    final pdf = pw.Document();
+    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدلي PRO';
+
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+
+    final lastPayment = txList.firstWhere(
+      (t) => t.type == 'payment', 
+      orElse: () => DebtTransaction(customerId: 0, amount: 0, type: '', transactionDate: DateTime.now())
+    );
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        margin: const pw.EdgeInsets.all(12),
+        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        textDirection: pw.TextDirection.rtl,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Text(pharmacyName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.Text('إيصال ديون عميل', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              pw.Divider(thickness: 0.5),
+              pw.SizedBox(height: 6),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('العميل:', style: const pw.TextStyle(fontSize: 11)),
+                  pw.Text(customer.name, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('التاريخ:', style: const pw.TextStyle(fontSize: 11)),
+                  pw.Text(DateFormat('yyyy/MM/dd HH:mm').format(DateTime.now()), style: const pw.TextStyle(fontSize: 11)),
+                ],
+              ),
+              pw.Divider(thickness: 0.5),
+              pw.SizedBox(height: 6),
+              if (lastPayment.amount > 0) ...[
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('آخر سداد:', style: const pw.TextStyle(fontSize: 11)),
+                    pw.Text('${lastPayment.amount} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+              ],
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('الرصيد المتبقي:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('${customer.totalDebt} ج.م', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 16),
+              pw.Text('تمت الطباعة بواسطة صيدلي PRO', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.sharePdf(bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
   }
 
   @override

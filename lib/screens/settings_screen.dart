@@ -9,6 +9,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
 import 'dart:convert';
+import 'package:share_plus/share_plus.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -123,6 +126,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
+        // Backup and Restore
+        _sectionTitle('☁️ النسخ الاحتياطي'),
+        Row(
+          children: [
+            Expanded(
+              child: _settingsTile(
+                emoji: '📤',
+                title: 'نسخة احتياطية',
+                subtitle: 'حفظ بياناتك',
+                onTap: _backupDB,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _settingsTile(
+                emoji: '📥',
+                title: 'استعادة',
+                subtitle: 'استرجاع البيانات',
+                onTap: _restoreDB,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
         // App Info
         _sectionTitle('ℹ️ عن التطبيق'),
         Container(
@@ -233,6 +261,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
     } catch (e) {
       if (mounted) showSnack(context, 'خطأ في قراءة الملف', isError: true);
+    }
+  }
+
+  Future<void> _backupDB() async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final path = p.join(dbPath, 'saydali_pro.db');
+      if (await File(path).exists()) {
+        await Share.shareXFiles([XFile(path)], subject: 'نسخة احتياطية - صيدلي PRO');
+      } else {
+        if (mounted) showSnack(context, 'لا توجد قاعدة بيانات!', isError: true);
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, 'حدث خطأ أثناء النسخ الاحتياطي', isError: true);
+    }
+  }
+
+  Future<void> _restoreDB() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any, // Android sometimes fails on custom db/sqlite extensions
+      );
+      if (result != null && result.files.single.path != null) {
+        final backupPath = result.files.single.path!;
+        if (!backupPath.endsWith('.db') && !backupPath.endsWith('.sqlite')) {
+           if (mounted) showSnack(context, 'الرجاء اختيار ملف قاعدة بيانات صالح (.db)', isError: true);
+           return;
+        }
+        final dbPath = await getDatabasesPath();
+        final path = p.join(dbPath, 'saydali_pro.db');
+        await File(backupPath).copy(path);
+        
+        if (mounted) {
+          showSnack(context, 'تم استعادة النسخة الاحتياطية بنجاح ✅ - يرجى إعادة تشغيل التطبيق لتحديث البيانات');
+          // Reload settings after restore
+          _loadSettings();
+        }
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, 'حدث خطأ أثناء الاستعادة', isError: true);
     }
   }
 }

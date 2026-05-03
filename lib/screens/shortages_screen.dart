@@ -10,6 +10,8 @@ import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
 
+import 'scanner_screen.dart';
+
 class ShortagesScreen extends StatefulWidget {
   const ShortagesScreen({super.key});
 
@@ -179,54 +181,80 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 16),
 
-                Autocomplete<String>(
-                  optionsBuilder: (v) {
-                    if (v.text.isEmpty) return const Iterable<String>.empty();
-                    return _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase()));
-                  },
-                  onSelected: (s) => nameCtrl.text = s,
-                  fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                    if (existing != null && ctrl.text.isEmpty && existing.name.isNotEmpty) ctrl.text = existing.name;
-                    return AppTextField(
-                      hint: 'اسم الدواء *',
-                      controller: ctrl,
-                      onChanged: (val) => nameCtrl.text = val,
-                    );
-                  },
-                  optionsViewBuilder: (context, onSelected, options) {
-                    return Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(
-                        color: AppColors.darkCard,
-                        elevation: 4.0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          side: const BorderSide(color: AppColors.darkBorder),
-                        ),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
-                          child: ListView.builder(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            itemCount: options.length,
-                            itemBuilder: (BuildContext context, int index) {
-                              final option = options.elementAt(index);
-                              return InkWell(
-                                onTap: () {
-                                  onSelected(option);
-                                  nameCtrl.text = option; // Ensure it syncs when selected
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12.0),
-                                  child: Text(option, style: const TextStyle(color: Colors.white)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Autocomplete<String>(
+                        optionsBuilder: (v) {
+                          if (v.text.isEmpty) return const Iterable<String>.empty();
+                          return _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase()));
+                        },
+                        onSelected: (s) => nameCtrl.text = s,
+                        fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                          if (existing != null && ctrl.text.isEmpty && existing.name.isNotEmpty) ctrl.text = existing.name;
+                          return AppTextField(
+                            hint: 'اسم الدواء *',
+                            controller: ctrl,
+                            onChanged: (val) => nameCtrl.text = val,
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              color: AppColors.darkCard,
+                              elevation: 4.0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(color: AppColors.darkBorder),
+                              ),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final option = options.elementAt(index);
+                                    return InkWell(
+                                      onTap: () {
+                                        onSelected(option);
+                                        nameCtrl.text = option; // Ensure it syncs when selected
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12.0),
+                                        child: Text(option, style: const TextStyle(color: Colors.white)),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                        ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.darkCard,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
+                        onPressed: () async {
+                          final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
+                          if (code != null) {
+                            nameCtrl.text = code;
+                            // Also update the internal autocomplete controller if needed, but onChanged handles text.
+                            // To be safe, we just update the text controller that handles the saving.
+                            setBS(() {});
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة المصنعة', controller: companyCtrl),
