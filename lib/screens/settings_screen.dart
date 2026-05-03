@@ -5,6 +5,10 @@ import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' hide Border;
+import 'dart:io';
+import 'dart:convert';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -108,6 +112,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
+        // Dictionary Upload
+        _sectionTitle('📚 قاموس الأدوية (مساعد الكتابة)'),
+        _settingsTile(
+          emoji: '📖',
+          title: 'رفع قاموس الأدوية',
+          subtitle: 'ملف Excel لتسهيل الإضافة في النواقص',
+          onTap: _uploadDictionary,
+          trailing: const Icon(Icons.upload_file, color: AppColors.primary),
+        ),
+        const SizedBox(height: 16),
+
         // App Info
         _sectionTitle('ℹ️ عن التطبيق'),
         Container(
@@ -191,4 +206,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     ),
   );
+
+  Future<void> _uploadDictionary() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
+    if (result == null || result.files.single.path == null) return;
+
+    if (!mounted) return;
+    showSnack(context, 'جاري قراءة الملف...');
+
+    try {
+      final bytes = File(result.files.single.path!).readAsBytesSync();
+      final excel = Excel.decodeBytes(bytes);
+      List<String> dict = [];
+
+      for (final table in excel.tables.keys) {
+        final sheet = excel.tables[table]!;
+        for (int i = 0; i < sheet.maxRows; i++) {
+          final row = sheet.row(i);
+          if (row.isEmpty || row[0]?.value == null) continue;
+          final name = row[0]?.value?.toString().trim() ?? '';
+          if (name.isNotEmpty) dict.add(name);
+        }
+      }
+
+      await DatabaseHelper.instance.setSetting('drug_dictionary', jsonEncode(dict));
+      if (mounted) showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
+    } catch (e) {
+      if (mounted) showSnack(context, 'خطأ في قراءة الملف', isError: true);
+    }
+  }
 }

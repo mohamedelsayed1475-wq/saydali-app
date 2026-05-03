@@ -7,6 +7,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'send_to_rep_screen.dart';
 
 class RepsScreen extends StatefulWidget {
   const RepsScreen({super.key});
@@ -124,46 +125,10 @@ class _RepsScreenState extends State<RepsScreen> {
       return;
     }
 
-    // إنشاء كود QR يحتوي على بيانات النواقص
-    final code = _generateCode();
-    final data = {
-      'code': code,
-      'rep_id': rep.id,
-      'rep_name': rep.name,
-      'shortages': shortages.map((s) => {'id': s['id'], 'name': s['name'], 'qty': s['quantity']}).toList(),
-      'sent_at': DateTime.now().toIso8601String(),
-    };
-    final qrData = base64Encode(utf8.encode(jsonEncode(data)));
-
     if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.darkCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('إرسال النواقص لـ ${rep.name}', style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700, fontSize: 15)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: QrImageView(data: qrData, size: 200),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(color: AppColors.dark, borderRadius: BorderRadius.circular(10)),
-              child: Text('كود: $code', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 4)),
-            ),
-            const SizedBox(height: 8),
-            Text('${shortages.length} صنف ناقص', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق', style: TextStyle(color: AppColors.textMuted))),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SendToRepScreen(rep: rep)),
     );
   }
 

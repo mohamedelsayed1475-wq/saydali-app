@@ -3,10 +3,12 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
+import 'dart:convert';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'send_to_rep_screen.dart';
 
 class ShortagesScreen extends StatefulWidget {
   const ShortagesScreen({super.key});
@@ -20,6 +22,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   String _filter = 'all';
   String _search = '';
   bool _loading = true;
+  List<String> _suggestions = [];
 
   final _filters = [
     ('all', 'الكل'),
@@ -33,6 +36,17 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   void initState() {
     super.initState();
     _loadShortages();
+    _loadSuggestions();
+  }
+
+  Future<void> _loadSuggestions() async {
+    final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary');
+    if (dictStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(dictStr);
+        if (mounted) setState(() => _suggestions = decoded.cast<String>());
+      } catch (e) {}
+    }
   }
 
   Future<void> _loadShortages() async {
@@ -50,6 +64,49 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         final matchSearch = _search.isEmpty || s.name.contains(_search) || s.company.contains(_search);
         return matchFilter && matchSearch;
       }).toList();
+
+  Future<void> _showSelectRepDialog() async {
+    final reps = await DatabaseHelper.instance.getReps();
+    if (reps.isEmpty) {
+      if (mounted) showSnack(context, 'لا يوجد مندوبون مسجلون', isError: true);
+      return;
+    }
+    
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('اختر المندوب لإرسال النواقص', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: reps.length,
+                itemBuilder: (ctx, i) {
+                  final rep = Representative.fromMap(reps[i]);
+                  return ListTile(
+                    leading: const Icon(Icons.person, color: AppColors.primary),
+                    title: Text(rep.name, style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(rep.company ?? '', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => SendToRepScreen(rep: rep)));
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _importExcel() async {
     final result = await FilePicker.platform.pickFiles(
@@ -122,7 +179,55 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 16),
 
-                AppTextField(hint: 'اسم الدواء *', controller: nameCtrl),
+                Autocomplete<String>(
+                  optionsBuilder: (v) {
+                    if (v.text.isEmpty) return const Iterable<String>.empty();
+                    return _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase()));
+                  },
+                  onSelected: (s) => nameCtrl.text = s,
+                  fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                    if (existing != null && ctrl.text.isEmpty && existing.name.isNotEmpty) ctrl.text = existing.name;
+                    return AppTextField(
+                      hint: 'اسم الدواء *',
+                      controller: ctrl,
+                      onChanged: (val) => nameCtrl.text = val,
+                    );
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        color: AppColors.darkCard,
+                        elevation: 4.0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(color: AppColors.darkBorder),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final option = options.elementAt(index);
+                              return InkWell(
+                                onTap: () {
+                                  onSelected(option);
+                                  nameCtrl.text = option; // Ensure it syncs when selected
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Text(option, style: const TextStyle(color: Colors.white)),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة المصنعة', controller: companyCtrl),
                 const SizedBox(height: 10),
@@ -229,8 +334,18 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: _filters.map((f) {
-                      final isActive = _filter == f.$1;
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.send, size: 16, color: Colors.white),
+                          label: const Text('إرسال لمندوب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                          backgroundColor: AppColors.primary,
+                          onPressed: _showSelectRepDialog,
+                        ),
+                      ),
+                      ..._filters.map((f) {
+                        final isActive = _filter == f.$1;
                       return Padding(
                         padding: const EdgeInsets.only(left: 8),
                         child: FilterChip(
@@ -243,7 +358,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           labelStyle: TextStyle(color: isActive ? Colors.white : AppColors.textMuted, fontWeight: FontWeight.w600),
                         ),
                       );
-                    }).toList(),
+                      }).toList(),
                   ),
                 ),
                 const SizedBox(height: 10),
