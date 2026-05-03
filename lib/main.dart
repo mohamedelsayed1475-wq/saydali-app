@@ -70,8 +70,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   Future<void> _navigate() async {
     await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
+    if (!mounted) return;
+
+    final expiryStr = await DatabaseHelper.instance.getSetting('subscription_expiry');
+    bool isValid = false;
+    if (expiryStr != null) {
+      final expiry = DateTime.tryParse(expiryStr);
+      if (expiry != null && expiry.isAfter(DateTime.now())) {
+        isValid = true;
+      }
+    }
+
+    if (isValid) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
     }
   }
 

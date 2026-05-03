@@ -4,6 +4,7 @@ import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
+import '../main.dart'; // import MainScreen
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -66,8 +67,25 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final result = await _checkCode(code);
     if (mounted) {
       setState(() => _isValidating = false);
-      if (result != null) {
+      if (result != null && result.startsWith('✅')) {
         showSnack(context, result);
+        
+        // Save subscription expiry (e.g. 30 days from now)
+        final expiry = DateTime.now().add(const Duration(days: 30)).toIso8601String();
+        await db.setSetting('subscription_expiry', expiry);
+        
+        // Redirect to main screen
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+              (route) => false,
+            );
+          }
+        });
+      } else if (result != null) {
+        setState(() => _codeError = result);
       } else {
         setState(() => _codeError = 'كود غير صحيح أو منتهي الصلاحية');
       }
