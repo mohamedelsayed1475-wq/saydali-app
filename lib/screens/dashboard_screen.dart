@@ -28,12 +28,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadData() async {
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();
-    final name = await DatabaseHelper.instance.getSetting('pharmacy_name');
+
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
-        _pharmacyName = name ?? 'صيدليتي';
         _loading = false;
       });
     }

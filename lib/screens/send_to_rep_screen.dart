@@ -77,7 +77,6 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       setState(() => _sending = false);
       if (code != null) {
         setState(() {
-          _sessionCode = code;
           _generatedLink = SupabaseService.instance.buildRepLink(code);
         });
         _showLinkSheet();
