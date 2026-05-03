@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'scanner_screen.dart';
 
@@ -152,6 +153,17 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  Future<void> _searchGoogleImages(String query) async {
+    if (query.trim().isEmpty) {
+      if (mounted) showSnack(context, 'الرجاء إدخال اسم الدواء للبحث', isError: true);
+      return;
+    }
+    final url = Uri.parse('https://www.google.com/search?tbm=isch&q=${Uri.encodeComponent(query)}+دواء');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
   Future<void> _showAddSheet({Shortage? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name);
     final companyCtrl = TextEditingController(text: existing?.company);
@@ -247,11 +259,22 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           final code = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ScannerScreen()));
                           if (code != null) {
                             nameCtrl.text = code;
-                            // Also update the internal autocomplete controller if needed, but onChanged handles text.
-                            // To be safe, we just update the text controller that handles the saving.
                             setBS(() {});
                           }
                         },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.darkCard,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.search, color: Colors.blue),
+                        onPressed: () => _searchGoogleImages(nameCtrl.text),
+                        tooltip: 'بحث في جوجل (صور)',
                       ),
                     ),
                   ],
