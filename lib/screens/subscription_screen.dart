@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
 import '../main.dart'; // import MainScreen
+import 'package:url_launcher/url_launcher.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -377,9 +378,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  void _openLink(String url) async {
-    // استخدام url_launcher أو نسخ الرابط
-    await Clipboard.setData(ClipboardData(text: url));
-    if (mounted) showSnack(context, 'تم نسخ الرابط - افتحه في المتصفح ✅');
+  void _openLink(String urlStr) async {
+    final url = Uri.parse(urlStr);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      await Clipboard.setData(ClipboardData(text: urlStr));
+      if (mounted) showSnack(context, 'تم نسخ الرابط - افتحه في المتصفح ✅');
+    }
   }
 }

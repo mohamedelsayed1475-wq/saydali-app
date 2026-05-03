@@ -6,6 +6,7 @@ import '../services/supabase_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'rep_response_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SendToRepScreen extends StatefulWidget {
   final Representative rep;
@@ -140,15 +141,20 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
                       final msg = 'مرحباً ${widget.rep.name}،\nيرجى مراجعة النواقص والرد عبر الرابط:\n$_generatedLink';
                       // فتح واتساب
                       final phone = widget.rep.phone?.replaceAll('+', '').replaceAll(' ', '') ?? '';
-                      final url = phone.isNotEmpty
+                      final urlStr = phone.isNotEmpty
                           ? 'https://wa.me/$phone?text=${Uri.encodeComponent(msg)}'
                           : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
-                      Clipboard.setData(ClipboardData(text: msg));
-                      showSnack(ctx, 'تم نسخ الرسالة - افتح واتساب');
+                      final url = Uri.parse(urlStr);
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      } else {
+                        Clipboard.setData(ClipboardData(text: msg));
+                        if (ctx.mounted) showSnack(ctx, 'تم نسخ الرسالة - افتح واتساب يدويًا');
+                      }
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
                     icon: const Icon(Icons.message, size: 16),
