@@ -280,3 +280,86 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+// ── نافذة ربط أعمدة الإكسيل ──────────────────────────────────────────────────
+class ColumnMappingDialog extends StatefulWidget {
+  final List<String> headers;
+  const ColumnMappingDialog({super.key, required this.headers});
+
+  @override
+  State<ColumnMappingDialog> createState() => _ColumnMappingDialogState();
+}
+
+class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
+  int _enNameIdx = 0;
+  int _arNameIdx = -1;
+  int _activeIdx = -1;
+  int _barcodeIdx = -1;
+
+  Widget _buildDropdown(String label, int value, ValueChanged<int?> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: AppColors.dark, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.darkBorder)),
+            child: DropdownButton<int>(
+              value: value,
+              isExpanded: true,
+              dropdownColor: AppColors.dark,
+              underline: const SizedBox(),
+              items: [
+                const DropdownMenuItem(value: -1, child: Text('غير موجود (تجاهل)', style: TextStyle(color: AppColors.textMuted))),
+                ...List.generate(widget.headers.length, (i) => DropdownMenuItem(value: i, child: Text(widget.headers[i], style: const TextStyle(color: AppColors.textColor)))),
+              ],
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.darkCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('تحديد الأعمدة', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDropdown('الاسم الإنجليزي (إجباري)', _enNameIdx, (v) => setState(() => _enNameIdx = v ?? -1)),
+            _buildDropdown('الاسم العربي', _arNameIdx, (v) => setState(() => _arNameIdx = v ?? -1)),
+            _buildDropdown('المادة الفعالة', _activeIdx, (v) => setState(() => _activeIdx = v ?? -1)),
+            _buildDropdown('الباركود', _barcodeIdx, (v) => setState(() => _barcodeIdx = v ?? -1)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted))),
+        ElevatedButton(
+          onPressed: () {
+            if (_enNameIdx == -1) {
+               showSnack(context, 'يجب تحديد عمود الاسم الإنجليزي', isError: true);
+               return;
+            }
+            Navigator.pop(context, {
+              'enName': _enNameIdx,
+              'arName': _arNameIdx,
+              'activeIngredient': _activeIdx,
+              'barcode': _barcodeIdx,
+            });
+          },
+          child: const Text('حفظ'),
+        ),
+      ],
+    );
+  }
+}
+

@@ -255,19 +255,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final bytes = File(result.files.single.path!).readAsBytesSync();
       final excel = Excel.decodeBytes(bytes);
-      List<String> dict = [];
+      if (excel.tables.isEmpty) return;
 
-      for (final table in excel.tables.keys) {
-        final sheet = excel.tables[table]!;
-        for (int i = 0; i < sheet.maxRows; i++) {
-          final row = sheet.row(i);
-          if (row.isEmpty || row[0]?.value == null) continue;
-          final name = row[0]?.value?.toString().trim() ?? '';
-          if (name.isNotEmpty) dict.add(name);
-        }
+      final table = excel.tables.keys.first;
+      final sheet = excel.tables[table]!;
+      if (sheet.maxRows == 0) return;
+
+      final firstRow = sheet.row(0);
+      final headers = <String>[];
+      for (int i = 0; i < firstRow.length; i++) {
+        headers.add(firstRow[i]?.value?.toString().trim() ?? 'عمود ${i+1}');
       }
 
-      await DatabaseHelper.instance.setSetting('drug_dictionary', jsonEncode(dict));
+      if (!mounted) return;
+      final mapping = await showDialog<Map<String, int>>(
+        context: context,
+        builder: (ctx) => ColumnMappingDialog(headers: headers),
+      );
+
+      if (mapping == null) return;
+
+      List<Map<String, String>> dict = [];
+
+      for (int i = 1; i < sheet.maxRows; i++) {
+        final row = sheet.row(i);
+        if (row.isEmpty) continue;
+
+        String getCol(String key) {
+           final idx = mapping[key];
+           if (idx == null || idx < 0 || idx >= row.length) return '';
+           return row[idx]?.value?.toString().trim() ?? '';
+        }
+
+        final enName = getCol('enName');
+        if (enName.isEmpty) continue;
+
+        dict.add({
+          'enName': enName,
+          'arName': getCol('arName'),
+          'activeIngredient': getCol('activeIngredient'),
+          'barcode': getCol('barcode'),
+        });
+      }
+
+      await DatabaseHelper.instance.setSetting('drug_dictionary_v2', jsonEncode(dict));
       if (mounted) showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
     } catch (e) {
       if (mounted) showSnack(context, 'خطأ في قراءة الملف', isError: true);

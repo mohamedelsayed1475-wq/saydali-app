@@ -25,7 +25,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   String _filter = 'all';
   String _search = '';
   bool _loading = true;
-  List<String> _suggestions = [];
+  List<Map<String, dynamic>> _suggestions = [];
 
   final _filters = [
     ('all', 'الكل'),
@@ -43,12 +43,20 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _loadSuggestions() async {
-    final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary');
+    final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
     if (dictStr != null) {
       try {
         final List<dynamic> decoded = jsonDecode(dictStr);
-        if (mounted) setState(() => _suggestions = decoded.cast<String>());
+        if (mounted) setState(() => _suggestions = decoded.cast<Map<String, dynamic>>());
       } catch (e) {}
+    } else {
+      final oldDictStr = await DatabaseHelper.instance.getSetting('drug_dictionary');
+      if (oldDictStr != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(oldDictStr);
+          if (mounted) setState(() => _suggestions = decoded.map((s) => {'enName': s.toString()}).toList());
+        } catch (e) {}
+      }
     }
   }
 
@@ -196,12 +204,19 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Autocomplete<String>(
+                      child: Autocomplete<Map<String, dynamic>>(
                         optionsBuilder: (v) {
-                          if (v.text.isEmpty) return const Iterable<String>.empty();
-                          return _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase()));
+                          if (v.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
+                          final q = v.text.toLowerCase();
+                          return _suggestions.where((s) {
+                             return (s['enName']?.toString().toLowerCase().contains(q) ?? false) ||
+                                    (s['arName']?.toString().toLowerCase().contains(q) ?? false) ||
+                                    (s['activeIngredient']?.toString().toLowerCase().contains(q) ?? false) ||
+                                    (s['barcode']?.toString().toLowerCase().contains(q) ?? false);
+                          });
                         },
-                        onSelected: (s) => nameCtrl.text = s,
+                        displayStringForOption: (option) => option['enName']?.toString() ?? '',
+                        onSelected: (s) => nameCtrl.text = s['enName']?.toString() ?? '',
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
                           if (existing != null && ctrl.text.isEmpty && existing.name.isNotEmpty) ctrl.text = existing.name;
                           return AppTextField(
@@ -223,21 +238,32 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                 side: const BorderSide(color: AppColors.darkBorder),
                               ),
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                                constraints: const BoxConstraints(maxHeight: 250, maxWidth: 300),
                                 child: ListView.builder(
                                   padding: EdgeInsets.zero,
                                   shrinkWrap: true,
                                   itemCount: options.length,
                                   itemBuilder: (BuildContext context, int index) {
                                     final option = options.elementAt(index);
+                                    final en = option['enName']?.toString() ?? '';
+                                    final ar = option['arName']?.toString() ?? '';
+                                    final act = option['activeIngredient']?.toString() ?? '';
+                                    
                                     return InkWell(
                                       onTap: () {
                                         onSelected(option);
-                                        nameCtrl.text = option; // Ensure it syncs when selected
+                                        nameCtrl.text = en; // Ensure it syncs when selected
                                       },
                                       child: Padding(
                                         padding: const EdgeInsets.all(12.0),
-                                        child: Text(option, style: const TextStyle(color: Colors.white)),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(en, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            if (ar.isNotEmpty) Text(ar, style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+                                            if (act.isNotEmpty) Text(act, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                          ],
+                                        ),
                                       ),
                                     );
                                   },
