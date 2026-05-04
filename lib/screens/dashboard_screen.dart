@@ -86,6 +86,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             : 'لديك $total صنف ناقص، $pending في انتظار رد المندوبين',
                         style: const TextStyle(color: AppColors.textLight, fontSize: 12),
                       ),
+                      if (pending > 0) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                          ),
+                          child: const Text(
+                            '⚠️ تنبيه: سيتم تحويل الأصناف المعلقة منذ 24 ساعة إلى مستعصية تلقائياً',
+                            style: TextStyle(color: AppColors.danger, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

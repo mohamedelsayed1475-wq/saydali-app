@@ -160,6 +160,15 @@ class DatabaseHelper {
     };
   }
 
+  Future<void> autoCloseOldPendingShortages() async {
+    final db = await database;
+    final twentyFourHoursAgo = DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+    await db.rawUpdate(
+      "UPDATE shortages SET status = 'stubborn' WHERE status = 'pending' AND created_at <= ?",
+      [twentyFourHoursAgo],
+    );
+  }
+
   // ── المندوبين ──────────────────────────────────────────────────
   Future<int> insertRep(Map<String, dynamic> data) async {
     final db = await database;

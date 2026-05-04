@@ -33,6 +33,7 @@ class ShortagesProvider extends ChangeNotifier {
   Future<void> load() async {
     _loading = true;
     notifyListeners();
+    await DatabaseHelper.instance.autoCloseOldPendingShortages();
     final data = await DatabaseHelper.instance.getShortages();
     _shortages = data.map(Shortage.fromMap).toList();
     _loading = false;
