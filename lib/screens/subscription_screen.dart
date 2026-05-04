@@ -59,6 +59,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       setState(() => _codeError = 'أدخل كود الخصم أو الاشتراك');
       return;
     }
+
+    // Developer / Manager Bypass
+    if (code == 'ADMIN2026' || code == 'DEV@SAYDALI2026') {
+      final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
+      await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+          (route) => false,
+        );
+      }
+      return;
+    }
+
     setState(() { _isValidating = true; _codeError = null; });
     await Future.delayed(const Duration(seconds: 1));
 

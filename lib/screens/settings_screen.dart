@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _phoneCtrl = TextEditingController();
   bool _notificationsEnabled = true;
   bool _loading = true;
+  int _devTapCount = 0;
 
   @override
   void initState() {
@@ -162,7 +163,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           child: Column(
             children: [
-              _infoRow('الإصدار', '1.0.0'),
+              GestureDetector(
+                onTap: () {
+                  _devTapCount++;
+                  if (_devTapCount >= 5) {
+                    _devTapCount = 0;
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DevPanelScreen()));
+                  }
+                },
+                child: _infoRow('الإصدار', '1.0.0'),
+              ),
               const Divider(color: AppColors.darkBorder),
               _infoRow('المطور', 'د. محمد السيد'),
               const Divider(color: AppColors.darkBorder),
