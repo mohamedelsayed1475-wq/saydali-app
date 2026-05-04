@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
@@ -549,6 +552,124 @@ class _DebtsScreenState extends State<DebtsScreen> {
     await Printing.sharePdf(bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
   }
 
+  Future<void> _launchWhatsApp(String? phone, double debt, String name) async {
+    if (phone == null || phone.isEmpty) {
+      showSnack(context, 'لا يوجد رقم هاتف مسجل لهذا العميل', isError: true);
+      return;
+    }
+    String formattedPhone = phone.trim();
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '+2$formattedPhone';
+    }
+    final message = Uri.encodeComponent('مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} جنيه.\nشكراً لكم.');
+    final url = Uri.parse('whatsapp://send?phone=$formattedPhone&text=$message');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      final webUrl = Uri.parse('https://wa.me/$formattedPhone?text=$message');
+      if (await canLaunchUrl(webUrl)) {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) showSnack(context, 'لا يمكن فتح واتساب', isError: true);
+      }
+    }
+  }
+
+  Future<void> _shareDebts() async {
+    if (_filtered.isEmpty) {
+      showSnack(context, 'لا توجد ديون للمشاركة', isError: true);
+      return;
+    }
+    final buffer = StringBuffer();
+    buffer.writeln('💰 تقرير المديونيات (${_filtered.length} عملاء):');
+    buffer.writeln('إجمالي الديون: ${_totalDebt.toStringAsFixed(2)} جنيه');
+    buffer.writeln('-------------------');
+    for (var c in _filtered) {
+      if (c.totalDebt > 0) {
+        buffer.writeln('👤 العميل: ${c.name}');
+        if (c.phone != null && c.phone!.isNotEmpty) buffer.writeln('📱 الهاتف: ${c.phone}');
+        buffer.writeln('💵 المديونية: ${c.totalDebt.toStringAsFixed(2)} جنيه');
+        buffer.writeln('-------------------');
+      }
+    }
+    await Share.share(buffer.toString());
+  }
+
+  Future<void> _importFromClipboard() async {
+    final data = await Clipboard.getData('text/plain');
+    if (data == null || data.text == null || data.text!.isEmpty) {
+      showSnack(context, 'الحافظة فارغة! انسخ التقرير من واتساب أولاً', isError: true);
+      return;
+    }
+
+    final text = data.text!;
+    final nameRegex = RegExp(r'👤 العميل:\s*(.*)');
+    final phoneRegex = RegExp(r'📱 الهاتف:\s*(.*)');
+    final debtRegex = RegExp(r'💵 المديونية:\s*([\d.]+)');
+
+    final blocks = text.split('-------------------');
+    int count = 0;
+    
+    for (var block in blocks) {
+      final nameMatch = nameRegex.firstMatch(block);
+      if (nameMatch != null) {
+        final name = nameMatch.group(1)?.trim() ?? '';
+        if (name.isEmpty) continue;
+        
+        final phoneMatch = phoneRegex.firstMatch(block);
+        final phone = phoneMatch?.group(1)?.trim() ?? '';
+        
+        final debtMatch = debtRegex.firstMatch(block);
+        final debtStr = debtMatch?.group(1) ?? '0';
+        final totalDebt = double.tryParse(debtStr) ?? 0.0;
+        
+        if (totalDebt <= 0) continue;
+
+        Customer? existing;
+        for (var c in _customers) {
+          if (c.name == name) {
+            existing = c;
+            break;
+          }
+        }
+        
+        int customerId;
+        double currentTotalDebt = 0;
+        if (existing != null) {
+          customerId = existing.id!;
+          currentTotalDebt = existing.totalDebt;
+        } else {
+          customerId = await DatabaseHelper.instance.insertCustomer({
+            'name': name,
+            'phone': phone,
+            'address': '',
+          });
+        }
+
+        // Calculate difference
+        final amountToUpdate = totalDebt - currentTotalDebt;
+        
+        if (amountToUpdate != 0) {
+          await DatabaseHelper.instance.addDebtTransaction({
+            'customer_id': customerId,
+            'amount': amountToUpdate.abs(),
+            'type': amountToUpdate > 0 ? 'debt' : 'payment',
+            'description': 'استيراد/مزامنة من المساعد',
+          });
+        }
+        
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      await _loadCustomers();
+      if (mounted) showSnack(context, 'تم استيراد ديون $count عملاء بنجاح ✅');
+    } else {
+      if (mounted) showSnack(context, 'لم يتم العثور على ديون متوافقة في النص المنسوخ', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -580,6 +701,20 @@ class _DebtsScreenState extends State<DebtsScreen> {
                           style: const TextStyle(color: AppColors.danger, fontSize: 24, fontWeight: FontWeight.w800)),
                       Text('${_customers.length} عميل', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                     ],
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.paste_rounded, color: Colors.white),
+                    tooltip: 'إضافة من رسالة المساعد',
+                    style: IconButton.styleFrom(backgroundColor: AppColors.warning.withValues(alpha: 0.2)),
+                    onPressed: _importFromClipboard,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.share, color: Colors.white),
+                    tooltip: 'مشاركة التقرير مع المدير',
+                    style: IconButton.styleFrom(backgroundColor: AppColors.accent.withValues(alpha: 0.2)),
+                    onPressed: _shareDebts,
                   ),
                 ],
               ),
@@ -710,6 +845,11 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   ],
                 ),
                 const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.green),
+                  tooltip: 'إرسال عبر واتساب',
+                  onPressed: () => _launchWhatsApp(customer.phone, customer.totalDebt, customer.name),
+                ),
                 const Icon(Icons.chevron_left, color: AppColors.textMuted, size: 18),
               ],
             ),

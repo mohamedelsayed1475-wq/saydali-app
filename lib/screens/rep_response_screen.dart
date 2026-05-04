@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
 import '../database/database_helper.dart';
 import '../utils/app_theme.dart';
@@ -20,6 +21,8 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   bool _loading = false;
   String? _error;
   RepResponse? _response;
+  String _searchQuery = '';
+  bool _showSearch = false;
 
   @override
   void initState() {
@@ -83,32 +86,32 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     if (confirm != true) return;
 
     final db = DatabaseHelper.instance;
+    final shortagesData = await db.getShortages();
+    
+    final Map<String, List<int>> shortageMap = {};
+    for (var s in shortagesData) {
+      final key = s['name'].toString().trim().toLowerCase();
+      shortageMap.putIfAbsent(key, () => []).add(s['id'] as int);
+    }
 
-    // الأصناف المتاحة → covered (بالبحث بالاسم)
     for (final item in _response!.availableItems) {
-      final shortages = await db.getShortages();
-      for (final s in shortages) {
-        final name = (s['name'] as String).trim().toLowerCase();
-        final itemName = item.drugName.trim().toLowerCase();
-        if (name == itemName) {
-          await db.updateShortage(s['id'] as int, {'status': 'covered'});
+      final key = item.drugName.trim().toLowerCase();
+      if (shortageMap.containsKey(key)) {
+        for (final id in shortageMap[key]!) {
+          await db.updateShortage(id, {'status': 'covered'});
         }
       }
     }
 
-    // الأصناف غير المتاحة → stubborn
     for (final item in _response!.unavailableItems) {
-      final shortages = await db.getShortages();
-      for (final s in shortages) {
-        final name = (s['name'] as String).trim().toLowerCase();
-        final itemName = item.drugName.trim().toLowerCase();
-        if (name == itemName) {
-          await db.updateShortage(s['id'] as int, {'status': 'stubborn'});
+      final key = item.drugName.trim().toLowerCase();
+      if (shortageMap.containsKey(key)) {
+        for (final id in shortageMap[key]!) {
+          await db.updateShortage(id, {'status': 'stubborn'});
         }
       }
     }
 
-    // حذف الجلسة فوراً من السحابة بعد استقبالها
     await SupabaseService.instance.deleteSession(_response!.sessionId);
 
     if (mounted) {
@@ -134,7 +137,6 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       build: (pw.Context context) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // Header
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
@@ -158,7 +160,6 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
           pw.Divider(),
           pw.SizedBox(height: 10),
 
-          // Available Items
           if (_response!.availableItems.isNotEmpty) ...[
             pw.Text('✅ الأصناف المتاحة (${_response!.availableItems.length})',
                 style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.green700)),
@@ -208,7 +209,6 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             pw.SizedBox(height: 16),
           ],
 
-          // Unavailable Items
           if (_response!.unavailableItems.isNotEmpty) ...[
             pw.Divider(),
             pw.SizedBox(height: 8),
@@ -238,24 +238,67 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   String _formatDate(DateTime d) =>
       '${d.day}/${d.month}/${d.year} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
 
+  void _shareAsText() {
+    if (_response == null) return;
+    final r = _response!;
+    String msg = '📦 تقرير رد المندوب: ${r.repName}\n';
+    msg += '📅 التاريخ: ${_formatDate(r.respondedAt)}\n';
+    msg += '--------------------------\n';
+    
+    if (r.availableItems.isNotEmpty) {
+      msg += '✅ الأصناف المتاحة:\n';
+      for (var item in r.availableItems) {
+        msg += '- ${item.drugName} (${item.quantity} علبة) - ${item.finalPrice.toStringAsFixed(2)}ج\n';
+      }
+      msg += '\n💰 الإجمالي: ${r.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} جنيه\n';
+    }
+
+    if (r.unavailableItems.isNotEmpty) {
+      msg += '\n❌ غير متاحة (تحتاج مندوب آخر):\n';
+      for (var item in r.unavailableItems) {
+        msg += '- ${item.drugName}\n';
+      }
+    }
+
+    msg += '\nتم الإرسال عبر صيدلي PRO 💊';
+    Share.share(msg);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.dark,
       appBar: AppBar(
-        title: const Text('استقبال رد المندوب', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: _showSearch 
+          ? TextField(
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(hintText: 'ابحث عن صنف...', hintStyle: TextStyle(color: Colors.white60), border: InputBorder.none),
+              onChanged: (val) => setState(() => _searchQuery = val),
+              autofocus: true,
+            )
+          : const Text('استقبال رد المندوب', style: TextStyle(fontWeight: FontWeight.w700)),
         backgroundColor: AppColors.darkCard,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textColor),
-          onPressed: () => Navigator.pop(context),
+          icon: Icon(_showSearch ? Icons.close : Icons.arrow_back_ios_rounded, color: AppColors.textColor),
+          onPressed: () {
+            if (_showSearch) {
+              setState(() { _showSearch = false; _searchQuery = ''; });
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
         actions: [
-          if (_response != null)
+          if (_response != null) ...[
             IconButton(
-              icon: const Icon(Icons.picture_as_pdf, color: AppColors.danger),
-              tooltip: 'تصدير PDF',
-              onPressed: _exportPDF,
+              icon: const Icon(Icons.search, color: AppColors.primary),
+              onPressed: () => setState(() => _showSearch = true),
             ),
+            IconButton(
+              icon: const Icon(Icons.share, color: AppColors.accent),
+              onPressed: _shareAsText,
+            ),
+          ]
         ],
       ),
       body: _response == null ? _buildCodeEntry() : _buildResponse(),
@@ -278,11 +321,26 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: const Icon(Icons.picture_as_pdf, size: 18),
-                  label: const Text('تصدير PDF', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+                  label: const Text('PDF', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _shareAsText,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.accent,
+                    side: const BorderSide(color: AppColors.accent),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.share, size: 18),
+                  label: const Text('نص', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
                 child: ElevatedButton.icon(
                   onPressed: _finishDay,
                   icon: const Icon(Icons.check_circle_rounded, size: 18),
@@ -313,12 +371,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             controller: _codeCtrl,
             textCapitalization: TextCapitalization.characters,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 8,
-            ),
+            style: const TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 8),
             maxLength: 8,
             decoration: InputDecoration(
               hintText: '--------',
@@ -343,65 +396,63 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
 
   Widget _buildResponse() {
     final r = _response!;
-    final total = r.availableItems.fold(0.0, (s, i) => s + i.totalPrice);
+    final filteredAvailable = r.availableItems.where((i) => i.drugName.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final filteredUnavailable = r.unavailableItems.where((i) => i.drugName.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    final total = filteredAvailable.fold(0.0, (s, i) => s + i.totalPrice);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Rep Info
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)]),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primaryDark),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 50, height: 50,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
-                  borderRadius: BorderRadius.circular(99),
+        if (!_showSearch) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)]),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primaryDark),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 50, height: 50,
+                  decoration: BoxDecoration(gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]), borderRadius: BorderRadius.circular(99)),
+                  child: Center(child: Text(r.repName[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22))),
                 ),
-                child: Center(child: Text(r.repName[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22))),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(r.repName, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
-                    Text('رد في ${_formatDate(r.respondedAt)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(r.repName, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text('رد في ${_formatDate(r.respondedAt)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(20)),
-                child: Text('${r.availableItems.length + r.unavailableItems.length} صنف', style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(20)),
+                  child: Text('${r.availableItems.length + r.unavailableItems.length} صنف', style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
 
-        // Available
-        if (r.availableItems.isNotEmpty) ...[
+        if (filteredAvailable.isNotEmpty) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('✅ متاح (${r.availableItems.length})', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+              Text('✅ متاح (${filteredAvailable.length})', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
               Text('${total.toStringAsFixed(2)} جنيه', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 8),
-          ...r.availableItems.map((item) => _buildAvailableCard(item)),
+          ...filteredAvailable.map((item) => _buildAvailableCard(item)),
           const SizedBox(height: 12),
         ],
 
-        // Unavailable - لديها فرصة
-        if (r.unavailableItems.isNotEmpty) ...[
+        if (filteredUnavailable.isNotEmpty) ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -416,18 +467,20 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                   children: [
                     const Text('⏳', style: TextStyle(fontSize: 16)),
                     const SizedBox(width: 8),
-                    Text('لديها فرصة (${r.unavailableItems.length})', style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
+                    Text('لديها فرصة (${filteredUnavailable.length})', style: const TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text('هذه الأصناف غير متاحة من هذا المندوب - يمكن إرسالها لمندوب آخر',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                const Text('هذه الأصناف غير متاحة من هذا المندوب - يمكن إرسالها لمندوب آخر', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          ...r.unavailableItems.map((item) => _buildUnavailableCard(item)),
+          ...filteredUnavailable.map((item) => _buildUnavailableCard(item)),
         ],
+
+        if (filteredAvailable.isEmpty && filteredUnavailable.isEmpty)
+          const Center(child: Padding(padding: EdgeInsets.all(40), child: Text('لا توجد نتائج بحث مطابقة', style: TextStyle(color: AppColors.textMuted)))),
       ],
     );
   }
@@ -436,11 +489,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-      ),
+      decoration: BoxDecoration(color: AppColors.darkCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.primary.withValues(alpha: 0.3))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -459,8 +508,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text('${item.finalPrice.toStringAsFixed(2)} جنيه', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
-                  if (item.discount > 0)
-                    Text('خصم ${item.discount.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.warning, fontSize: 11)),
+                  if (item.discount > 0) Text('خصم ${item.discount.toStringAsFixed(0)}%', style: const TextStyle(color: AppColors.warning, fontSize: 11)),
                 ],
               ),
             ],
@@ -478,11 +526,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.2)),
-      ),
+      decoration: BoxDecoration(color: AppColors.darkCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.danger.withValues(alpha: 0.2))),
       child: Row(
         children: [
           const Icon(Icons.cancel_rounded, color: AppColors.danger, size: 18),

@@ -10,7 +10,9 @@ import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
+import 'package:flutter/services.dart';
 import 'scanner_screen.dart';
 
 class ShortagesScreen extends StatefulWidget {
@@ -70,10 +72,28 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  bool _fuzzyMatch(String query, String text) {
+    String q = query.toLowerCase().trim();
+    if (q.isEmpty) return true;
+    String t = text.toLowerCase();
+    if (t.contains(q)) return true;
+    
+    int i = 0;
+    for (int j = 0; j < t.length && i < q.length; j++) {
+      if (t[j] == q[i]) i++;
+    }
+    return i == q.length;
+  }
+
   List<Shortage> get _filtered => _shortages.where((s) {
         final matchFilter = _filter == 'all' || s.status == _filter;
-        final matchSearch = _search.isEmpty || s.name.contains(_search) || s.company.contains(_search);
-        return matchFilter && matchSearch;
+        if (!matchFilter) return false;
+        if (_search.isEmpty) return true;
+        
+        final terms = _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+        
+        // Every term must match (either name or company)
+        return terms.every((term) => _fuzzyMatch(term, s.name) || _fuzzyMatch(term, s.company));
       }).toList();
 
   Future<void> _showSelectRepDialog() async {
@@ -207,12 +227,19 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       child: Autocomplete<Map<String, dynamic>>(
                         optionsBuilder: (v) {
                           if (v.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
-                          final q = v.text.toLowerCase();
+                          final terms = v.text.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
                           return _suggestions.where((s) {
-                             return (s['enName']?.toString().toLowerCase().contains(q) ?? false) ||
-                                    (s['arName']?.toString().toLowerCase().contains(q) ?? false) ||
-                                    (s['activeIngredient']?.toString().toLowerCase().contains(q) ?? false) ||
-                                    (s['barcode']?.toString().toLowerCase().contains(q) ?? false);
+                             final en = s['enName']?.toString() ?? '';
+                             final ar = s['arName']?.toString() ?? '';
+                             final act = s['activeIngredient']?.toString() ?? '';
+                             final bar = s['barcode']?.toString() ?? '';
+                             
+                             return terms.every((term) => 
+                               _fuzzyMatch(term, en) || 
+                               _fuzzyMatch(term, ar) || 
+                               _fuzzyMatch(term, act) || 
+                               _fuzzyMatch(term, bar)
+                             );
                           });
                         },
                         displayStringForOption: (option) => option['enName']?.toString() ?? '',
@@ -383,6 +410,74 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     );
   }
 
+  Future<void> _shareShortages() async {
+    if (_filtered.isEmpty) {
+      showSnack(context, 'لا توجد نواقص للمشاركة', isError: true);
+      return;
+    }
+    final buffer = StringBuffer();
+    buffer.writeln('📋 تقرير النواقص (${_filtered.length} أصناف):');
+    buffer.writeln('-------------------');
+    for (var s in _filtered) {
+      buffer.writeln('💊 الدواء: ${s.name}');
+      buffer.writeln('🏢 الشركة: ${s.company}');
+      buffer.writeln('📦 الكمية: ${s.quantity}');
+      if (s.isUrgent) buffer.writeln('🚨 حالة: عاجل جداً');
+      buffer.writeln('-------------------');
+    }
+    await Share.share(buffer.toString());
+  }
+
+  Future<void> _importFromClipboard() async {
+    final data = await Clipboard.getData('text/plain');
+    if (data == null || data.text == null || data.text!.isEmpty) {
+      showSnack(context, 'الحافظة فارغة! انسخ الرسالة من واتساب أولاً', isError: true);
+      return;
+    }
+
+    final text = data.text!;
+    final drugRegex = RegExp(r'💊 الدواء:\s*(.*)');
+    final companyRegex = RegExp(r'🏢 الشركة:\s*(.*)');
+    final qtyRegex = RegExp(r'📦 الكمية:\s*(\d+)');
+    final urgentRegex = RegExp(r'🚨 حالة:\s*عاجل');
+
+    final blocks = text.split('-------------------');
+    int count = 0;
+    
+    for (var block in blocks) {
+      final nameMatch = drugRegex.firstMatch(block);
+      if (nameMatch != null) {
+        final name = nameMatch.group(1)?.trim() ?? '';
+        if (name.isEmpty) continue;
+        
+        final companyMatch = companyRegex.firstMatch(block);
+        final company = companyMatch?.group(1)?.trim() ?? 'غير محدد';
+        
+        final qtyMatch = qtyRegex.firstMatch(block);
+        final qtyStr = qtyMatch?.group(1) ?? '1';
+        final qty = int.tryParse(qtyStr) ?? 1;
+        
+        final isUrgent = urgentRegex.hasMatch(block);
+        
+        await DatabaseHelper.instance.insertShortage({
+          'name': name,
+          'company': company,
+          'quantity': qty,
+          'status': 'pending',
+          'is_urgent': isUrgent ? 1 : 0,
+        });
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      await _loadShortages();
+      if (mounted) showSnack(context, 'تم استيراد $count أصناف بنجاح ✅');
+    } else {
+      if (mounted) showSnack(context, 'لم يتم العثور على أصناف متوافقة في النص المنسوخ', isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -421,6 +516,24 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           label: const Text('إرسال لمندوب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                           backgroundColor: AppColors.primary,
                           onPressed: _showSelectRepDialog,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.share, size: 16, color: Colors.white),
+                          label: const Text('مشاركة للمدير', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                          backgroundColor: AppColors.accent,
+                          onPressed: _shareShortages,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.paste_rounded, size: 16, color: Colors.white),
+                          label: const Text('إضافة من الرسالة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                          backgroundColor: AppColors.warning,
+                          onPressed: _importFromClipboard,
                         ),
                       ),
                       ..._filters.map((f) {

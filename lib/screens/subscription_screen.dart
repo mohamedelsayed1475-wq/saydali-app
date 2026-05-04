@@ -63,7 +63,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() { _isValidating = true; _codeError = null; });
     
     final db = DatabaseHelper.instance;
-    final data = await SupabaseService.instance.checkSubscriptionCode(code);
+    final localDb = await db.database;
+    
+    List<Map<String, dynamic>> localCodes = [];
+    try {
+      localCodes = await localDb.query('subscription_codes', where: 'code = ?', whereArgs: [code]);
+    } catch (_) {}
+
+    Map<String, dynamic>? data;
+    bool isLocal = false;
+    
+    if (localCodes.isNotEmpty) {
+      data = localCodes.first;
+      isLocal = true;
+    } else {
+      data = await SupabaseService.instance.checkSubscriptionCode(code);
+    }
     
     if (mounted) {
       setState(() => _isValidating = false);
@@ -90,12 +105,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final duration = (data['duration_days'] ?? 30) as int;
       
       if (discount > 0 && discount < 100) {
+        if (isLocal) {
+          await localDb.update('subscription_codes', {'used_count': usedCount + 1}, where: 'code = ?', whereArgs: [code]);
+        }
         setState(() {
           _discountPercent = discount;
           _currentPrice = 200 - (200 * discount / 100);
         });
         showSnack(context, '✅ تم تطبيق خصم $discount% بنجاح!');
       } else {
+        if (isLocal) {
+          await localDb.update('subscription_codes', {'used_count': usedCount + 1}, where: 'code = ?', whereArgs: [code]);
+        }
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
         final expiry = DateTime.now().add(Duration(days: duration)).toIso8601String();
         await db.setSetting('subscription_expiry', expiry);

@@ -14,13 +14,22 @@ import 'database/database_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // تهيئة قاعدة البيانات
-  await DatabaseHelper.instance.database;
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
+  try {
+    // تهيئة قاعدة البيانات
+    await DatabaseHelper.instance.database;
+  } catch (e) {
+    // في حالة فشل تهيئة قاعدة البيانات، نستمر comunque لتجنب تعطل التطبيق تمامًا
+    debugPrint('خطأ في تهيئة قاعدة البيانات: $e');
+  }
+  try {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+  } catch (e) {
+    debugPrint('خطأ في إعداد واجهة النظام: $e');
+  }
   runApp(const SaydaliApp());
 }
 
@@ -68,25 +77,30 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _navigate();
   }
 
-  Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
+Future<void> _navigate() async {
+  await Future.delayed(const Duration(seconds: 2));
+  if (!mounted) return;
 
+  bool isValid = false;
+  try {
     final expiryStr = await DatabaseHelper.instance.getSetting('subscription_expiry');
-    bool isValid = false;
     if (expiryStr != null) {
       final expiry = DateTime.tryParse(expiryStr);
       if (expiry != null && expiry.isAfter(DateTime.now())) {
         isValid = true;
       }
     }
-
-    if (isValid) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
-    } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
-    }
+  } catch (e) {
+    debugPrint('خطأ في قراءة إعدادات الاشتراك: $e');
+    // في حالة الخطأ، نفترض أن الاشتراك غير صالح ونوجه المستخدم لشاشة الاشتراك
   }
+
+  if (isValid) {
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+  } else {
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  }
+}
 
   @override
   void dispose() {
