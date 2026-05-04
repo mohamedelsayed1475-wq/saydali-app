@@ -181,10 +181,11 @@ class SupabaseService {
   }
 
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
-  String buildRepLink(String sessionCode) {
-    return 'https://pharmacy-app-v2.vercel.app/?code=$sessionCode';
-  }
+  // ✅ السطر الصح (زى الأول)
+String buildRepLink(String sessionCode) {
+  return 'https://mohamedelsayed1475-wq.github.io/saydali-app1/?code=$sessionCode';
 }
+
 
 // ── نماذج البيانات ──────────────────────────────────────────────────
 class RepResponse {
