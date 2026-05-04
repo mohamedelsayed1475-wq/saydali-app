@@ -217,7 +217,6 @@ class DatabaseHelper {
       double currentDebt = (customer.first['total_debt'] as num).toDouble();
       double amount = (data['amount'] as num).toDouble();
       double newDebt = data['type'] == 'debt' ? currentDebt + amount : currentDebt - amount;
-      if (newDebt < 0) newDebt = 0;
       await db.update('customers', {'total_debt': newDebt}, where: 'id = ?', whereArgs: [data['customer_id']]);
     }
     return txId;
