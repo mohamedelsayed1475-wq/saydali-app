@@ -184,6 +184,8 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
     final linkCtrl = TextEditingController();
+    final whatsappCtrl = TextEditingController();
+    final msgCtrl = TextEditingController(text: 'مرحباً، أنا أستخدم تطبيق صيدلي PRO وأود طلب منتجكم.');
     final btnTextCtrl = TextEditingController(text: 'التواصل عبر واتساب');
     final durationCtrl = TextEditingController(text: '0');
     String screen = 'home';
@@ -233,9 +235,16 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                   ),
                 ],
                 const SizedBox(height: 10),
-                AppTextField(hint: 'رابط التواصل (مثال: https://wa.me/...)', controller: linkCtrl),
+                const Text('لتفعيل الطلب عبر الواتساب (لتتبع المبيعات):', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                const SizedBox(height: 5),
+                AppTextField(hint: 'رقم الواتساب للشركة (مثال: 20100000000+)', controller: whatsappCtrl, keyboardType: TextInputType.phone),
                 const SizedBox(height: 10),
-                AppTextField(hint: 'نص زر التواصل (مثال: تواصل معنا)', controller: btnTextCtrl),
+                AppTextField(hint: 'الرسالة التلقائية لتأكيد المصدر', controller: msgCtrl, maxLines: 2),
+                const SizedBox(height: 10),
+                const Divider(color: AppColors.darkBorder),
+                AppTextField(hint: 'أو رابط خارجي عادي (يُترك فارغاً إذا كتبت رقم واتساب)', controller: linkCtrl),
+                const SizedBox(height: 10),
+                AppTextField(hint: 'نص زر التواصل (مثال: اطلب العرض الآن)', controller: btnTextCtrl),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'مدة الإجبار قبل التخطي (ثواني)', controller: durationCtrl, keyboardType: TextInputType.number),
                 const SizedBox(height: 10),
@@ -262,12 +271,21 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                   text: 'نشر الإعلان',
                   onTap: () async {
                     if (titleCtrl.text.trim().isEmpty) return;
+                    
+                    String finalLink = linkCtrl.text.trim();
+                    final phone = whatsappCtrl.text.trim();
+                    if (phone.isNotEmpty) {
+                      final msg = Uri.encodeComponent(msgCtrl.text.trim());
+                      final formattedPhone = phone.replaceAll('+', '').replaceAll(' ', '');
+                      finalLink = 'https://wa.me/$formattedPhone?text=$msg';
+                    }
+
                     final db = await DatabaseHelper.instance.database;
                     await db.insert('ads', {
                       'title': titleCtrl.text.trim(),
                       'body': bodyCtrl.text.trim(),
                       'image_url': pickedImagePath,
-                      'link': linkCtrl.text.trim(),
+                      'link': finalLink,
                       'button_text': btnTextCtrl.text.trim().isEmpty ? 'التفاصيل' : btnTextCtrl.text.trim(),
                       'is_active': 1,
                       'screen': screen,
