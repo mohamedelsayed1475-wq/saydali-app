@@ -130,30 +130,36 @@ class GradientProgressBar extends StatelessWidget {
 class AppTextField extends StatelessWidget {
   final String hint;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final TextInputType? keyboardType;
   final int maxLines;
   final Widget? prefix;
   final Widget? suffix;
   final void Function(String)? onChanged;
+  final void Function(String)? onSubmitted;
 
   const AppTextField({
     super.key,
     required this.hint,
     this.controller,
+    this.focusNode,
     this.keyboardType,
     this.maxLines = 1,
     this.prefix,
     this.suffix,
     this.onChanged,
+    this.onSubmitted,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: keyboardType,
       maxLines: maxLines,
       onChanged: onChanged,
+      onSubmitted: onSubmitted,
       style: const TextStyle(color: AppColors.textColor),
       decoration: InputDecoration(
         hintText: hint,

@@ -207,6 +207,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           return AppTextField(
                             hint: 'اسم الدواء *',
                             controller: ctrl,
+                            focusNode: fn,
+                            onSubmitted: (_) => onSubmit(),
                             onChanged: (val) => nameCtrl.text = val,
                           );
                         },
