@@ -1,4 +1,7 @@
+import 'dart:math';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
@@ -47,8 +50,6 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
         created_at TEXT NOT NULL
       )
     ''');
-    // جدول الإعلانات
-    await db.execute('''
       CREATE TABLE IF NOT EXISTS ads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
@@ -57,9 +58,13 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
         link TEXT,
         is_active INTEGER DEFAULT 1,
         screen TEXT DEFAULT 'home',
+        skip_duration INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE ads ADD COLUMN skip_duration INTEGER DEFAULT 0');
+    } catch (_) {}
     _loadCodes();
     _loadAds();
   }
@@ -83,6 +88,12 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
     final maxUsesCtrl = TextEditingController(text: '1');
     String plan = 'pro';
 
+    void generateRandomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      final rnd = Random();
+      codeCtrl.text = String.fromCharCodes(Iterable.generate(8, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+    }
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -98,7 +109,17 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
               children: [
                 const Text('🎟️ إضافة كود جديد', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
                 const SizedBox(height: 16),
-                AppTextField(hint: 'الكود (مثال: SAYDALI2026)', controller: codeCtrl),
+                Row(
+                  children: [
+                    Expanded(child: AppTextField(hint: 'الكود (مثال: SAYDALI2026)', controller: codeCtrl)),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.autorenew, color: AppColors.primary),
+                      onPressed: () => setBS(() => generateRandomCode()),
+                      tooltip: 'توليد تلقائي',
+                    )
+                  ],
+                ),
                 const SizedBox(height: 10),
                 Row(children: [
                   Expanded(child: AppTextField(hint: 'مدة (أيام)', controller: daysCtrl, keyboardType: TextInputType.number)),
@@ -157,7 +178,9 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
     final linkCtrl = TextEditingController();
+    final durationCtrl = TextEditingController(text: '0');
     String screen = 'home';
+    String? pickedImagePath;
 
     await showModalBottomSheet(
       context: context,
@@ -178,7 +201,34 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                 const SizedBox(height: 10),
                 AppTextField(hint: 'نص الإعلان', controller: bodyCtrl, maxLines: 3),
                 const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final result = await FilePicker.platform.pickFiles(type: FileType.image);
+                          if (result != null) {
+                            setBS(() => pickedImagePath = result.files.single.path);
+                          }
+                        },
+                        icon: const Icon(Icons.image),
+                        label: const Text('اختيار صورة من الهاتف'),
+                        style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                if (pickedImagePath != null) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(pickedImagePath!), height: 120, width: double.infinity, fit: BoxFit.cover),
+                  ),
+                ],
+                const SizedBox(height: 10),
                 AppTextField(hint: 'رابط (اختياري)', controller: linkCtrl),
+                const SizedBox(height: 10),
+                AppTextField(hint: 'مدة الإجبار قبل التخطي (ثواني)', controller: durationCtrl, keyboardType: TextInputType.number),
                 const SizedBox(height: 10),
                 const Text('الشاشة', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
@@ -203,9 +253,11 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                     await db.insert('ads', {
                       'title': titleCtrl.text.trim(),
                       'body': bodyCtrl.text.trim(),
+                      'image_url': pickedImagePath,
                       'link': linkCtrl.text.trim(),
                       'is_active': 1,
                       'screen': screen,
+                      'skip_duration': int.tryParse(durationCtrl.text) ?? 0,
                       'created_at': DateTime.now().toIso8601String(),
                     });
                     if (ctx.mounted) Navigator.pop(ctx);

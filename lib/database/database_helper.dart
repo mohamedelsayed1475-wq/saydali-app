@@ -256,6 +256,15 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<Map<String, dynamic>?> getActiveAd(String screen) async {
+    final db = await database;
+    try {
+      final result = await db.query('ads', where: 'is_active = 1 AND screen = ?', whereArgs: [screen], limit: 1);
+      if (result.isNotEmpty) return result.first;
+    } catch (_) {}
+    return null;
+  }
+
   Future<Map<String, String>> getAllSettings() async {
     final db = await database;
     final result = await db.query('settings');

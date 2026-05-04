@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../database/database_helper.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
@@ -18,11 +21,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, int> _stats = {};
   double _totalDebt = 0;
   bool _loading = true;
+  static bool _adShown = false;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    if (!_adShown) {
+      _adShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkAndShowAd());
+    }
+  }
+
+  Future<void> _checkAndShowAd() async {
+    final ad = await DatabaseHelper.instance.getActiveAd('home');
+    if (ad == null) return;
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AdDialog(ad: ad),
+    );
   }
 
   Future<void> _loadData() async {
@@ -258,6 +278,109 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(emoji, style: const TextStyle(fontSize: 18)),
             const SizedBox(width: 8),
             Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AdDialog extends StatefulWidget {
+  final Map<String, dynamic> ad;
+  const AdDialog({super.key, required this.ad});
+
+  @override
+  State<AdDialog> createState() => _AdDialogState();
+}
+
+class _AdDialogState extends State<AdDialog> {
+  late int _remaining;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = widget.ad['skip_duration'] ?? 0;
+    if (_remaining > 0) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _remaining--;
+          if (_remaining <= 0) {
+            timer.cancel();
+          }
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = widget.ad['image_url'] != null && widget.ad['image_url'].toString().isNotEmpty;
+    final hasLink = widget.ad['link'] != null && widget.ad['link'].toString().isNotEmpty;
+    
+    return PopScope(
+      canPop: _remaining <= 0,
+      child: Dialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasImage)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                child: Image.file(
+                  File(widget.ad['image_url']),
+                  height: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, err, st) => const SizedBox(height: 100, child: Center(child: Icon(Icons.broken_image, color: AppColors.textMuted, size: 40))),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Text(widget.ad['title'], style: const TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+                  const SizedBox(height: 10),
+                  Text(widget.ad['body'], style: const TextStyle(color: AppColors.textColor, fontSize: 14), textAlign: TextAlign.center),
+                  if (hasLink) ...[
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final url = Uri.tryParse(widget.ad['link']);
+                        if (url != null) await launchUrl(url, mode: LaunchMode.externalApplication);
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+                      child: const Text('التفاصيل', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.darkBorder, height: 1),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: _remaining > 0
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('يمكنك التخطي بعد $_remaining ثانية', style: const TextStyle(color: AppColors.textMuted, fontSize: 12), textAlign: TextAlign.center),
+                    )
+                  : TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('تخطي الإعلان', style: TextStyle(color: AppColors.textMuted)),
+                    ),
+            ),
           ],
         ),
       ),
