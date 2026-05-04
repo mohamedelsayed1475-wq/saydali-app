@@ -119,9 +119,9 @@ class SupabaseService {
 
       return RepResponse(
         sessionId: session['id'].toString(),
-        repName: session['rep_name'] ?? '',
-        repPhone: session['rep_phone'] ?? '',
-        pharmacyName: session['pharmacy_name'] ?? '',
+        repName: session['rep_name']?.toString() ?? '',
+        repPhone: session['rep_phone']?.toString() ?? '',
+        pharmacyName: session['pharmacy_name']?.toString() ?? '',
         respondedAt: session['responded_at'] != null
             ? DateTime.parse(session['responded_at'])
             : DateTime.now(),
@@ -227,13 +227,13 @@ class ResponseItem {
   });
 
   factory ResponseItem.fromMap(Map<String, dynamic> map) => ResponseItem(
-        id: map['id'] ?? '',
-        drugName: map['drug_name'] ?? '',
-        company: map['company'] ?? '',
-        quantity: map['quantity'] ?? 1,
+        id: map['id']?.toString() ?? '',
+        drugName: map['drug_name']?.toString() ?? '',
+        company: map['company']?.toString() ?? '',
+        quantity: map['quantity'] as int? ?? 1,
         price: (map['price'] as num?)?.toDouble() ?? 0,
         discount: (map['discount'] as num?)?.toDouble() ?? 0,
-        notes: map['rep_notes'],
+        notes: map['rep_notes']?.toString(),
       );
 
   double get finalPrice => price * (1 - discount / 100);

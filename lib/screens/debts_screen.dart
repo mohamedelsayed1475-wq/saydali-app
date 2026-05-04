@@ -222,16 +222,33 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('سجل المعاملات', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
-                          TextButton.icon(
-                            onPressed: () => _printReceipt(customer, txList),
-                            icon: const Icon(Icons.receipt_long, size: 16),
-                            label: const Text('مشاركة الإيصال', style: TextStyle(fontSize: 12)),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => _showStatementOptions(customer, txList),
+                                icon: const Icon(Icons.picture_as_pdf, size: 14),
+                                label: const Text('كشف حساب', style: TextStyle(fontSize: 12)),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.warning,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton.icon(
+                                onPressed: () => _printReceipt(customer, txList),
+                                icon: const Icon(Icons.receipt_long, size: 14),
+                                label: const Text('إيصال', style: TextStyle(fontSize: 12)),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -292,6 +309,164 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _showStatementOptions(Customer customer, List<DebtTransaction> txList) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('فترة كشف الحساب', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _periodBtn(ctx, customer, txList, 'شهر', 1),
+                _periodBtn(ctx, customer, txList, 'شهرين', 2),
+                _periodBtn(ctx, customer, txList, '3 شهور', 3),
+                _periodBtn(ctx, customer, txList, 'سنة', 12),
+                _periodBtn(ctx, customer, txList, 'الكل', null),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _periodBtn(BuildContext ctx, Customer customer, List<DebtTransaction> txList, String label, int? months) {
+    return ActionChip(
+      label: Text(label, style: const TextStyle(color: AppColors.textColor)),
+      backgroundColor: AppColors.dark,
+      side: const BorderSide(color: AppColors.darkBorder),
+      onPressed: () {
+        Navigator.pop(ctx);
+        _printAccountStatement(customer, txList, months);
+      },
+    );
+  }
+
+  Future<void> _printAccountStatement(Customer customer, List<DebtTransaction> txList, int? months) async {
+    showSnack(context, 'جاري توليد كشف الحساب...');
+    
+    final filteredTx = txList.where((tx) {
+      if (months == null) return true;
+      final limitDate = DateTime.now().subtract(Duration(days: months * 30));
+      return tx.transactionDate.isAfter(limitDate);
+    }).toList();
+
+    filteredTx.sort((a, b) => a.transactionDate.compareTo(b.transactionDate));
+
+    final pdf = pw.Document();
+    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدلي PRO';
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        textDirection: pw.TextDirection.rtl,
+        build: (pw.Context context) {
+          return [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('كشف حساب عميل', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(pharmacyName, style: const pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('العميل: ${customer.name}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    if (customer.phone != null && customer.phone!.isNotEmpty)
+                      pw.Text('هاتف: ${customer.phone}', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                    pw.Text('تاريخ التقرير: ${DateFormat('yyyy/MM/dd').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                  ],
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+            
+            pw.Text(months == null ? 'جميع المعاملات السابقة' : 'المعاملات خلال آخر $months شهر', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            pw.SizedBox(height: 10),
+
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey300),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(2),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(1.5),
+                3: const pw.FlexColumnWidth(1.5),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  children: ['التاريخ', 'البيان', 'النوع', 'المبلغ']
+                      .map((h) => pw.Padding(
+                            padding: const pw.EdgeInsets.all(6),
+                            child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                          ))
+                      .toList(),
+                ),
+                ...filteredTx.map((tx) {
+                  final isDebt = tx.type == 'debt';
+                  return pw.TableRow(
+                    children: [
+                      _formatDate(tx.transactionDate),
+                      tx.description ?? (isDebt ? 'دين' : 'سداد'),
+                      isDebt ? 'إضافة دين' : 'سداد دين',
+                      '${tx.amount.toStringAsFixed(2)} ج.م',
+                    ]
+                        .map((t) => pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(t, style: const pw.TextStyle(fontSize: 10)),
+                            ))
+                        .toList(),
+                  );
+                }),
+              ],
+            ),
+            pw.SizedBox(height: 16),
+            
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('الرصيد النهائي المتبقي على العميل:', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('${customer.totalDebt.toStringAsFixed(2)} جنيه', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: customer.totalDebt > 0 ? PdfColors.red700 : PdfColors.green700)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Center(
+              child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.sharePdf(bytes: await pdf.save(), filename: 'statement_${customer.name}.pdf');
   }
 
   Future<void> _printReceipt(Customer customer, List<DebtTransaction> txList) async {
