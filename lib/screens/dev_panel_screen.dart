@@ -50,6 +50,8 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
         created_at TEXT NOT NULL
       )
     ''');
+    // جدول الإعلانات
+    await db.execute('''
       CREATE TABLE IF NOT EXISTS ads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
@@ -233,15 +235,19 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                 const Text('الشاشة', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 8, children: [
-                  for (final s in [('home', 'الرئيسية'), ('shortages', 'النواقص'), ('reports', 'التقارير')])
+                  for (final s in [
+                    {'id': 'home', 'label': 'الرئيسية'},
+                    {'id': 'shortages', 'label': 'النواقص'},
+                    {'id': 'reports', 'label': 'التقارير'}
+                  ])
                     ChoiceChip(
-                      label: Text(s.$2),
-                      selected: screen == s.$1,
-                      onSelected: (_) => setBS(() => screen = s.$1),
+                      label: Text(s['label']!),
+                      selected: screen == s['id'],
+                      onSelected: (_) => setBS(() => screen = s['id']!),
                       selectedColor: AppColors.primary,
                       backgroundColor: AppColors.dark,
-                      labelStyle: TextStyle(color: screen == s.$1 ? Colors.white : AppColors.textMuted, fontSize: 12),
-                      side: BorderSide(color: screen == s.$1 ? AppColors.primary : AppColors.darkBorder),
+                      labelStyle: TextStyle(color: screen == s['id'] ? Colors.white : AppColors.textMuted, fontSize: 12),
+                      side: BorderSide(color: screen == s['id'] ? AppColors.primary : AppColors.darkBorder),
                     ),
                 ]),
                 const SizedBox(height: 16),
