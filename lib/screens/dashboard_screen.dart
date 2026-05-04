@@ -362,7 +362,7 @@ class _AdDialogState extends State<AdDialog> {
                         if (url != null) await launchUrl(url, mode: LaunchMode.externalApplication);
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-                      child: const Text('التفاصيل', style: TextStyle(fontWeight: FontWeight.w700)),
+                      child: Text(widget.ad['button_text'] ?? 'التفاصيل', style: const TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ],
                 ],

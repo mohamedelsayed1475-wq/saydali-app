@@ -58,6 +58,7 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
         body TEXT NOT NULL,
         image_url TEXT,
         link TEXT,
+        button_text TEXT DEFAULT 'التفاصيل',
         is_active INTEGER DEFAULT 1,
         screen TEXT DEFAULT 'home',
         skip_duration INTEGER DEFAULT 0,
@@ -66,6 +67,9 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
     ''');
     try {
       await db.execute('ALTER TABLE ads ADD COLUMN skip_duration INTEGER DEFAULT 0');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE ads ADD COLUMN button_text TEXT DEFAULT "التفاصيل"');
     } catch (_) {}
     _loadCodes();
     _loadAds();
@@ -180,6 +184,7 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
     final titleCtrl = TextEditingController();
     final bodyCtrl = TextEditingController();
     final linkCtrl = TextEditingController();
+    final btnTextCtrl = TextEditingController(text: 'التواصل عبر واتساب');
     final durationCtrl = TextEditingController(text: '0');
     String screen = 'home';
     String? pickedImagePath;
@@ -228,7 +233,9 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                   ),
                 ],
                 const SizedBox(height: 10),
-                AppTextField(hint: 'رابط (اختياري)', controller: linkCtrl),
+                AppTextField(hint: 'رابط التواصل (مثال: https://wa.me/...)', controller: linkCtrl),
+                const SizedBox(height: 10),
+                AppTextField(hint: 'نص زر التواصل (مثال: تواصل معنا)', controller: btnTextCtrl),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'مدة الإجبار قبل التخطي (ثواني)', controller: durationCtrl, keyboardType: TextInputType.number),
                 const SizedBox(height: 10),
@@ -261,6 +268,7 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
                       'body': bodyCtrl.text.trim(),
                       'image_url': pickedImagePath,
                       'link': linkCtrl.text.trim(),
+                      'button_text': btnTextCtrl.text.trim().isEmpty ? 'التفاصيل' : btnTextCtrl.text.trim(),
                       'is_active': 1,
                       'screen': screen,
                       'skip_duration': int.tryParse(durationCtrl.text) ?? 0,
