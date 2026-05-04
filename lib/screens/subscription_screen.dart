@@ -18,32 +18,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   final _codeCtrl = TextEditingController();
   bool _isValidating = false;
   String? _codeError;
-  int _selectedPlan = 1; // 0=basic, 1=pro, 2=premium
+  int _selectedPlan = 0; // 0=premium
+  double _currentPrice = 200;
+  int _discountPercent = 0;
 
   final _plans = [
-    (
-      name: 'أساسي',
-      medal: '🥉',
-      price: 50,
-      duration: 'شهر',
-      color: const Color(0xFFCD7F32),
-      features: ['نواقص غير محدودة', 'تصدير PDF', 'ديون العملاء', 'مندوب واحد'],
-    ),
-    (
-      name: 'احترافي',
-      medal: '🥈',
-      price: 100,
-      duration: 'شهر',
-      color: const Color(0xFF9CA3AF),
-      features: ['كل مميزات الأساسي', 'مندوبون غير محدودون', 'تصدير Excel', 'تقارير متقدمة', 'رفع Excel للأصناف'],
-    ),
     (
       name: 'بريميوم',
       medal: '🥇',
       price: 200,
       duration: 'شهر',
       color: AppColors.warning,
-      features: ['كل مميزات الاحترافي', 'ذكاء اصطناعي', 'دعم 24/7', 'نسخ احتياطي سحابي', 'إعلانات مخصصة'],
+      features: ['إدارة النواقص والديون', 'مندوبون غير محدودون', 'تصدير فواتير (PDF & Excel)', 'نسخ احتياطي سحابي', 'دعم فني متميز 24/7'],
     ),
   ];
 
@@ -75,59 +61,51 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     setState(() { _isValidating = true; _codeError = null; });
-    await Future.delayed(const Duration(seconds: 1));
-
-    // التحقق من الكود في قاعدة البيانات
+    
     final db = DatabaseHelper.instance;
-    // هنا هيتم التحقق من جدول الأكواد
-    final result = await _checkCode(code);
+    final data = await SupabaseService.instance.checkSubscriptionCode(code);
+    
     if (mounted) {
       setState(() => _isValidating = false);
-      if (result != null && result.startsWith('✅')) {
-        showSnack(context, result);
-        
-        // Save subscription expiry (e.g. 30 days from now)
-        final expiry = DateTime.now().add(const Duration(days: 30)).toIso8601String();
+      
+      if (data == null) {
+        setState(() => _codeError = 'كود غير صحيح');
+        return;
+      }
+      
+      final isActive = data['is_active'] == true || data['is_active'] == 1;
+      if (!isActive) {
+        setState(() => _codeError = '❌ الكود غير فعال أو منتهي');
+        return;
+      }
+      
+      final maxUses = data['max_uses'] ?? 1;
+      final usedCount = data['used_count'] ?? 0;
+      if (usedCount >= maxUses) {
+        setState(() => _codeError = '❌ الكود تم استخدامه بالكامل');
+        return;
+      }
+
+      final discount = (data['discount_percent'] ?? 0) as int;
+      final duration = (data['duration_days'] ?? 30) as int;
+      
+      if (discount > 0 && discount < 100) {
+        setState(() {
+          _discountPercent = discount;
+          _currentPrice = 200 - (200 * discount / 100);
+        });
+        showSnack(context, '✅ تم تطبيق خصم $discount% بنجاح!');
+      } else {
+        showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
+        final expiry = DateTime.now().add(Duration(days: duration)).toIso8601String();
         await db.setSetting('subscription_expiry', expiry);
         
-        // Redirect to main screen
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const MainScreen()),
-              (route) => false,
-            );
+            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const MainScreen()), (route) => false);
           }
         });
-      } else if (result != null) {
-        setState(() => _codeError = result);
-      } else {
-        setState(() => _codeError = 'كود غير صحيح أو منتهي الصلاحية');
       }
-    }
-  }
-
-  Future<String?> _checkCode(String code) async {
-    final data = await SupabaseService.instance.checkSubscriptionCode(code);
-    if (data == null) return null;
-    
-    final isActive = data['is_active'] == true || data['is_active'] == 1;
-    if (!isActive) return '❌ الكود غير فعال أو منتهي';
-    
-    final maxUses = data['max_uses'] ?? 1;
-    final usedCount = data['used_count'] ?? 0;
-    if (usedCount >= maxUses) return '❌ الكود تم استخدامه بالكامل';
-
-    final discount = data['discount_percent'] ?? 0;
-    final plan = data['plan'] ?? 'pro';
-    
-    String planName = plan == 'basic' ? 'الأساسي' : plan == 'premium' ? 'بريميوم' : 'الاحترافي';
-
-    if (discount > 0) {
-      return '✅ خصم $discount%! تم تفعيل العرض';
-    } else {
-      return '✅ كود صحيح! تم تفعيل الاشتراك $planName';
     }
   }
 
@@ -211,6 +189,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     ),
                   ],
                 ),
+                if (_discountPercent > 0) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('باقي الحساب للتحويل:', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+                        Text('$_currentPrice جنيه', style: const TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Cairo')),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
