@@ -7,6 +7,7 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
 import 'pin_lock_screen.dart';
+import 'platform_settings_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
@@ -256,6 +257,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: 'ملف Excel لتسهيل الإضافة في النواقص',
           onTap: _uploadDictionary,
           trailing: const Icon(Icons.upload_file, color: AppColors.primary),
+        ),
+        const SizedBox(height: 16),
+
+        // Pharmacy Platforms
+        _sectionTitle('📱 منصات شركات الأدوية'),
+        _settingsTile(
+          emoji: '🏪',
+          title: 'إدارة المنصات',
+          subtitle: 'أضف منصات الشركات للبحث والطلب من حكيم',
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const PlatformSettingsScreen())),
+          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
         ),
         const SizedBox(height: 16),
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
+import 'platform_service.dart';
 
 // ── أنواع النوايا ──────────────────────────────────────────────────
 enum ChatIntent {
@@ -13,6 +14,7 @@ enum ChatIntent {
   searchDrug,
   findAlternative,
   analyzePatterns,
+  searchPlatform,
   showDebts,
   checkCustomerDebt,
   showReps,
@@ -89,8 +91,12 @@ class ChatService {
     if (RegExp(r'(بديل|بدائل|بدل|عوض)').hasMatch(n)) {
       return ChatIntent.findAlternative;
     }
-    if (RegExp(r'(تحليل|انماط|نمط|اكثر|اكتر|تكرار|متكرر)').hasMatch(n)) {
+    if (RegExp(r'(تحليل|انماط|نمط|تكرار|متكرر)').hasMatch(n)) {
       return ChatIntent.analyzePatterns;
+    }
+    if (RegExp(r'(ابحث|دور|سعر|اسعار|اطلب|طلب|منصة|منصات|شركة|شركات|اونلاين)').hasMatch(n) &&
+        !RegExp(r'(ناقص|نواقص|اضف|معلق)').hasMatch(n)) {
+      return ChatIntent.searchPlatform;
     }
     if (RegExp(r'(مساعده|مساعدة|ايه|ازاي|كيف|ايش|امر|اوامر)').hasMatch(n)) {
       return ChatIntent.help;
@@ -127,6 +133,8 @@ class ChatService {
         return _handleFindAlternative(text);
       case ChatIntent.analyzePatterns:
         return _handleAnalyzePatterns();
+      case ChatIntent.searchPlatform:
+        return _handleSearchPlatform(text);
       default:
         return _handleSearchDrug(text);
     }
@@ -401,6 +409,64 @@ class ChatService {
     );
   }
 
+  // ── البحث في منصات الأدوية ──────────────────────────────────────────────────
+  Future<ChatResponse> _handleSearchPlatform(String text) async {
+    final n = _normalize(text);
+    const stop = {'ابحث','دور','عن','في','سعر','اسعار','اطلب','طلب','منصة','منصات','شركة','شركات','اونلاين','من','لي','لى','عاوز','عايز'};
+    final words = n.split(' ').where((w) => !stop.contains(w) && w.length > 1).toList();
+    if (words.isEmpty) {
+      return ChatResponse(
+        text: '❓ اكتب اسم الدواء مثلاً:\n"ابحث عن بروفين"\n"سعر أموكسيسيللين"',
+        intent: ChatIntent.searchPlatform, success: false,
+      );
+    }
+    final drugName = words.join(' ');
+    final platforms = await PlatformService.instance.getPlatforms();
+    if (platforms.isEmpty) {
+      return ChatResponse(
+        text: '📱 مفيش منصات مضافة!\n\n'
+            'روح الإعدادات ← منصات الأدوية\n'
+            'وأضف منصات شركات الأدوية اللي بتتعامل معاها.\n\n'
+            '💡 هتحتاج:\n'
+            '• اسم المنصة\n'
+            '• رابط الـ API\n'
+            '• مفتاح الـ API (من حسابك في المنصة)',
+        intent: ChatIntent.searchPlatform, success: false,
+      );
+    }
+
+    final results = await PlatformService.instance.searchAll(drugName);
+    if (results.isEmpty) {
+      return ChatResponse(
+        text: '🔍 بحثت في ${platforms.length} منصة عن "$drugName"\n\n'
+            '❌ مش لاقي نتائج.\n'
+            '💡 جرب اسم تاني أو تأكد من إعدادات المنصات.',
+        intent: ChatIntent.searchPlatform,
+      );
+    }
+
+    final buf = StringBuffer('🔍 نتائج "$drugName" من ${results.length} منصة:\n\n');
+    for (final entry in results.entries) {
+      buf.writeln('📦 ${entry.key}:');
+      for (final r in entry.value) {
+        final avail = r.available ? '✅' : '❌';
+        final priceStr = '${r.price.toStringAsFixed(2)}';
+        buf.write('  $avail ${r.drugName} - $priceStr');
+        if (r.discount > 0) {
+          buf.write(' (خصم ${r.discount.toStringAsFixed(0)}% → ${r.finalPrice.toStringAsFixed(2)})');
+        }
+        buf.writeln();
+      }
+      buf.writeln();
+    }
+    buf.writeln('💡 للطلب تواصل مع المنصة مباشرة من حسابك.');
+
+    return ChatResponse(
+      text: buf.toString().trim(),
+      intent: ChatIntent.searchPlatform,
+    );
+  }
+
   // ── مطابقة ضبابية (fuzzy) ──────────────────────────────────────────────────
   bool _fuzzyMatch(String query, String text) {
     final q = query.toLowerCase().trim();
@@ -645,7 +711,12 @@ class ChatService {
 • اكتب اسم الدواء مباشرة
 
 ⚙️ API:
-• اضغط أيقونة ⚙️ لإضافة API خاص''';
+• اضغط أيقونة ⚙️ لإضافة API خاص
+
+📱 منصات الأدوية:
+• "ابحث عن [اسم]" ← بحث في كل المنصات
+• "سعر [اسم]" ← مقارنة الأسعار
+• أضف منصاتك من الإعدادات''';
 
   String _apiHelpText() => '''⚙️ إعدادات الذكاء الاصطناعي
 
