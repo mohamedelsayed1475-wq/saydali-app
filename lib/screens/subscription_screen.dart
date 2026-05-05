@@ -55,7 +55,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     // Developer / Manager Bypass
-    if (code == EnvConfig.adminCode1 || code == EnvConfig.adminCode2) {
+    const fallbackCodes = {'ADMIN2026', 'DEV@SAYDALI2026'};
+    if (code == EnvConfig.adminCode1 ||
+        code == EnvConfig.adminCode2 ||
+        fallbackCodes.contains(code)) {
       final expiry =
           DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
