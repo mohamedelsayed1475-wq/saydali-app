@@ -549,6 +549,83 @@ class ChatService {
 
 💡 اضغط أيقونة ⚙️ في أعلى الشاشة لإضافة مفتاحك.''';
 
+  // ── اقتراح أسماء أدوية عبر API (للـ autocomplete) ──────────────────────────
+  Future<List<Map<String, dynamic>>> suggestDrugNames(String query) async {
+    if (query.trim().length < 3) return [];
+    final prefs = await SharedPreferences.getInstance();
+    final url = prefs.getString('custom_api_url') ?? '';
+    final key = prefs.getString('custom_api_key') ?? '';
+
+    // OpenAI if available
+    if (url.isNotEmpty && key.isNotEmpty) {
+      try {
+        final endpoint = url.endsWith('/')
+            ? '${url}chat/completions'
+            : '$url/chat/completions';
+        final res = await http
+            .post(Uri.parse(endpoint),
+                headers: {
+                  'Authorization': 'Bearer $key',
+                  'Content-Type': 'application/json'
+                },
+                body: jsonEncode({
+                  'model': 'gpt-3.5-turbo',
+                  'messages': [
+                    {
+                      'role': 'system',
+                      'content':
+                          'أنت قاموس أدوية. أعطني 5 أسماء أدوية تجارية تطابق أو تشبه الاسم المطلوب. أعد كل اسم في سطر منفصل بدون ترقيم أو شرح.'
+                    },
+                    {'role': 'user', 'content': query},
+                  ],
+                  'max_tokens': 80,
+                  'temperature': 0.3,
+                }))
+            .timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final d = jsonDecode(res.body);
+          final text = d['choices']?[0]?['message']?['content'] ?? '';
+          return text
+              .toString()
+              .split('\n')
+              .map((s) => s.replaceAll(RegExp(r'^[\d\-\.\)]+\s*'), '').trim())
+              .where((s) => s.isNotEmpty && s.length > 2)
+              .take(5)
+              .map((s) =>
+                  <String, dynamic>{'enName': s, 'arName': '', 'source': 'ai'})
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    // DuckDuckGo fallback
+    try {
+      final ddgUrl =
+          'https://api.duckduckgo.com/?q=${Uri.encodeComponent("$query drug")}&format=json&no_html=1';
+      final res = await http
+          .get(Uri.parse(ddgUrl))
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final d = jsonDecode(res.body);
+        final topics = d['RelatedTopics'] as List? ?? [];
+        return topics
+            .take(5)
+            .map((t) {
+              final text = t['Text']?.toString() ?? '';
+              final name = text.split(' - ').first.split(':').first.trim();
+              return <String, dynamic>{
+                'enName': name,
+                'arName': '',
+                'source': 'web'
+              };
+            })
+            .where((m) => (m['enName'] as String).length > 2)
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   // ── إدارة إعدادات API ──────────────────────────────────────────────────
   Future<void> saveApiSettings({
     required String url,

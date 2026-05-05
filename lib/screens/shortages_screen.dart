@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
+import '../services/chat_service.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
@@ -28,6 +30,9 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   String _search = '';
   bool _loading = true;
   List<Map<String, dynamic>> _suggestions = [];
+  List<Map<String, dynamic>> _aiDrugSuggestions = [];
+  bool _aiSearching = false;
+  Timer? _aiDebounce;
 
   final _filters = [
     ('all', 'الكل'),
@@ -36,6 +41,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     ('covered', 'مغطى'),
     ('stubborn', 'مستعصي'),
   ];
+
+  @override
+  void dispose() {
+    _aiDebounce?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -65,6 +76,36 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         } catch (e) {}
       }
     }
+  }
+
+  void _searchAiForDrug(String query, VoidCallback onUpdate) {
+    _aiDebounce?.cancel();
+    if (query.length < 3) {
+      _aiDrugSuggestions = [];
+      _aiSearching = false;
+      onUpdate();
+      return;
+    }
+    final q = query.toLowerCase();
+    final hasLocal = _suggestions.any((s) {
+      final en = s['enName']?.toString().toLowerCase() ?? '';
+      final ar = s['arName']?.toString().toLowerCase() ?? '';
+      return en.contains(q) || ar.contains(q);
+    });
+    if (hasLocal) {
+      _aiDrugSuggestions = [];
+      _aiSearching = false;
+      onUpdate();
+      return;
+    }
+    _aiSearching = true;
+    onUpdate();
+    _aiDebounce = Timer(const Duration(milliseconds: 600), () async {
+      final results = await ChatService.instance.suggestDrugNames(query);
+      _aiDrugSuggestions = results;
+      _aiSearching = false;
+      if (mounted) onUpdate();
+    });
   }
 
   Future<void> _loadShortages() async {
@@ -295,7 +336,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                             controller: ctrl,
                             focusNode: fn,
                             onSubmitted: (_) => onSubmit(),
-                            onChanged: (val) => nameCtrl.text = val,
+                            onChanged: (val) {
+                              nameCtrl.text = val;
+                              _searchAiForDrug(val, () => setBS(() {}));
+                            },
                           );
                         },
                         optionsViewBuilder: (context, onSelected, options) {
@@ -404,6 +448,39 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     ),
                   ],
                 ),
+                // AI Suggestions
+                if (_aiSearching)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Row(children: [
+                      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+                      SizedBox(width: 8),
+                      Text('🤖 جاري البحث بالذكاء الاصطناعي...', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    ]),
+                  ),
+                if (_aiDrugSuggestions.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text('🤖 اقتراحات الذكاء الاصطناعي:', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: _aiDrugSuggestions.map((d) {
+                      final name = d['enName']?.toString() ?? '';
+                      return ActionChip(
+                        label: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+                        onPressed: () {
+                          nameCtrl.text = name;
+                          setBS(() => _aiDrugSuggestions = []);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة المصنعة', controller: companyCtrl),
                 const SizedBox(height: 10),
