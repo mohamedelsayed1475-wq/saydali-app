@@ -21,6 +21,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     ('الديون', '💰'),
     ('المندوبين', '👥'),
     ('ملخص اليوم', '📊'),
+    ('تحليل النواقص', '📈'),
     ('مساعدة', '🤖'),
   ];
 

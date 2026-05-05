@@ -11,6 +11,8 @@ enum ChatIntent {
   markCovered,
   deleteShortage,
   searchDrug,
+  findAlternative,
+  analyzePatterns,
   showDebts,
   checkCustomerDebt,
   showReps,
@@ -84,6 +86,12 @@ class ChatService {
     if (RegExp(r'(api|ايبيآي|مفتاح|ذكاء)').hasMatch(n)) {
       return ChatIntent.apiSettings;
     }
+    if (RegExp(r'(بديل|بدائل|بدل|عوض)').hasMatch(n)) {
+      return ChatIntent.findAlternative;
+    }
+    if (RegExp(r'(تحليل|انماط|نمط|اكثر|اكتر|تكرار|متكرر)').hasMatch(n)) {
+      return ChatIntent.analyzePatterns;
+    }
     if (RegExp(r'(مساعده|مساعدة|ايه|ازاي|كيف|ايش|امر|اوامر)').hasMatch(n)) {
       return ChatIntent.help;
     }
@@ -115,6 +123,10 @@ class ChatService {
         return ChatResponse(text: _apiHelpText(), intent: ChatIntent.apiSettings);
       case ChatIntent.help:
         return ChatResponse(text: _helpText(), intent: ChatIntent.help);
+      case ChatIntent.findAlternative:
+        return _handleFindAlternative(text);
+      case ChatIntent.analyzePatterns:
+        return _handleAnalyzePatterns();
       default:
         return _handleSearchDrug(text);
     }
@@ -297,6 +309,95 @@ class ChatService {
           '  🔴 عنيد: ${stats['stubborn']}\n\n'
           '💰 إجمالي الديون: ${totalDebt.toStringAsFixed(2)} $currency',
       intent: ChatIntent.showStats,
+    );
+  }
+
+  // ── بدائل الأدوية ──────────────────────────────────────────────────
+  Future<ChatResponse> _handleFindAlternative(String text) async {
+    final n = _normalize(text);
+    const stop = {'بديل','بدائل','بدل','عوض','لـ','ل','دواء','عقار'};
+    final words = n.split(' ').where((w) => !stop.contains(w) && w.length > 1).toList();
+    if (words.isEmpty) {
+      return ChatResponse(
+        text: '❓ اكتب اسم الدواء مثلاً:\n"بديل بروفين"',
+        intent: ChatIntent.findAlternative, success: false,
+      );
+    }
+    final drugName = words.join(' ');
+    final dictionary = await _loadDictionary();
+    if (dictionary.isEmpty) {
+      return ChatResponse(
+        text: '📖 القاموس فارغ! ارفع قاموس الأدوية من الإعدادات أولاً.',
+        intent: ChatIntent.findAlternative, success: false,
+      );
+    }
+    final original = dictionary.where((d) {
+      final en = d['enName']?.toString().toLowerCase() ?? '';
+      final ar = d['arName']?.toString().toLowerCase() ?? '';
+      return en.contains(drugName.toLowerCase()) || ar.contains(drugName.toLowerCase());
+    }).toList();
+    if (original.isEmpty) {
+      return ChatResponse(
+        text: '❌ مش لاقي "$drugName" في القاموس.',
+        intent: ChatIntent.findAlternative, success: false,
+      );
+    }
+    final activeIngredient = original.first['activeIngredient']?.toString() ?? '';
+    if (activeIngredient.isEmpty) {
+      return ChatResponse(
+        text: '⚠️ "${original.first['enName']}" مش مسجل ليه مادة فعالة في القاموس.',
+        intent: ChatIntent.findAlternative, success: false,
+      );
+    }
+    final alternatives = dictionary.where((d) {
+      final act = d['activeIngredient']?.toString().toLowerCase() ?? '';
+      final en = d['enName']?.toString() ?? '';
+      return act.contains(activeIngredient.toLowerCase()) && en != original.first['enName'];
+    }).take(8).toList();
+    if (alternatives.isEmpty) {
+      return ChatResponse(
+        text: '🔍 "${original.first['enName']}"\n🧪 المادة الفعالة: $activeIngredient\n\n❌ مفيش بدائل بنفس المادة الفعالة.',
+        intent: ChatIntent.findAlternative,
+      );
+    }
+    final lines = alternatives.map((d) {
+      return '💊 ${d['enName']}${d['arName']?.toString().isNotEmpty == true ? " (${d['arName']})" : ""}';
+    }).join('\n');
+    return ChatResponse(
+      text: '🔄 بدائل "${original.first['enName']}":\n🧪 المادة الفعالة: $activeIngredient\n\n$lines',
+      intent: ChatIntent.findAlternative,
+    );
+  }
+
+  // ── تحليل أنماط النواقص ──────────────────────────────────────────────────
+  Future<ChatResponse> _handleAnalyzePatterns() async {
+    final db = await DatabaseHelper.instance.database;
+    final all = await db.query('shortages', orderBy: 'created_at DESC');
+    if (all.isEmpty) {
+      return ChatResponse(text: '📭 مفيش نواقص مسجلة للتحليل.', intent: ChatIntent.analyzePatterns);
+    }
+    final freq = <String, int>{};
+    for (final s in all) {
+      final name = s['name']?.toString() ?? '';
+      freq[name] = (freq[name] ?? 0) + 1;
+    }
+    final sorted = freq.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final top = sorted.take(10).toList();
+    final stubborn = all.where((s) => s['status'] == 'stubborn').length;
+    final covered = all.where((s) => s['status'] == 'covered').length;
+    final rate = all.isNotEmpty ? ((covered / all.length) * 100).toStringAsFixed(0) : '0';
+    final lines = top.asMap().entries.map((e) {
+      final medal = e.key < 3 ? ['🥇','🥈','🥉'][e.key] : '${e.key + 1}.';
+      return '$medal ${e.value.key} (${e.value.value} مرة)';
+    }).join('\n');
+    return ChatResponse(
+      text: '📈 تحليل أنماط النواقص:\n\n'
+          '🔢 إجمالي: ${all.length} صنف\n'
+          '✅ نسبة التغطية: $rate%\n'
+          '🔴 مستعصي: $stubborn صنف\n\n'
+          '🏆 الأكثر تكراراً:\n$lines\n\n'
+          '💡 نصيحة: خزّن الأدوية الأكثر تكراراً بكميات أكبر!',
+      intent: ChatIntent.analyzePatterns,
     );
   }
 
@@ -523,6 +624,12 @@ class ChatService {
 • "النواقص" ← عرض الكل
 • "النواقص المعلقة" ← فقط المعلقة
 • "تم توفير [اسم]" ← تعليم كمتوفر
+
+🔄 البدائل:
+• "بديل [اسم]" ← بدائل بنفس المادة الفعالة
+
+📈 التحليل:
+• "تحليل النواقص" ← أنماط وتكرارات
 
 💰 الديون:
 • "الديون" ← عرض الكل
