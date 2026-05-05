@@ -23,6 +23,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = true;
   static bool _adShown = false;
   String _currency = 'ج.م';
+  List<Map<String, dynamic>> _alerts = [];
 
   @override
   void initState() {
@@ -47,15 +48,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
+    // تشغيل الإغلاق التلقائي للنواقص القديمة
+    await DatabaseHelper.instance.autoCloseOldPendingShortages();
+
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();
     final currency = await DatabaseHelper.instance.getCurrency();
+
+    // بناء التنبيهات الذكية
+    final alerts = <Map<String, dynamic>>[];
+
+    // 1. نواقص معلقة > 12 ساعة
+    final db = await DatabaseHelper.instance.database;
+    final twelveHoursAgo =
+        DateTime.now().subtract(const Duration(hours: 12)).toIso8601String();
+    final oldPending = await db.query('shortages',
+        where: "status = 'pending' AND created_at <= ?",
+        whereArgs: [twelveHoursAgo]);
+    if (oldPending.isNotEmpty) {
+      alerts.add({
+        'icon': '⏰',
+        'title': '${oldPending.length} صنف قرب يبقى مستعصي!',
+        'subtitle': 'معلق أكتر من 12 ساعة - تواصل مع المندوب',
+        'color': AppColors.warning,
+      });
+    }
+
+    // 2. ديون كبيرة
+    final customers = await DatabaseHelper.instance.getCustomers();
+    final highDebt = customers
+        .where((c) => (c['total_debt'] as num) > 500)
+        .toList();
+    if (highDebt.isNotEmpty) {
+      alerts.add({
+        'icon': '💸',
+        'title': '${highDebt.length} عميل عليه دين كبير',
+        'subtitle': 'إجمالي: ${debt.toStringAsFixed(0)} $currency',
+        'color': AppColors.danger,
+      });
+    }
+
+    // 3. نواقص مستعصية
+    final stubbornCount = stats['stubborn'] ?? 0;
+    if (stubbornCount > 3) {
+      alerts.add({
+        'icon': '🔴',
+        'title': '$stubbornCount صنف مستعصي',
+        'subtitle': 'جرب مندوب تاني أو ابحث عن بدائل',
+        'color': AppColors.danger,
+      });
+    }
+
+    // 4. نسبة تغطية ضعيفة
+    final total = stats['total'] ?? 0;
+    final covered = stats['covered'] ?? 0;
+    if (total > 5 && covered / total < 0.3) {
+      alerts.add({
+        'icon': '📉',
+        'title': 'نسبة التغطية ضعيفة (${((covered / total) * 100).toStringAsFixed(0)}%)',
+        'subtitle': 'حاول تتواصل مع المندوبين',
+        'color': AppColors.warning,
+      });
+    }
+
+    // 5. أخبار إيجابية
+    if (alerts.isEmpty && total > 0) {
+      alerts.add({
+        'icon': '🎉',
+        'title': 'كل حاجة تمام!',
+        'subtitle': 'مفيش تنبيهات عاجلة - استمر!',
+        'color': AppColors.primary,
+      });
+    }
 
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
         _currency = currency;
+        _alerts = alerts;
         _loading = false;
       });
     }
@@ -82,66 +153,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // AI Banner
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+          // Smart Alerts
+          if (_alerts.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primaryDark),
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primaryDark),
-            ),
-            child: Row(
-              children: [
-                const Text('🤖', style: TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
                     children: [
-                      const Text('تنبيه ذكي',
+                      Text('🤖', style: TextStyle(fontSize: 20)),
+                      SizedBox(width: 8),
+                      Text('تنبيهات ذكية',
                           style: TextStyle(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13)),
-                      const SizedBox(height: 4),
-                      Text(
-                        total == 0
-                            ? 'لا توجد نواقص اليوم 🎉'
-                            : 'لديك $total صنف ناقص، $pending في انتظار رد المندوبين',
-                        style: const TextStyle(
-                            color: AppColors.textLight, fontSize: 12),
-                      ),
-                      if (pending > 0) ...[
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.danger.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                                color: AppColors.danger.withValues(alpha: 0.3)),
-                          ),
-                          child: const Text(
-                            '⚠️ تنبيه: سيتم تحويل الأصناف المعلقة منذ 24 ساعة إلى مستعصية تلقائياً',
-                            style: TextStyle(
-                                color: AppColors.danger,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  ..._alerts.map((a) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(a['icon'], style: const TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(a['title'],
+                                      style: TextStyle(
+                                          color: a['color'] as Color,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12)),
+                                  Text(a['subtitle'],
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
 
           // Stats Row 1
           Row(
