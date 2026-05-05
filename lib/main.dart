@@ -12,6 +12,7 @@ import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/chat_screen.dart';
+import 'screens/pin_lock_screen.dart';
 import 'database/database_helper.dart';
 
 void main() async {
@@ -104,8 +105,23 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     if (isValid) {
-      Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (_) => const MainScreen()));
+      final hasPIN = await PinLockScreen.isPinEnabled();
+      if (hasPIN && mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PinLockScreen(
+              onSuccess: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+              ),
+            ),
+          ),
+        );
+      } else if (mounted) {
+        Navigator.pushReplacement(
+            context, MaterialPageRoute(builder: (_) => const MainScreen()));
+      }
     } else {
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const SubscriptionScreen()));

@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
+import 'pin_lock_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _pharmacistCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   bool _notificationsEnabled = true;
+  bool _pinEnabled = false;
   bool _loading = true;
   int _devTapCount = 0;
   String _selectedCountryCode = 'EG';
@@ -47,6 +49,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _notificationsEnabled =
             (settings['notifications_enabled'] ?? '1') == '1';
         _loading = false;
+      });
+      PinLockScreen.isPinEnabled().then((v) {
+        if (mounted) setState(() => _pinEnabled = v);
       });
     }
   }
@@ -171,6 +176,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: _notificationsEnabled,
             activeThumbColor: AppColors.primary,
             onChanged: (v) => setState(() => _notificationsEnabled = v),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // PIN Lock
+        _sectionTitle('🔐 قفل التطبيق'),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: SwitchListTile(
+            title: const Text('قفل برقم سري',
+                style: TextStyle(color: AppColors.textColor)),
+            subtitle: Text(
+                _pinEnabled ? 'التطبيق محمي برقم سري' : 'اضغط لتفعيل القفل',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            value: _pinEnabled,
+            activeThumbColor: AppColors.primary,
+            onChanged: (v) {
+              if (v) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PinLockScreen(
+                      isSetup: true,
+                      onSuccess: () {
+                        Navigator.pop(context);
+                        setState(() => _pinEnabled = true);
+                        showSnack(context, '🔐 تم تفعيل القفل بنجاح!');
+                      },
+                    ),
+                  ),
+                );
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PinLockScreen(
+                      onSuccess: () async {
+                        await PinLockScreen.removePin();
+                        if (mounted) {
+                          Navigator.pop(context);
+                          setState(() => _pinEnabled = false);
+                          showSnack(context, '🔓 تم إلغاء القفل');
+                        }
+                      },
+                    ),
+                  ),
+                );
+              }
+            },
             contentPadding: EdgeInsets.zero,
           ),
         ),

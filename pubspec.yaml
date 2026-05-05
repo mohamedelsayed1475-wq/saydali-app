@@ -56,6 +56,9 @@ dependencies:
   # الشات بوت الذكي
   shared_preferences: ^2.2.2
 
+  # قفل التطبيق
+  crypto: ^3.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
