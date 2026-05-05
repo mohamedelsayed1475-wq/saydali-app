@@ -25,8 +25,36 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // إضافة أي تعديلات مستقبلية هنا
-      // مثال: await db.execute('ALTER TABLE shortages ADD COLUMN new_col TEXT');
+      // إنشاء جداول الأكواد والإعلانات لو مش موجودة (ترقية من v1)
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS subscription_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          plan TEXT NOT NULL,
+          duration_days INTEGER NOT NULL,
+          discount_percent INTEGER DEFAULT 0,
+          max_uses INTEGER DEFAULT 1,
+          used_count INTEGER DEFAULT 0,
+          device_id TEXT,
+          is_active INTEGER DEFAULT 1,
+          expires_at TEXT,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ads (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          image_url TEXT,
+          link TEXT,
+          button_text TEXT DEFAULT 'التفاصيل',
+          is_active INTEGER DEFAULT 1,
+          screen TEXT DEFAULT 'home',
+          skip_duration INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      ''');
     }
   }
 

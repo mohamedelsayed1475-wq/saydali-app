@@ -56,10 +56,17 @@ class Shortage {
 
   String get timeAgo {
     final diff = DateTime.now().difference(createdAt);
-    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
-    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+    if (diff.inMinutes < 1) return 'الآن';
+    if (diff.inMinutes < 60) {
+      final m = diff.inMinutes;
+      return 'منذ $m ${m <= 10 ? 'دقائق' : 'دقيقة'}';
+    }
+    if (diff.inHours < 24) {
+      final h = diff.inHours;
+      return 'منذ $h ${h <= 10 ? 'ساعات' : 'ساعة'}';
+    }
     if (diff.inDays == 1) return 'أمس';
-    return 'منذ ${diff.inDays} أيام';
+    return 'منذ ${diff.inDays} ${diff.inDays <= 10 ? 'أيام' : 'يوم'}';
   }
 
   Shortage copyWith({

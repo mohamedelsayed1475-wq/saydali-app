@@ -31,7 +31,14 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
+            --dart-define=DEV_PASS=${{ secrets.DEV_PASS }} \
+            --dart-define=ADMIN_CODE_1=${{ secrets.ADMIN_CODE_1 }} \
+            --dart-define=ADMIN_CODE_2=${{ secrets.ADMIN_CODE_2 }} \
+            --dart-define=WEB_PORTAL_URL=${{ secrets.WEB_PORTAL_URL }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

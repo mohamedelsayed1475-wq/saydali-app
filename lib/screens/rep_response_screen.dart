@@ -50,17 +50,24 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
 
     setState(() { _loading = true; _error = null; });
 
-    final response = await SupabaseService.instance.fetchResponseByCode(code);
+    final result = await SupabaseService.instance.fetchResponseByCode(code);
 
     if (mounted) {
       setState(() {
         _loading = false;
-        if (response != null) {
-          _response = response;
+        if (result.response != null) {
+          _response = result.response;
+        } else if (result.error != null) {
+          _error = result.error;
         } else {
           _error = 'كود غير صحيح أو منتهي الصلاحية';
         }
       });
+
+      // حذف البيانات من Supabase فوراً بعد استلام الرد (توفير التكلفة)
+      if (result.response != null) {
+        SupabaseService.instance.deleteSession(result.response!.sessionId);
+      }
     }
   }
 
@@ -112,7 +119,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       }
     }
 
-    await SupabaseService.instance.deleteSession(_response!.sessionId);
+
 
     if (mounted) {
       showSnack(context, 'تم إنهاء اليوم ✅');

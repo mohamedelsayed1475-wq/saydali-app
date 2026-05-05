@@ -1,14 +1,17 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../utils/env_config.dart';
 
 class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
   SupabaseService._internal();
 
-  static const _url = 'https://kmrszdvsdqfaaksqhnqf.supabase.co/rest/v1';
-  static const _key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcnN6ZHZzZHFmYWFrc3FobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTYwNTIsImV4cCI6MjA5MzA3MjA1Mn0.ac8p574OhOG9OPuHzCDOxeHNdEiUkFEtFG_l535Pl3A';
+  static const _url = EnvConfig.supabaseUrl;
+  static const _key = EnvConfig.supabaseKey;
 
   bool get isConfigured => _key.isNotEmpty && !_key.contains('REPLACE');
 
@@ -79,10 +82,13 @@ class SupabaseService {
   }
 
   // ── استقبال رد المندوب بالكود ──────────────────────────────────────────────────
-  Future<RepResponse?> fetchResponseByCode(String responseCode) async {
+  /// يرجع ({RepResponse? response, String? error}).
+  /// error == null يعني نجاح أو كود خاطئ (response == null).
+  /// error != null يعني فشل في الاتصال.
+  Future<({RepResponse? response, String? error})> fetchResponseByCode(String responseCode) async {
     if (!isConfigured) {
       debugPrint('❌ Supabase key غير مضبوط');
-      return null;
+      return (response: null, error: 'إعدادات الاتصال غير مكتملة');
     }
     try {
       final codeRes = await http.get(
@@ -92,10 +98,10 @@ class SupabaseService {
 
       if (codeRes.statusCode != 200) {
         debugPrint('❌ خطأ في جلب الكود: ${codeRes.statusCode}');
-        return null;
+        return (response: null, error: 'خطأ من السيرفر (${codeRes.statusCode})');
       }
       final codes = jsonDecode(codeRes.body) as List;
-      if (codes.isEmpty) return null;
+      if (codes.isEmpty) return (response: null, error: null); // كود غير موجود
 
       final sessionId = codes[0]['session_id'];
 
@@ -104,9 +110,9 @@ class SupabaseService {
         headers: _headers,
       ).timeout(const Duration(seconds: 10));
 
-      if (sessionRes.statusCode != 200) return null;
+      if (sessionRes.statusCode != 200) return (response: null, error: 'خطأ في جلب بيانات الجلسة');
       final sessions = jsonDecode(sessionRes.body) as List;
-      if (sessions.isEmpty) return null;
+      if (sessions.isEmpty) return (response: null, error: null);
       final session = sessions[0];
 
       final itemsRes = await http.get(
@@ -114,10 +120,10 @@ class SupabaseService {
         headers: _headers,
       ).timeout(const Duration(seconds: 10));
 
-      if (itemsRes.statusCode != 200) return null;
+      if (itemsRes.statusCode != 200) return (response: null, error: 'خطأ في جلب الأصناف');
       final items = jsonDecode(itemsRes.body) as List;
 
-      return RepResponse(
+      return (response: RepResponse(
         sessionId: session['id'].toString(),
         repName: session['rep_name']?.toString() ?? '',
         repPhone: session['rep_phone']?.toString() ?? '',
@@ -133,22 +139,42 @@ class SupabaseService {
             .where((i) => i['is_available'] == 0)
             .map((i) => ResponseItem.fromMap(i))
             .toList(),
-      );
+      ), error: null);
+    } on TimeoutException {
+      debugPrint('❌ fetchResponseByCode timeout');
+      return (response: null, error: 'انتهت مهلة الاتصال - تحقق من الإنترنت');
+    } on SocketException {
+      debugPrint('❌ fetchResponseByCode no internet');
+      return (response: null, error: 'لا يوجد اتصال بالإنترنت');
     } catch (e) {
       debugPrint('❌ fetchResponseByCode error: $e');
-      return null;
+      return (response: null, error: 'خطأ في الاتصال: $e');
     }
   }
 
-  // ── حذف الجلسة ──────────────────────────────────────────────────
+  // ── حذف الجلسة وبياناتها من السحابة (توفير التكلفة) ──────────────────
   Future<void> deleteSession(String sessionId) async {
     if (!isConfigured) return;
     try {
+      // 1. حذف الأصناف المرتبطة بالجلسة
+      await http.delete(
+        Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+
+      // 2. حذف كود الرد
+      await http.delete(
+        Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+
+      // 3. حذف الجلسة نفسها
       await http.delete(
         Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
         headers: _headers,
       ).timeout(const Duration(seconds: 10));
-      debugPrint('✅ تم حذف الجلسة بنجاح من السحابة');
+
+      debugPrint('✅ تم حذف الجلسة وبياناتها من السحابة');
     } catch (e) {
       debugPrint('❌ deleteSession error: $e');
     }
@@ -181,9 +207,9 @@ class SupabaseService {
   }
 
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
-  // ✅ السطر الصح (زى الأول)
-String buildRepLink(String sessionCode) {
-  return 'https://mohamedelsayed1475-wq.github.io/saydali-app1/?code=$sessionCode';
+  String buildRepLink(String sessionCode) {
+    return '${EnvConfig.webPortalBaseUrl}/?code=$sessionCode';
+  }
 }
 
 

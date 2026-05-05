@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../utils/app_theme.dart';
+import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 
@@ -17,7 +18,7 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
   late TabController _tabCtrl;
   final _passCtrl = TextEditingController();
   bool _authenticated = false;
-  static const _devPass = 'dev@saydali2026'; // كلمة سر المطور
+  static const _devPass = EnvConfig.devPassword;
 
   // أكواد الاشتراك
   List<Map<String, dynamic>> _codes = [];
@@ -33,44 +34,8 @@ class _DevPanelScreenState extends State<DevPanelScreen> with SingleTickerProvid
   }
 
   Future<void> _initDevTables() async {
-    final db = await DatabaseHelper.instance.database;
-    // جدول الأكواد
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS subscription_codes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        plan TEXT NOT NULL,
-        duration_days INTEGER NOT NULL,
-        discount_percent INTEGER DEFAULT 0,
-        max_uses INTEGER DEFAULT 1,
-        used_count INTEGER DEFAULT 0,
-        device_id TEXT,
-        is_active INTEGER DEFAULT 1,
-        expires_at TEXT,
-        created_at TEXT NOT NULL
-      )
-    ''');
-    // جدول الإعلانات
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS ads (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        body TEXT NOT NULL,
-        image_url TEXT,
-        link TEXT,
-        button_text TEXT DEFAULT 'التفاصيل',
-        is_active INTEGER DEFAULT 1,
-        screen TEXT DEFAULT 'home',
-        skip_duration INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL
-      )
-    ''');
-    try {
-      await db.execute('ALTER TABLE ads ADD COLUMN skip_duration INTEGER DEFAULT 0');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE ads ADD COLUMN button_text TEXT DEFAULT "التفاصيل"');
-    } catch (_) {}
+    // الجداول تم إنشاؤها في database_helper.dart → _onCreate
+    // هنا فقط نحمل البيانات
     _loadCodes();
     _loadAds();
   }

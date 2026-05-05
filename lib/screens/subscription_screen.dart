@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/app_theme.dart';
+import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
@@ -47,7 +48,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     // Developer / Manager Bypass
-    if (code == 'ADMIN2026' || code == 'DEV@SAYDALI2026') {
+    if (code == EnvConfig.adminCode1 || code == EnvConfig.adminCode2) {
       final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
       if (mounted) {
