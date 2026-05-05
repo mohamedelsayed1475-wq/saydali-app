@@ -300,11 +300,82 @@ class ChatService {
     );
   }
 
-  // ── البحث عن دواء: محلي → ملفات → API ──────────────────────────────────
+  // ── مطابقة ضبابية (fuzzy) ──────────────────────────────────────────────────
+  bool _fuzzyMatch(String query, String text) {
+    final q = query.toLowerCase().trim();
+    if (q.isEmpty) return false;
+    final t = text.toLowerCase();
+    if (t.contains(q)) return true;
+    // مطابقة حروف متتابعة
+    int i = 0;
+    for (int j = 0; j < t.length && i < q.length; j++) {
+      if (t[j] == q[i]) i++;
+    }
+    return i == q.length;
+  }
+
+  // ── تحميل القاموس من الإعدادات ──────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> _loadDictionary() async {
+    final dictStr =
+        await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    if (dictStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(dictStr);
+        return decoded.cast<Map<String, dynamic>>();
+      } catch (_) {}
+    }
+    // محاولة القاموس القديم
+    final oldStr =
+        await DatabaseHelper.instance.getSetting('drug_dictionary');
+    if (oldStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(oldStr);
+        return decoded.map((s) => <String, dynamic>{'enName': s.toString()}).toList();
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  // ── البحث عن دواء: القاموس → النواقص → API ──────────────────────────────────
   Future<ChatResponse> _handleSearchDrug(String text) async {
     final n = _normalize(text);
+    final terms = text.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty).toList();
 
-    // 1️⃣ قاعدة البيانات المحلية
+    // 1️⃣ البحث في القاموس أولاً
+    final dictionary = await _loadDictionary();
+    if (dictionary.isNotEmpty) {
+      final matches = dictionary.where((drug) {
+        final en = drug['enName']?.toString() ?? '';
+        final ar = drug['arName']?.toString() ?? '';
+        final act = drug['activeIngredient']?.toString() ?? '';
+        final bar = drug['barcode']?.toString() ?? '';
+        return terms.every((term) =>
+            _fuzzyMatch(term, en) ||
+            _fuzzyMatch(term, ar) ||
+            _fuzzyMatch(term, act) ||
+            _fuzzyMatch(term, bar));
+      }).take(8).toList();
+
+      if (matches.isNotEmpty) {
+        final lines = matches.map((d) {
+          final en = d['enName'] ?? '';
+          final ar = d['arName'] ?? '';
+          final act = d['activeIngredient'] ?? '';
+          final parts = <String>[
+            '💊 $en',
+            if (ar.toString().isNotEmpty) '   🏷️ $ar',
+            if (act.toString().isNotEmpty) '   🧪 $act',
+          ];
+          return parts.join('\n');
+        }).join('\n\n');
+        return ChatResponse(
+          text: '📖 وجدت في القاموس (${matches.length} نتيجة):\n\n$lines\n\n💡 جرب: "أضف دواء ${matches.first['enName']}"',
+          intent: ChatIntent.searchDrug,
+        );
+      }
+    }
+
+    // 2️⃣ البحث في النواقص المحلية
     final db = await DatabaseHelper.instance.database;
     final localResults = await db.query(
       'shortages',
@@ -323,12 +394,12 @@ class ChatService {
           .map((s) => '💊 ${s['name']} | ${statusLabel[s['status']] ?? s['status']}')
           .join('\n');
       return ChatResponse(
-        text: '🗄️ وجدت في قاعدة البيانات:\n\n$lines',
+        text: '🗄️ وجدت في النواقص:\n\n$lines',
         intent: ChatIntent.searchDrug,
       );
     }
 
-    // 2️⃣ البحث عبر API
+    // 3️⃣ البحث عبر API
     return _searchViaApi(text);
   }
 
