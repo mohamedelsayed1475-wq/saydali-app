@@ -30,7 +30,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       price: 200,
       duration: 'شهر',
       color: AppColors.warning,
-      features: ['إدارة النواقص والديون', 'مندوبون غير محدودون', 'تصدير فواتير (PDF & Excel)', 'نسخ احتياطي سحابي', 'دعم فني متميز 24/7'],
+      features: [
+        'إدارة النواقص والديون',
+        'مندوبون غير محدودون',
+        'تصدير فواتير (PDF & Excel)',
+        'نسخ احتياطي سحابي',
+        'دعم فني متميز 24/7'
+      ],
     ),
   ];
 
@@ -49,7 +55,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
     // Developer / Manager Bypass
     if (code == EnvConfig.adminCode1 || code == EnvConfig.adminCode2) {
-      final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
+      final expiry =
+          DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
       if (mounted) {
         Navigator.pushAndRemoveUntil(
@@ -61,40 +68,44 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       return;
     }
 
-    setState(() { _isValidating = true; _codeError = null; });
-    
+    setState(() {
+      _isValidating = true;
+      _codeError = null;
+    });
+
     final db = DatabaseHelper.instance;
     final localDb = await db.database;
-    
+
     List<Map<String, dynamic>> localCodes = [];
     try {
-      localCodes = await localDb.query('subscription_codes', where: 'code = ?', whereArgs: [code]);
+      localCodes = await localDb
+          .query('subscription_codes', where: 'code = ?', whereArgs: [code]);
     } catch (_) {}
 
     Map<String, dynamic>? data;
     bool isLocal = false;
-    
+
     if (localCodes.isNotEmpty) {
       data = localCodes.first;
       isLocal = true;
     } else {
       data = await SupabaseService.instance.checkSubscriptionCode(code);
     }
-    
+
     if (mounted) {
       setState(() => _isValidating = false);
-      
+
       if (data == null) {
         setState(() => _codeError = 'كود غير صحيح');
         return;
       }
-      
+
       final isActive = data['is_active'] == true || data['is_active'] == 1;
       if (!isActive) {
         setState(() => _codeError = '❌ الكود غير فعال أو منتهي');
         return;
       }
-      
+
       final maxUses = data['max_uses'] ?? 1;
       final usedCount = data['used_count'] ?? 0;
       if (usedCount >= maxUses) {
@@ -104,10 +115,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       final discount = (data['discount_percent'] ?? 0) as int;
       final duration = (data['duration_days'] ?? 30) as int;
-      
+
       if (discount > 0 && discount < 100) {
         if (isLocal) {
-          await localDb.update('subscription_codes', {'used_count': usedCount + 1}, where: 'code = ?', whereArgs: [code]);
+          await localDb.update(
+              'subscription_codes', {'used_count': usedCount + 1},
+              where: 'code = ?', whereArgs: [code]);
         }
         setState(() {
           _discountPercent = discount;
@@ -116,15 +129,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         showSnack(context, '✅ تم تطبيق خصم $discount% بنجاح!');
       } else {
         if (isLocal) {
-          await localDb.update('subscription_codes', {'used_count': usedCount + 1}, where: 'code = ?', whereArgs: [code]);
+          await localDb.update(
+              'subscription_codes', {'used_count': usedCount + 1},
+              where: 'code = ?', whereArgs: [code]);
         }
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
-        final expiry = DateTime.now().add(Duration(days: duration)).toIso8601String();
+        final expiry =
+            DateTime.now().add(Duration(days: duration)).toIso8601String();
         await db.setSetting('subscription_expiry', expiry);
-        
+
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
-            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const MainScreen()), (route) => false);
+            Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+                (route) => false);
           }
         });
       }
@@ -136,10 +155,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return Scaffold(
       backgroundColor: AppColors.dark,
       appBar: AppBar(
-        title: const Text('الاشتراك والتفعيل', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('الاشتراك والتفعيل',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         backgroundColor: AppColors.darkCard,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textColor),
+          icon: const Icon(Icons.arrow_back_ios_rounded,
+              color: AppColors.textColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -152,7 +173,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF0D2E1C), Color(0xFF132233)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.primaryDark),
@@ -161,21 +183,34 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               children: [
                 const Text('💊', style: TextStyle(fontSize: 40)),
                 const SizedBox(height: 8),
-                const Text('صيدلي PRO', style: TextStyle(color: AppColors.primary, fontSize: 22, fontWeight: FontWeight.w800)),
-                const Text('اختر الباقة المناسبة لصيدليتك', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                const Text('صيدلي PRO',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
+                const Text('اختر الباقة المناسبة لصيدليتك',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
           // Plans
-          const Text('📦 الباقات المتاحة', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+          const Text('📦 الباقات المتاحة',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           for (int i = 0; i < _plans.length; i++) _buildPlanCard(i),
           const SizedBox(height: 20),
 
           // Discount Code
-          const Text('🎟️ كود الخصم أو التفعيل', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+          const Text('🎟️ كود الخصم أو التفعيل',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -191,22 +226,34 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     Expanded(
                       child: TextField(
                         controller: _codeCtrl,
-                        style: const TextStyle(color: AppColors.textColor, letterSpacing: 3, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                            color: AppColors.textColor,
+                            letterSpacing: 3,
+                            fontWeight: FontWeight.w700),
                         textCapitalization: TextCapitalization.characters,
                         decoration: InputDecoration(
                           hintText: 'XXXXXXXX',
-                          hintStyle: const TextStyle(color: AppColors.textMuted, letterSpacing: 3),
+                          hintStyle: const TextStyle(
+                              color: AppColors.textMuted, letterSpacing: 3),
                           errorText: _codeError,
-                          prefixIcon: const Icon(Icons.confirmation_number_rounded, color: AppColors.primary),
+                          prefixIcon: const Icon(
+                              Icons.confirmation_number_rounded,
+                              color: AppColors.primary),
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
                       onPressed: _isValidating ? null : _validateCode,
-                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16)),
+                      style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 16)),
                       child: _isValidating
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
                           : const Text('تفعيل'),
                     ),
                   ],
@@ -214,17 +261,27 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 if (_discountPercent > 0) ...[
                   const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('باقي الحساب للتحويل:', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-                        Text('$_currentPrice جنيه', style: const TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800, fontFamily: 'Cairo')),
+                        const Text('باقي الحساب للتحويل:',
+                            style: TextStyle(
+                                color: AppColors.textColor,
+                                fontWeight: FontWeight.w700)),
+                        Text('$_currentPrice جنيه',
+                            style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Cairo')),
                       ],
                     ),
                   ),
@@ -235,7 +292,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           const SizedBox(height: 20),
 
           // Payment Methods
-          const Text('💳 طرق الدفع', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+          const Text('💳 طرق الدفع',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
 
           // Vodafone Cash
@@ -254,11 +315,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             title: 'InstaPay',
             subtitle: 'drmohamedelsayed123@instapay',
             color: const Color(0xFF6366F1),
-            onTap: () => _openLink('https://ipn.eg/S/drmohamedelsayed123/instapay/3MXYr5'),
+            onTap: () => _openLink(
+                'https://ipn.eg/S/drmohamedelsayed123/instapay/3MXYr5'),
             trailing: IconButton(
-              icon: const Icon(Icons.copy, color: AppColors.textMuted, size: 18),
+              icon:
+                  const Icon(Icons.copy, color: AppColors.textMuted, size: 18),
               onPressed: () {
-                Clipboard.setData(const ClipboardData(text: 'drmohamedelsayed123@instapay'));
+                Clipboard.setData(
+                    const ClipboardData(text: 'drmohamedelsayed123@instapay'));
                 showSnack(context, 'تم نسخ عنوان InstaPay ✅');
               },
             ),
@@ -271,25 +335,33 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF0D1B2A),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF229ED9).withValues(alpha: 0.4)),
+              border: Border.all(
+                  color: const Color(0xFF229ED9).withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 48, height: 48,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: const Color(0xFF229ED9).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Center(child: Text('✈️', style: TextStyle(fontSize: 24))),
+                  child: const Center(
+                      child: Text('✈️', style: TextStyle(fontSize: 24))),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('تواصل مع المطور', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-                      const Text('للاستفسار أو المشاكل الفنية', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                      const Text('تواصل مع المطور',
+                          style: TextStyle(
+                              color: AppColors.textColor,
+                              fontWeight: FontWeight.w700)),
+                      const Text('للاستفسار أو المشاكل الفنية',
+                          style: TextStyle(
+                              color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -297,7 +369,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   onPressed: () => _openLink('https://t.me/Mohamed07Elsayed'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF229ED9),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     minimumSize: Size.zero,
                   ),
                   child: const Text('Telegram', style: TextStyle(fontSize: 12)),
@@ -321,9 +394,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isSelected ? plan.color.withValues(alpha: 0.1) : AppColors.darkCard,
+            color: isSelected
+                ? plan.color.withValues(alpha: 0.1)
+                : AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isSelected ? plan.color : AppColors.darkBorder, width: isSelected ? 2 : 1),
+            border: Border.all(
+                color: isSelected ? plan.color : AppColors.darkBorder,
+                width: isSelected ? 2 : 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,13 +409,28 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 children: [
                   Text(plan.medal, style: const TextStyle(fontSize: 24)),
                   const SizedBox(width: 10),
-                  Text(plan.name, style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 16)),
+                  Text(plan.name,
+                      style: TextStyle(
+                          color: plan.color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16)),
                   const Spacer(),
                   RichText(
                     text: TextSpan(
                       children: [
-                        TextSpan(text: '${plan.price}', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 22, fontFamily: 'Cairo')),
-                        const TextSpan(text: ' جنيه/شهر', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo')),
+                        TextSpan(
+                            text: '${plan.price}',
+                            style: TextStyle(
+                                color: plan.color,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 22,
+                                fontFamily: 'Cairo')),
+                        const TextSpan(
+                            text: ' جنيه/شهر',
+                            style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                                fontFamily: 'Cairo')),
                       ],
                     ),
                   ),
@@ -352,15 +444,23 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
-                children: plan.features.map((f) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: plan.color.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: plan.color.withValues(alpha: 0.2)),
-                  ),
-                  child: Text('✓ $f', style: TextStyle(color: plan.color, fontSize: 11, fontWeight: FontWeight.w600)),
-                )).toList(),
+                children: plan.features
+                    .map((f) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: plan.color.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: plan.color.withValues(alpha: 0.2)),
+                          ),
+                          child: Text('✓ $f',
+                              style: TextStyle(
+                                  color: plan.color,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600)),
+                        ))
+                    .toList(),
               ),
             ],
           ),
@@ -390,17 +490,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         child: Row(
           children: [
             Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
-              child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Center(
+                  child: Text(emoji, style: const TextStyle(fontSize: 24))),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-                  Text(subtitle, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  Text(title,
+                      style: const TextStyle(
+                          color: AppColors.textColor,
+                          fontWeight: FontWeight.w700)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 12)),
                 ],
               ),
             ),
@@ -419,7 +528,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       }
     } catch (e) {
       await Clipboard.setData(ClipboardData(text: urlStr));
-      if (mounted) showSnack(context, 'لم نتمكن من فتح التطبيق - تم نسخ الرابط ✅');
+      if (mounted)
+        showSnack(context, 'لم نتمكن من فتح التطبيق - تم نسخ الرابط ✅');
     }
   }
 }

@@ -46,11 +46,16 @@ class Shortage {
 
   String get statusLabel {
     switch (status) {
-      case 'pending': return 'بانتظار رد';
-      case 'offered': return 'عرض موصول';
-      case 'covered': return 'تمت التغطية';
-      case 'stubborn': return 'مستعصي';
-      default: return status;
+      case 'pending':
+        return 'بانتظار رد';
+      case 'offered':
+        return 'عرض موصول';
+      case 'covered':
+        return 'تمت التغطية';
+      case 'stubborn':
+        return 'مستعصي';
+      default:
+        return status;
     }
   }
 
@@ -70,9 +75,15 @@ class Shortage {
   }
 
   Shortage copyWith({
-    int? id, String? name, String? company, int? quantity,
-    String? status, bool? isUrgent, String? notes,
-  }) => Shortage(
+    int? id,
+    String? name,
+    String? company,
+    int? quantity,
+    String? status,
+    bool? isUrgent,
+    String? notes,
+  }) =>
+      Shortage(
         id: id ?? this.id,
         name: name ?? this.name,
         company: company ?? this.company,

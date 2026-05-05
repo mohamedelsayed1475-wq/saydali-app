@@ -22,7 +22,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('مسح الباركود', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text('مسح الباركود',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),

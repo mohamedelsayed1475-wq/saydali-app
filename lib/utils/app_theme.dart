@@ -27,11 +27,16 @@ class AppTheme {
           surface: AppColors.darkCard,
           error: AppColors.danger,
         ),
-        textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme).copyWith(
-          headlineLarge: GoogleFonts.cairo(color: AppColors.textColor, fontWeight: FontWeight.w800),
-          headlineMedium: GoogleFonts.cairo(color: AppColors.textColor, fontWeight: FontWeight.w700),
-          titleLarge: GoogleFonts.cairo(color: AppColors.textColor, fontWeight: FontWeight.w700),
-          titleMedium: GoogleFonts.cairo(color: AppColors.textColor, fontWeight: FontWeight.w600),
+        textTheme:
+            GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme).copyWith(
+          headlineLarge: GoogleFonts.cairo(
+              color: AppColors.textColor, fontWeight: FontWeight.w800),
+          headlineMedium: GoogleFonts.cairo(
+              color: AppColors.textColor, fontWeight: FontWeight.w700),
+          titleLarge: GoogleFonts.cairo(
+              color: AppColors.textColor, fontWeight: FontWeight.w700),
+          titleMedium: GoogleFonts.cairo(
+              color: AppColors.textColor, fontWeight: FontWeight.w600),
           bodyLarge: GoogleFonts.cairo(color: AppColors.textColor),
           bodyMedium: GoogleFonts.cairo(color: AppColors.textLight),
           bodySmall: GoogleFonts.cairo(color: AppColors.textMuted),
@@ -71,9 +76,11 @@ class AppTheme {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.symmetric(vertical: 14),
-            textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, fontFamily: 'Cairo'),
+            textStyle: const TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 15, fontFamily: 'Cairo'),
           ),
         ),
         cardTheme: CardThemeData(

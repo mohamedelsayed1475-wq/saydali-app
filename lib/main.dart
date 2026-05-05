@@ -62,7 +62,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _fadeAnim;
   late Animation<double> _scaleAnim;
@@ -70,37 +71,43 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
-    _fadeAnim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeIn));
-    _scaleAnim = Tween<double>(begin: 0.7, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200));
+    _fadeAnim = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeIn));
+    _scaleAnim = Tween<double>(begin: 0.7, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _ctrl.forward();
     _navigate();
   }
 
-Future<void> _navigate() async {
-  await Future.delayed(const Duration(seconds: 2));
-  if (!mounted) return;
+  Future<void> _navigate() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
 
-  bool isValid = false;
-  try {
-    final expiryStr = await DatabaseHelper.instance.getSetting('subscription_expiry');
-    if (expiryStr != null) {
-      final expiry = DateTime.tryParse(expiryStr);
-      if (expiry != null && expiry.isAfter(DateTime.now())) {
-        isValid = true;
+    bool isValid = false;
+    try {
+      final expiryStr =
+          await DatabaseHelper.instance.getSetting('subscription_expiry');
+      if (expiryStr != null) {
+        final expiry = DateTime.tryParse(expiryStr);
+        if (expiry != null && expiry.isAfter(DateTime.now())) {
+          isValid = true;
+        }
       }
+    } catch (e) {
+      debugPrint('خطأ في قراءة إعدادات الاشتراك: $e');
+      // في حالة الخطأ، نفترض أن الاشتراك غير صالح ونوجه المستخدم لشاشة الاشتراك
     }
-  } catch (e) {
-    debugPrint('خطأ في قراءة إعدادات الاشتراك: $e');
-    // في حالة الخطأ، نفترض أن الاشتراك غير صالح ونوجه المستخدم لشاشة الاشتراك
-  }
 
-  if (isValid) {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
-  } else {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+    if (isValid) {
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => const MainScreen()));
+    } else {
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+    }
   }
-}
 
   @override
   void dispose() {
@@ -121,22 +128,44 @@ Future<void> _navigate() async {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 100, height: 100,
+                  width: 100,
+                  height: 100,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [AppColors.primary, AppColors.primaryDark],
-                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(28),
-                    boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.4), blurRadius: 30, spreadRadius: 5)],
+                    boxShadow: [
+                      BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.4),
+                          blurRadius: 30,
+                          spreadRadius: 5)
+                    ],
                   ),
-                  child: const Center(child: Text('💊', style: TextStyle(fontSize: 50))),
+                  child: const Center(
+                      child: Text('💊', style: TextStyle(fontSize: 50))),
                 ),
                 const SizedBox(height: 20),
-                const Text('صيدلي', style: TextStyle(color: AppColors.primary, fontSize: 36, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                const Text('PRO', style: TextStyle(color: AppColors.textMuted, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 4)),
+                const Text('صيدلي',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 36,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1)),
+                const Text('PRO',
+                    style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 4)),
                 const SizedBox(height: 40),
-                const SizedBox(width: 40, child: LinearProgressIndicator(color: AppColors.primary, backgroundColor: AppColors.darkBorder)),
+                const SizedBox(
+                    width: 40,
+                    child: LinearProgressIndicator(
+                        color: AppColors.primary,
+                        backgroundColor: AppColors.darkBorder)),
               ],
             ),
           ),
@@ -175,7 +204,14 @@ class _MainScreenState extends State<MainScreen> {
     (icon: Icons.settings_rounded, label: 'الإعدادات'),
   ];
 
-  final _titles = ['لوحة التحكم', 'نواقص اليوم', 'المندوبون', 'ديون العملاء', 'التقارير', 'الإعدادات'];
+  final _titles = [
+    'لوحة التحكم',
+    'نواقص اليوم',
+    'المندوبون',
+    'ديون العملاء',
+    'التقارير',
+    'الإعدادات'
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -190,8 +226,15 @@ class _MainScreenState extends State<MainScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('صيدلي', style: TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800, height: 1.2)),
-                Text(_titles[_currentIndex], style: const TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.2)),
+                const Text('صيدلي',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2)),
+                Text(_titles[_currentIndex],
+                    style: const TextStyle(
+                        color: AppColors.textMuted, fontSize: 11, height: 1.2)),
               ],
             ),
           ],
@@ -199,7 +242,8 @@ class _MainScreenState extends State<MainScreen> {
         actions: [
           // Badge الاشتراك
           GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
             child: Container(
               margin: const EdgeInsets.only(left: 8, top: 10, bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -207,18 +251,30 @@ class _MainScreenState extends State<MainScreen> {
                 color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text('🥈 احترافي', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+              child: const Text('🥈 احترافي',
+                  style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
             ),
           ),
           // Avatar
           Container(
-            margin: const EdgeInsets.only(left: 12, right: 4, top: 8, bottom: 8),
-            width: 36, height: 36,
+            margin:
+                const EdgeInsets.only(left: 12, right: 4, top: 8, bottom: 8),
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
+              gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryDark]),
               borderRadius: BorderRadius.circular(99),
             ),
-            child: const Center(child: Text('ص', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14))),
+            child: const Center(
+                child: Text('ص',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14))),
           ),
         ],
       ),
@@ -239,22 +295,32 @@ class _MainScreenState extends State<MainScreen> {
                   onTap: () => setState(() => _currentIndex = i),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isActive ? AppColors.primary.withValues(alpha: 0.1) : Colors.transparent,
+                      color: isActive
+                          ? AppColors.primary.withValues(alpha: 0.1)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(_tabs[i].icon, color: isActive ? AppColors.primary : AppColors.textMuted, size: 22),
+                        Icon(_tabs[i].icon,
+                            color: isActive
+                                ? AppColors.primary
+                                : AppColors.textMuted,
+                            size: 22),
                         const SizedBox(height: 2),
                         Text(
                           _tabs[i].label,
                           style: TextStyle(
-                            color: isActive ? AppColors.primary : AppColors.textMuted,
+                            color: isActive
+                                ? AppColors.primary
+                                : AppColors.textMuted,
                             fontSize: 9,
-                            fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                            fontWeight:
+                                isActive ? FontWeight.w700 : FontWeight.w400,
                           ),
                         ),
                       ],

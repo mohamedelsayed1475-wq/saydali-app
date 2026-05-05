@@ -42,7 +42,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading)
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.primary));
 
     final total = _stats['total'] ?? 0;
     final covered = _stats['covered'] ?? 0;
@@ -65,7 +67,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.primaryDark, Color(0xFF004D38)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -73,14 +76,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('التقرير الشهري - ${_monthName()}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                Text('$total ناقص', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800)),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 13)),
+                Text('$total ناقص',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800)),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     _summaryItem('$rate%', 'معدل التغطية'),
                     const SizedBox(width: 24),
-                    _summaryItem('${_totalDebt.toStringAsFixed(0)} جنيه', 'إجمالي الديون'),
+                    _summaryItem('${_totalDebt.toStringAsFixed(0)} جنيه',
+                        'إجمالي الديون'),
                     const SizedBox(width: 24),
                     _summaryItem('$covered صنف', 'تمت تغطيته'),
                   ],
@@ -101,36 +110,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('📊 النواقص الأسبوعية', style: TextStyle(color: AppColors.textLight, fontWeight: FontWeight.w700)),
+                const Text('📊 النواقص الأسبوعية',
+                    style: TextStyle(
+                        color: AppColors.textLight,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 16),
                 SizedBox(
                   height: 120,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: List.generate(4, (i) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text('${values[i]}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                            const SizedBox(height: 4),
-                            Container(
-                              height: maxVal > 0 ? (values[i] / maxVal * 80) : 10,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [AppColors.primary, AppColors.primaryDark],
-                                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    children: List.generate(
+                        4,
+                        (i) => Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text('${values[i]}',
+                                        style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 11)),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: maxVal > 0
+                                          ? (values[i] / maxVal * 80)
+                                          : 10,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            AppColors.primary,
+                                            AppColors.primaryDark
+                                          ],
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                        ),
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                                top: Radius.circular(6)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(weeks[i],
+                                        style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 10),
+                                        textAlign: TextAlign.center),
+                                  ],
                                 ),
-                                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(weeks[i], style: const TextStyle(color: AppColors.textMuted, fontSize: 10), textAlign: TextAlign.center),
-                          ],
-                        ),
-                      ),
-                    )),
+                            )),
                   ),
                 ),
               ],
@@ -149,7 +179,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('📦 توزيع الحالات', style: TextStyle(color: AppColors.textLight, fontWeight: FontWeight.w700)),
+                const Text('📦 توزيع الحالات',
+                    style: TextStyle(
+                        color: AppColors.textLight,
+                        fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 for (final entry in [
                   ('تمت التغطية', _stats['covered'] ?? 0, AppColors.primary),
@@ -159,12 +192,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ]) ...[
                   Row(
                     children: [
-                      SizedBox(width: 100, child: Text(entry.$1, style: const TextStyle(color: AppColors.textLight, fontSize: 13))),
+                      SizedBox(
+                          width: 100,
+                          child: Text(entry.$1,
+                              style: const TextStyle(
+                                  color: AppColors.textLight, fontSize: 13))),
                       Expanded(
-                        child: GradientProgressBar(value: total > 0 ? entry.$2 / total : 0),
+                        child: GradientProgressBar(
+                            value: total > 0 ? entry.$2 / total : 0),
                       ),
                       const SizedBox(width: 8),
-                      Text('${entry.$2}', style: TextStyle(color: entry.$3, fontWeight: FontWeight.w700)),
+                      Text('${entry.$2}',
+                          style: TextStyle(
+                              color: entry.$3, fontWeight: FontWeight.w700)),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -175,14 +215,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
           const SizedBox(height: 16),
 
           // Export buttons
-          const Text('📤 تصدير التقارير', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+          const Text('📤 تصدير التقارير',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _exportPDF,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger.withValues(alpha: 0.8)),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.danger.withValues(alpha: 0.8)),
                   icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
                   label: const Text('تصدير PDF'),
                 ),
@@ -191,7 +236,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _exportExcel,
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF217346)),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF217346)),
                   icon: const Icon(Icons.table_chart, color: Colors.white),
                   label: const Text('تصدير Excel'),
                 ),
@@ -204,18 +250,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _summaryItem(String value, String label) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
-    ],
-  );
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700)),
+          Text(label,
+              style: const TextStyle(color: Colors.white60, fontSize: 11)),
+        ],
+      );
 
   Future<void> _exportPDF() async {
     showSnack(context, 'جاري تجهيز PDF...');
     final pdf = pw.Document();
     final shortages = await DatabaseHelper.instance.getShortages();
-    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
+    final pharmacyName =
+        await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
 
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
@@ -234,25 +284,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('التقرير الشهري', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                  pw.Text(pharmacyName, style: const pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+                  pw.Text('التقرير الشهري',
+                      style: pw.TextStyle(
+                          fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(pharmacyName,
+                      style: const pw.TextStyle(
+                          fontSize: 14, color: PdfColors.grey700)),
                 ],
               ),
-              pw.Text('التاريخ: ${_formatDate(DateTime.now())}', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              pw.Text('التاريخ: ${_formatDate(DateTime.now())}',
+                  style: const pw.TextStyle(
+                      fontSize: 12, color: PdfColors.grey700)),
             ],
           ),
           pw.SizedBox(height: 20),
           pw.Divider(),
           pw.SizedBox(height: 10),
-          
-          pw.Text('إحصائيات الشهر', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('إحصائيات الشهر',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Text('إجمالي النواقص: ${_stats['total'] ?? 0}'),
           pw.Text('تمت التغطية: ${_stats['covered'] ?? 0}'),
           pw.Text('إجمالي الديون: $_totalDebt جنيه'),
           pw.SizedBox(height: 20),
-
-          pw.Text('سجل النواقص', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.Text('سجل النواقص',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 8),
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey300),
@@ -262,23 +320,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 children: ['الصنف', 'الشركة', 'الكمية', 'الحالة']
                     .map((h) => pw.Padding(
                           padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                          child: pw.Text(h,
+                              style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  fontSize: 10)),
                         ))
                     .toList(),
               ),
               ...shortages.take(50).map((item) => pw.TableRow(
-                children: [
-                  item['name'].toString(), 
-                  item['company'].toString(),
-                  item['quantity'].toString(),
-                  item['status'].toString(),
-                ]
-                    .map((t) => pw.Padding(
-                          padding: const pw.EdgeInsets.all(6),
-                          child: pw.Text(t, style: const pw.TextStyle(fontSize: 10)),
-                        ))
-                    .toList(),
-              )),
+                    children: [
+                      item['name'].toString(),
+                      item['company'].toString(),
+                      item['quantity'].toString(),
+                      item['status'].toString(),
+                    ]
+                        .map((t) => pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(t,
+                                  style: const pw.TextStyle(fontSize: 10)),
+                            ))
+                        .toList(),
+                  )),
             ],
           ),
         ],
@@ -292,19 +354,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
     showSnack(context, 'جاري تجهيز Excel...');
     try {
       var excel = Excel.createExcel();
-      
+
       // Sheet 1: النواقص
       var shortagesSheet = excel['النواقص'];
       excel.setDefaultSheet('النواقص');
       shortagesSheet.appendRow([
-        TextCellValue('ID'), 
-        TextCellValue('الصنف'), 
-        TextCellValue('الشركة'), 
-        TextCellValue('الكمية'), 
-        TextCellValue('الحالة'), 
+        TextCellValue('ID'),
+        TextCellValue('الصنف'),
+        TextCellValue('الشركة'),
+        TextCellValue('الكمية'),
+        TextCellValue('الحالة'),
         TextCellValue('التاريخ')
       ]);
-      
+
       final shortages = await DatabaseHelper.instance.getShortages();
       for (var s in shortages) {
         shortagesSheet.appendRow([
@@ -320,13 +382,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
       // Sheet 2: الديون
       var debtsSheet = excel['الديون'];
       debtsSheet.appendRow([
-        TextCellValue('ID'), 
-        TextCellValue('العميل'), 
-        TextCellValue('رقم الهاتف'), 
-        TextCellValue('العنوان'), 
+        TextCellValue('ID'),
+        TextCellValue('العميل'),
+        TextCellValue('رقم الهاتف'),
+        TextCellValue('العنوان'),
         TextCellValue('إجمالي الدين')
       ]);
-      
+
       final customers = await DatabaseHelper.instance.getCustomers();
       for (var c in customers) {
         debtsSheet.appendRow([
@@ -339,10 +401,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
 
       final dir = await getApplicationDocumentsDirectory();
-      final path = '${dir.path}/saydali_report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      final path =
+          '${dir.path}/saydali_report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
       final file = File(path);
       await file.writeAsBytes(excel.save()!);
-      
+
       await Share.shareXFiles([XFile(path)], text: 'تقرير صيدلي PRO');
     } catch (e) {
       if (mounted) showSnack(context, 'حدث خطأ أثناء التصدير: $e');
@@ -353,7 +416,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
       '${d.day}/${d.month}/${d.year} ${d.hour}:${d.minute.toString().padLeft(2, '0')}';
 
   String _monthName() {
-    const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+    const months = [
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر'
+    ];
     return '${months[DateTime.now().month - 1]} ${DateTime.now().year}';
   }
 }

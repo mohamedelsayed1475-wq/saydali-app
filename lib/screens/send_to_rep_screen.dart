@@ -55,15 +55,19 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
 
     setState(() => _sending = true);
 
-    final selectedItems = _shortages.where((s) => _selected.contains(s.id)).toList();
-    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
+    final selectedItems =
+        _shortages.where((s) => _selected.contains(s.id)).toList();
+    final pharmacyName =
+        await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
 
-    final items = selectedItems.map((s) => {
-      'name': s.name,
-      'company': s.company,
-      'quantity': s.quantity,
-      'is_private': 0,
-    }).toList();
+    final items = selectedItems
+        .map((s) => {
+              'name': s.name,
+              'company': s.company,
+              'quantity': s.quantity,
+              'is_private': 0,
+            })
+        .toList();
 
     final code = await SupabaseService.instance.createSession(
       repName: widget.rep.name,
@@ -91,17 +95,29 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       context: context,
       backgroundColor: AppColors.darkCard,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(99)))),
+            Center(
+                child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.darkBorder,
+                        borderRadius: BorderRadius.circular(99)))),
             const SizedBox(height: 20),
-            const Text('✅ تم إنشاء الرابط!', style: TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text('✅ تم إنشاء الرابط!',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            Text('أرسل الرابط لـ ${widget.rep.name}', style: const TextStyle(color: AppColors.textMuted)),
+            Text('أرسل الرابط لـ ${widget.rep.name}',
+                style: const TextStyle(color: AppColors.textMuted)),
             const SizedBox(height: 20),
 
             // الرابط
@@ -117,15 +133,18 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                   Expanded(
                     child: Text(
                       _generatedLink ?? '',
-                      style: const TextStyle(color: AppColors.primary, fontSize: 11),
+                      style: const TextStyle(
+                          color: AppColors.primary, fontSize: 11),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.copy, color: AppColors.primary, size: 18),
+                    icon: const Icon(Icons.copy,
+                        color: AppColors.primary, size: 18),
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: _generatedLink ?? ''));
+                      Clipboard.setData(
+                          ClipboardData(text: _generatedLink ?? ''));
                       showSnack(ctx, 'تم نسخ الرابط ✅');
                     },
                   ),
@@ -140,23 +159,30 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () async {
-                      final msg = 'مرحباً ${widget.rep.name}،\nيرجى مراجعة النواقص والرد عبر الرابط:\n$_generatedLink';
+                      final msg =
+                          'مرحباً ${widget.rep.name}،\nيرجى مراجعة النواقص والرد عبر الرابط:\n$_generatedLink';
                       // فتح واتساب
-                      final phone = widget.rep.phone?.replaceAll('+', '').replaceAll(' ', '') ?? '';
+                      final phone = widget.rep.phone
+                              ?.replaceAll('+', '')
+                              .replaceAll(' ', '') ??
+                          '';
                       final urlStr = phone.isNotEmpty
                           ? 'https://wa.me/$phone?text=${Uri.encodeComponent(msg)}'
                           : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
                       final url = Uri.parse(urlStr);
                       try {
-                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                        if (!await launchUrl(url,
+                            mode: LaunchMode.externalApplication)) {
                           throw Exception('Could not launch');
                         }
                       } catch (e) {
                         Clipboard.setData(ClipboardData(text: msg));
-                        if (ctx.mounted) showSnack(ctx, 'تم نسخ الرسالة - افتح واتساب يدويًا');
+                        if (ctx.mounted)
+                          showSnack(ctx, 'تم نسخ الرسالة - افتح واتساب يدويًا');
                       }
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366)),
                     icon: const Icon(Icons.message, size: 16),
                     label: const Text('واتساب'),
                   ),
@@ -165,10 +191,12 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: _generatedLink ?? ''));
+                      Clipboard.setData(
+                          ClipboardData(text: _generatedLink ?? ''));
                       showSnack(ctx, 'تم نسخ الرابط ✅');
                     },
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.darkBorder),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.darkBorder),
                     icon: const Icon(Icons.copy, size: 16),
                     label: const Text('نسخ'),
                   ),
@@ -185,17 +213,22 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                   Navigator.pop(ctx);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => RepResponseScreen(initialCode: _sessionCode)),
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            RepResponseScreen(initialCode: _sessionCode)),
                   );
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 icon: const Icon(Icons.qr_code_scanner, size: 18),
-                label: const Text('استقبال رد المندوب', style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
+                label: const Text('استقبال رد المندوب',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
               ),
             ),
             const SizedBox(height: 20),
@@ -207,16 +240,20 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingItems = _shortages.where((s) => s.status == 'pending').toList();
-    final stubbornItems = _shortages.where((s) => s.status == 'stubborn').toList();
+    final pendingItems =
+        _shortages.where((s) => s.status == 'pending').toList();
+    final stubbornItems =
+        _shortages.where((s) => s.status == 'stubborn').toList();
 
     return Scaffold(
       backgroundColor: AppColors.dark,
       appBar: AppBar(
-        title: Text('إرسال لـ ${widget.rep.name}', style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text('إرسال لـ ${widget.rep.name}',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
         backgroundColor: AppColors.darkCard,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textColor),
+          icon: const Icon(Icons.arrow_back_ios_rounded,
+              color: AppColors.textColor),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -225,14 +262,16 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
               padding: const EdgeInsets.only(left: 16),
               child: Text(
                 '${_selected.length} محدد',
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.w700),
               ),
             ),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : _shortages.isEmpty
               ? const EmptyState(
                   emoji: '🎉',
@@ -248,7 +287,8 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
@@ -257,7 +297,8 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                           Expanded(
                             child: Text(
                               'اختر الأصناف التي تريد إرسالها. الأصناف العلامة 🔒 لن تُرسل.',
-                              style: const TextStyle(color: AppColors.textLight, fontSize: 12),
+                              style: const TextStyle(
+                                  color: AppColors.textLight, fontSize: 12),
                             ),
                           ),
                         ],
@@ -272,21 +313,32 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('⏳ بانتظار الرد', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                                const Text('⏳ بانتظار الرد',
+                                    style: TextStyle(
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700)),
                                 TextButton(
                                   onPressed: () => setState(() {
-                                    for (final s in pendingItems) _selected.add(s.id!);
+                                    for (final s in pendingItems)
+                                      _selected.add(s.id!);
                                   }),
-                                  child: const Text('تحديد الكل', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                                  child: const Text('تحديد الكل',
+                                      style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 12)),
                                 ),
                               ],
                             ),
                             ...pendingItems.map((s) => _buildItemTile(s)),
                           ],
-
                           if (stubbornItems.isNotEmpty) ...[
                             const SizedBox(height: 8),
-                            const Text('🔴 مستعصية', style: TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w700)),
+                            const Text('🔴 مستعصية',
+                                style: TextStyle(
+                                    color: AppColors.danger,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700)),
                             const SizedBox(height: 8),
                             ...stubbornItems.map((s) => _buildItemTile(s)),
                           ],
@@ -305,9 +357,14 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
           child: ElevatedButton.icon(
             onPressed: _sending ? null : _sendToRep,
             icon: _sending
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.send_rounded, size: 18),
-            label: Text(_sending ? 'جاري الإرسال...' : 'إرسال ${_selected.length} صنف'),
+            label: Text(
+                _sending ? 'جاري الإرسال...' : 'إرسال ${_selected.length} صنف'),
           ),
         ),
       ),
@@ -318,43 +375,67 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
     final isSelected = _selected.contains(item.id);
     return GestureDetector(
       onTap: () => setState(() {
-        if (isSelected) _selected.remove(item.id);
-        else _selected.add(item.id!);
+        if (isSelected)
+          _selected.remove(item.id);
+        else
+          _selected.add(item.id!);
       }),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withValues(alpha: 0.08) : AppColors.darkCard,
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.08)
+              : AppColors.darkCard,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? AppColors.primary.withValues(alpha: 0.5) : AppColors.darkBorder),
+          border: Border.all(
+              color: isSelected
+                  ? AppColors.primary.withValues(alpha: 0.5)
+                  : AppColors.darkBorder),
         ),
         child: Row(
           children: [
             Container(
-              width: 22, height: 22,
+              width: 22,
+              height: 22,
               decoration: BoxDecoration(
                 color: isSelected ? AppColors.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: isSelected ? AppColors.primary : AppColors.textMuted),
+                border: Border.all(
+                    color:
+                        isSelected ? AppColors.primary : AppColors.textMuted),
               ),
-              child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 14) : null,
+              child: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 14)
+                  : null,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w600, fontSize: 14)),
-                  Text('${item.company} · ${item.quantity} علبة', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  Text(item.name,
+                      style: const TextStyle(
+                          color: AppColors.textColor,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14)),
+                  Text('${item.company} · ${item.quantity} علبة',
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 12)),
                 ],
               ),
             ),
             if (item.isUrgent)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                child: const Text('🚨 عاجل', style: TextStyle(color: AppColors.danger, fontSize: 11, fontWeight: FontWeight.w700)),
+                decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: const Text('🚨 عاجل',
+                    style: TextStyle(
+                        color: AppColors.danger,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
               ),
           ],
         ),

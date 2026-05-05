@@ -36,38 +36,46 @@ class SupabaseService {
     try {
       final sessionCode = _generateCode(8);
 
-      final sessionRes = await http.post(
-        Uri.parse('$_url/rep_sessions'),
-        headers: _headers,
-        body: jsonEncode({
-          'session_code': sessionCode,
-          'rep_name': repName,
-          'rep_phone': repPhone,
-          'pharmacy_name': pharmacyName,
-          'status': 'pending',
-          'expires_at': DateTime.now().add(const Duration(hours: 4)).toIso8601String(),
-        }),
-      ).timeout(const Duration(seconds: 10));
+      final sessionRes = await http
+          .post(
+            Uri.parse('$_url/rep_sessions'),
+            headers: _headers,
+            body: jsonEncode({
+              'session_code': sessionCode,
+              'rep_name': repName,
+              'rep_phone': repPhone,
+              'pharmacy_name': pharmacyName,
+              'status': 'pending',
+              'expires_at': DateTime.now()
+                  .add(const Duration(hours: 4))
+                  .toIso8601String(),
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (sessionRes.statusCode != 201) {
-        debugPrint('❌ خطأ في إنشاء الجلسة: ${sessionRes.statusCode} ${sessionRes.body}');
+        debugPrint(
+            '❌ خطأ في إنشاء الجلسة: ${sessionRes.statusCode} ${sessionRes.body}');
         return null;
       }
       final sessionData = jsonDecode(sessionRes.body);
-      final sessionId = sessionData is List ? sessionData[0]['id'] : sessionData['id'];
+      final sessionId =
+          sessionData is List ? sessionData[0]['id'] : sessionData['id'];
 
       for (final item in items) {
-        final itemRes = await http.post(
-          Uri.parse('$_url/session_items'),
-          headers: _headers,
-          body: jsonEncode({
-            'session_id': sessionId,
-            'drug_name': item['name'],
-            'company': item['company'] ?? 'غير محدد',
-            'quantity': item['quantity'] ?? 1,
-            'is_private': item['is_private'] ?? 0,
-          }),
-        ).timeout(const Duration(seconds: 10));
+        final itemRes = await http
+            .post(
+              Uri.parse('$_url/session_items'),
+              headers: _headers,
+              body: jsonEncode({
+                'session_id': sessionId,
+                'drug_name': item['name'],
+                'company': item['company'] ?? 'غير محدد',
+                'quantity': item['quantity'] ?? 1,
+                'is_private': item['is_private'] ?? 0,
+              }),
+            )
+            .timeout(const Duration(seconds: 10));
 
         if (itemRes.statusCode != 201) {
           debugPrint('⚠️ خطأ في إضافة صنف: ${item['name']} - ${itemRes.body}');
@@ -85,61 +93,77 @@ class SupabaseService {
   /// يرجع ({RepResponse? response, String? error}).
   /// error == null يعني نجاح أو كود خاطئ (response == null).
   /// error != null يعني فشل في الاتصال.
-  Future<({RepResponse? response, String? error})> fetchResponseByCode(String responseCode) async {
+  Future<({RepResponse? response, String? error})> fetchResponseByCode(
+      String responseCode) async {
     if (!isConfigured) {
       debugPrint('❌ Supabase key غير مضبوط');
       return (response: null, error: 'إعدادات الاتصال غير مكتملة');
     }
     try {
-      final codeRes = await http.get(
-        Uri.parse('$_url/response_codes?response_code=eq.${responseCode.toUpperCase()}&select=*'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      final codeRes = await http
+          .get(
+            Uri.parse(
+                '$_url/response_codes?response_code=eq.${responseCode.toUpperCase()}&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (codeRes.statusCode != 200) {
         debugPrint('❌ خطأ في جلب الكود: ${codeRes.statusCode}');
-        return (response: null, error: 'خطأ من السيرفر (${codeRes.statusCode})');
+        return (
+          response: null,
+          error: 'خطأ من السيرفر (${codeRes.statusCode})'
+        );
       }
       final codes = jsonDecode(codeRes.body) as List;
       if (codes.isEmpty) return (response: null, error: null); // كود غير موجود
 
       final sessionId = codes[0]['session_id'];
 
-      final sessionRes = await http.get(
-        Uri.parse('$_url/rep_sessions?id=eq.$sessionId&select=*'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      final sessionRes = await http
+          .get(
+            Uri.parse('$_url/rep_sessions?id=eq.$sessionId&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
-      if (sessionRes.statusCode != 200) return (response: null, error: 'خطأ في جلب بيانات الجلسة');
+      if (sessionRes.statusCode != 200)
+        return (response: null, error: 'خطأ في جلب بيانات الجلسة');
       final sessions = jsonDecode(sessionRes.body) as List;
       if (sessions.isEmpty) return (response: null, error: null);
       final session = sessions[0];
 
-      final itemsRes = await http.get(
-        Uri.parse('$_url/session_items?session_id=eq.$sessionId&select=*'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      final itemsRes = await http
+          .get(
+            Uri.parse('$_url/session_items?session_id=eq.$sessionId&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
-      if (itemsRes.statusCode != 200) return (response: null, error: 'خطأ في جلب الأصناف');
+      if (itemsRes.statusCode != 200)
+        return (response: null, error: 'خطأ في جلب الأصناف');
       final items = jsonDecode(itemsRes.body) as List;
 
-      return (response: RepResponse(
-        sessionId: session['id'].toString(),
-        repName: session['rep_name']?.toString() ?? '',
-        repPhone: session['rep_phone']?.toString() ?? '',
-        pharmacyName: session['pharmacy_name']?.toString() ?? '',
-        respondedAt: session['responded_at'] != null
-            ? DateTime.parse(session['responded_at'])
-            : DateTime.now(),
-        availableItems: items
-            .where((i) => i['is_available'] == 1)
-            .map((i) => ResponseItem.fromMap(i))
-            .toList(),
-        unavailableItems: items
-            .where((i) => i['is_available'] == 0)
-            .map((i) => ResponseItem.fromMap(i))
-            .toList(),
-      ), error: null);
+      return (
+        response: RepResponse(
+          sessionId: session['id'].toString(),
+          repName: session['rep_name']?.toString() ?? '',
+          repPhone: session['rep_phone']?.toString() ?? '',
+          pharmacyName: session['pharmacy_name']?.toString() ?? '',
+          respondedAt: session['responded_at'] != null
+              ? DateTime.parse(session['responded_at'])
+              : DateTime.now(),
+          availableItems: items
+              .where((i) => i['is_available'] == 1)
+              .map((i) => ResponseItem.fromMap(i))
+              .toList(),
+          unavailableItems: items
+              .where((i) => i['is_available'] == 0)
+              .map((i) => ResponseItem.fromMap(i))
+              .toList(),
+        ),
+        error: null
+      );
     } on TimeoutException {
       debugPrint('❌ fetchResponseByCode timeout');
       return (response: null, error: 'انتهت مهلة الاتصال - تحقق من الإنترنت');
@@ -157,22 +181,28 @@ class SupabaseService {
     if (!isConfigured) return;
     try {
       // 1. حذف الأصناف المرتبطة بالجلسة
-      await http.delete(
-        Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      await http
+          .delete(
+            Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       // 2. حذف كود الرد
-      await http.delete(
-        Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      await http
+          .delete(
+            Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       // 3. حذف الجلسة نفسها
-      await http.delete(
-        Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      await http
+          .delete(
+            Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       debugPrint('✅ تم حذف الجلسة وبياناتها من السحابة');
     } catch (e) {
@@ -184,17 +214,21 @@ class SupabaseService {
   String _generateCode(int length) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random.secure();
-    return List.generate(length, (_) => chars[rand.nextInt(chars.length)]).join();
+    return List.generate(length, (_) => chars[rand.nextInt(chars.length)])
+        .join();
   }
 
   // ── التحقق من كود الاشتراك ──────────────────────────────────────────────────
   Future<Map<String, dynamic>?> checkSubscriptionCode(String code) async {
     if (!isConfigured) return null;
     try {
-      final res = await http.get(
-        Uri.parse('$_url/subscription_codes?code=eq.${code.toUpperCase()}&select=*'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      final res = await http
+          .get(
+            Uri.parse(
+                '$_url/subscription_codes?code=eq.${code.toUpperCase()}&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as List;
@@ -211,7 +245,6 @@ class SupabaseService {
     return '${EnvConfig.webPortalBaseUrl}/?code=$sessionCode';
   }
 }
-
 
 // ── نماذج البيانات ──────────────────────────────────────────────────
 class RepResponse {

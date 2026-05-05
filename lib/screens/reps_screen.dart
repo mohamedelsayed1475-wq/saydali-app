@@ -44,41 +44,64 @@ class _RepsScreenState extends State<RepsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(99)))),
+                Center(
+                    child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                            color: AppColors.darkBorder,
+                            borderRadius: BorderRadius.circular(99)))),
                 const SizedBox(height: 16),
                 Text(existing == null ? '➕ إضافة مندوب' : '✏️ تعديل المندوب',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                    style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16)),
                 const SizedBox(height: 16),
                 AppTextField(hint: 'اسم المندوب *', controller: nameCtrl),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة', controller: companyCtrl),
                 const SizedBox(height: 10),
-                AppTextField(hint: 'رقم الهاتف', controller: phoneCtrl, keyboardType: TextInputType.phone),
+                AppTextField(
+                    hint: 'رقم الهاتف',
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone),
                 const SizedBox(height: 10),
-                AppTextField(hint: 'ملاحظات', controller: notesCtrl, maxLines: 2),
+                AppTextField(
+                    hint: 'ملاحظات', controller: notesCtrl, maxLines: 2),
                 const SizedBox(height: 12),
-                const Text('التقييم', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                const Text('التقييم',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
                 Row(
-                  children: List.generate(5, (i) => IconButton(
-                    onPressed: () => setBS(() => rating = i + 1),
-                    icon: Icon(
-                      i < rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                      color: AppColors.warning,
-                      size: 30,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  )),
+                  children: List.generate(
+                      5,
+                      (i) => IconButton(
+                            onPressed: () => setBS(() => rating = i + 1),
+                            icon: Icon(
+                              i < rating
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              color: AppColors.warning,
+                              size: 30,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          )),
                 ),
                 const SizedBox(height: 16),
                 PrimaryButton(
@@ -99,11 +122,14 @@ class _RepsScreenState extends State<RepsScreen> {
                     if (existing == null) {
                       await DatabaseHelper.instance.insertRep(data);
                     } else {
-                      await DatabaseHelper.instance.updateRep(existing.id!, data);
+                      await DatabaseHelper.instance
+                          .updateRep(existing.id!, data);
                     }
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadReps();
-                    if (mounted) showSnack(context, existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
+                    if (mounted)
+                      showSnack(context,
+                          existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
                   },
                 ),
                 const SizedBox(height: 20),
@@ -116,9 +142,11 @@ class _RepsScreenState extends State<RepsScreen> {
   }
 
   Future<void> _sendShortages(Representative rep) async {
-    final shortages = await DatabaseHelper.instance.getShortages(status: 'pending');
+    final shortages =
+        await DatabaseHelper.instance.getShortages(status: 'pending');
     if (shortages.isEmpty) {
-      if (mounted) showSnack(context, 'لا توجد نواقص بانتظار الرد', isError: true);
+      if (mounted)
+        showSnack(context, 'لا توجد نواقص بانتظار الرد', isError: true);
       return;
     }
 
@@ -134,7 +162,8 @@ class _RepsScreenState extends State<RepsScreen> {
     return Scaffold(
       backgroundColor: AppColors.dark,
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : _reps.isEmpty
               ? EmptyState(
                   emoji: '👥',
@@ -157,7 +186,11 @@ class _RepsScreenState extends State<RepsScreen> {
         onPressed: () => _showAddSheet(),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('إضافة مندوب', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
+        label: const Text('إضافة مندوب',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Cairo')),
       ),
     );
   }
@@ -176,7 +209,8 @@ class _RepsScreenState extends State<RepsScreen> {
               foregroundColor: Colors.white,
               icon: Icons.edit_rounded,
               label: 'تعديل',
-              borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
+              borderRadius:
+                  const BorderRadius.horizontal(right: Radius.circular(14)),
             ),
             SlidableAction(
               onPressed: (_) async {
@@ -200,7 +234,9 @@ class _RepsScreenState extends State<RepsScreen> {
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
             border: Border(
-              top: BorderSide(color: index == 0 ? AppColors.warning : AppColors.darkBorder, width: index == 0 ? 2 : 1),
+              top: BorderSide(
+                  color: index == 0 ? AppColors.warning : AppColors.darkBorder,
+                  width: index == 0 ? 2 : 1),
               bottom: BorderSide(color: AppColors.darkBorder),
               left: BorderSide(color: AppColors.darkBorder),
               right: BorderSide(color: AppColors.darkBorder),
@@ -212,26 +248,40 @@ class _RepsScreenState extends State<RepsScreen> {
                 children: [
                   // Avatar
                   Container(
-                    width: 50, height: 50,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
+                      gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.primaryDark]),
                       borderRadius: BorderRadius.circular(99),
                     ),
-                    child: Center(child: Text(rep.name[0], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 20))),
+                    child: Center(
+                        child: Text(rep.name[0],
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 20))),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(rep.name, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700, fontSize: 15)),
+                        Text(rep.name,
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15)),
                         if (rep.company != null && rep.company!.isNotEmpty)
-                          Text(rep.company!, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                          Text(rep.company!,
+                              style: const TextStyle(
+                                  color: AppColors.textMuted, fontSize: 12)),
                         StarRating(count: rep.rating),
                       ],
                     ),
                   ),
-                  if (index < 3) Text(medals[index], style: const TextStyle(fontSize: 22)),
+                  if (index < 3)
+                    Text(medals[index], style: const TextStyle(fontSize: 22)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -257,11 +307,14 @@ class _RepsScreenState extends State<RepsScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary,
                     side: const BorderSide(color: AppColors.primary),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),
                   icon: const Icon(Icons.qr_code, size: 18),
-                  label: const Text('إرسال النواقص بـ QR', style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
+                  label: const Text('إرسال النواقص بـ QR',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
                 ),
               ),
             ],
@@ -274,11 +327,19 @@ class _RepsScreenState extends State<RepsScreen> {
   Widget _statBox(String label, String value, bool highlight) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(color: AppColors.dark, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.darkBorder)),
+      decoration: BoxDecoration(
+          color: AppColors.dark,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.darkBorder)),
       child: Column(
         children: [
-          Text(value, style: TextStyle(color: highlight ? AppColors.primary : AppColors.textColor, fontWeight: FontWeight.w700, fontSize: 13)),
-          Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+          Text(value,
+              style: TextStyle(
+                  color: highlight ? AppColors.primary : AppColors.textColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13)),
+          Text(label,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
         ],
       ),
     );

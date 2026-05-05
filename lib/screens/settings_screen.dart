@@ -41,23 +41,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _nameCtrl.text = settings['pharmacy_name'] ?? 'صيدليتي';
         _pharmacistCtrl.text = settings['pharmacist_name'] ?? 'الصيدلي';
         _phoneCtrl.text = settings['pharmacy_phone'] ?? '';
-        _notificationsEnabled = (settings['notifications_enabled'] ?? '1') == '1';
+        _notificationsEnabled =
+            (settings['notifications_enabled'] ?? '1') == '1';
         _loading = false;
       });
     }
   }
 
   Future<void> _saveSettings() async {
-    await DatabaseHelper.instance.setSetting('pharmacy_name', _nameCtrl.text.trim());
-    await DatabaseHelper.instance.setSetting('pharmacist_name', _pharmacistCtrl.text.trim());
-    await DatabaseHelper.instance.setSetting('pharmacy_phone', _phoneCtrl.text.trim());
-    await DatabaseHelper.instance.setSetting('notifications_enabled', _notificationsEnabled ? '1' : '0');
+    await DatabaseHelper.instance
+        .setSetting('pharmacy_name', _nameCtrl.text.trim());
+    await DatabaseHelper.instance
+        .setSetting('pharmacist_name', _pharmacistCtrl.text.trim());
+    await DatabaseHelper.instance
+        .setSetting('pharmacy_phone', _phoneCtrl.text.trim());
+    await DatabaseHelper.instance
+        .setSetting('notifications_enabled', _notificationsEnabled ? '1' : '0');
     if (mounted) showSnack(context, 'تم حفظ الإعدادات ✅');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    if (_loading)
+      return const Center(
+          child: CircularProgressIndicator(color: AppColors.primary));
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -77,9 +84,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 10),
               AppTextField(hint: 'اسم الصيدلي', controller: _pharmacistCtrl),
               const SizedBox(height: 10),
-              AppTextField(hint: 'رقم الهاتف', controller: _phoneCtrl, keyboardType: TextInputType.phone),
+              AppTextField(
+                  hint: 'رقم الهاتف',
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone),
               const SizedBox(height: 14),
-              PrimaryButton(text: 'حفظ البيانات', onTap: _saveSettings, icon: Icons.save_rounded),
+              PrimaryButton(
+                  text: 'حفظ البيانات',
+                  onTap: _saveSettings,
+                  icon: Icons.save_rounded),
             ],
           ),
         ),
@@ -95,8 +108,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             border: Border.all(color: AppColors.darkBorder),
           ),
           child: SwitchListTile(
-            title: const Text('تفعيل الإشعارات', style: TextStyle(color: AppColors.textColor)),
-            subtitle: const Text('تنبيهات النواقص والديون', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            title: const Text('تفعيل الإشعارات',
+                style: TextStyle(color: AppColors.textColor)),
+            subtitle: const Text('تنبيهات النواقص والديون',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
             value: _notificationsEnabled,
             activeThumbColor: AppColors.primary,
             onChanged: (v) => setState(() => _notificationsEnabled = v),
@@ -111,7 +126,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           emoji: '🥈',
           title: 'باقة احترافي',
           subtitle: 'اشتراكك الحالي - اضغط للتجديد أو الترقية',
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
           trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
         ),
         const SizedBox(height: 16),
@@ -168,7 +184,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _devTapCount++;
                   if (_devTapCount >= 5) {
                     _devTapCount = 0;
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DevPanelScreen()));
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const DevPanelScreen()));
                   }
                 },
                 child: _infoRow('الإصدار', '1.0.0'),
@@ -189,8 +208,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             emoji: '🛠️',
             title: 'لوحة المطور',
             subtitle: 'للمطور فقط - مقيدة بكلمة مرور',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DevPanelScreen())),
-            trailing: const Icon(Icons.lock_rounded, color: AppColors.textMuted, size: 18),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const DevPanelScreen())),
+            trailing: const Icon(Icons.lock_rounded,
+                color: AppColors.textMuted, size: 18),
           ),
         ],
         const SizedBox(height: 30),
@@ -199,11 +220,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _sectionTitle(String title) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(title, style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
-  );
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(title,
+            style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700)),
+      );
 
-  Widget _settingsTile({required String emoji, required String title, required String subtitle, required VoidCallback onTap, Widget? trailing}) {
+  Widget _settingsTile(
+      {required String emoji,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+      Widget? trailing}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -222,8 +252,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-                  Text(subtitle, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  Text(title,
+                      style: const TextStyle(
+                          color: AppColors.textColor,
+                          fontWeight: FontWeight.w700)),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 12)),
                 ],
               ),
             ),
@@ -235,18 +270,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _infoRow(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-        Text(value, style: const TextStyle(color: AppColors.textLight, fontSize: 13, fontWeight: FontWeight.w600)),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label,
+                style:
+                    const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            Text(value,
+                style: const TextStyle(
+                    color: AppColors.textLight,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
 
   Future<void> _uploadDictionary() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
+    final result = await FilePicker.platform
+        .pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xls']);
     if (result == null || result.files.single.path == null) return;
 
     if (!mounted) return;
@@ -264,7 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final firstRow = sheet.row(0);
       final headers = <String>[];
       for (int i = 0; i < firstRow.length; i++) {
-        headers.add(firstRow[i]?.value?.toString().trim() ?? 'عمود ${i+1}');
+        headers.add(firstRow[i]?.value?.toString().trim() ?? 'عمود ${i + 1}');
       }
 
       if (!mounted) return;
@@ -282,9 +324,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (row.isEmpty) continue;
 
         String getCol(String key) {
-           final idx = mapping[key];
-           if (idx == null || idx < 0 || idx >= row.length) return '';
-           return row[idx]?.value?.toString().trim() ?? '';
+          final idx = mapping[key];
+          if (idx == null || idx < 0 || idx >= row.length) return '';
+          return row[idx]?.value?.toString().trim() ?? '';
         }
 
         final enName = getCol('enName');
@@ -298,7 +340,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
 
-      await DatabaseHelper.instance.setSetting('drug_dictionary_v2', jsonEncode(dict));
+      await DatabaseHelper.instance
+          .setSetting('drug_dictionary_v2', jsonEncode(dict));
       if (mounted) showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
     } catch (e) {
       if (mounted) showSnack(context, 'خطأ في قراءة الملف', isError: true);
@@ -310,32 +353,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final dbPath = await getDatabasesPath();
       final path = p.join(dbPath, 'saydali_pro.db');
       if (await File(path).exists()) {
-        await Share.shareXFiles([XFile(path)], subject: 'نسخة احتياطية - صيدلي PRO');
+        await Share.shareXFiles([XFile(path)],
+            subject: 'نسخة احتياطية - صيدلي PRO');
       } else {
         if (mounted) showSnack(context, 'لا توجد قاعدة بيانات!', isError: true);
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'حدث خطأ أثناء النسخ الاحتياطي', isError: true);
+      if (mounted)
+        showSnack(context, 'حدث خطأ أثناء النسخ الاحتياطي', isError: true);
     }
   }
 
   Future<void> _restoreDB() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.any, // Android sometimes fails on custom db/sqlite extensions
+        type: FileType
+            .any, // Android sometimes fails on custom db/sqlite extensions
       );
       if (result != null && result.files.single.path != null) {
         final backupPath = result.files.single.path!;
         if (!backupPath.endsWith('.db') && !backupPath.endsWith('.sqlite')) {
-           if (mounted) showSnack(context, 'الرجاء اختيار ملف قاعدة بيانات صالح (.db)', isError: true);
-           return;
+          if (mounted)
+            showSnack(context, 'الرجاء اختيار ملف قاعدة بيانات صالح (.db)',
+                isError: true);
+          return;
         }
         final dbPath = await getDatabasesPath();
         final path = p.join(dbPath, 'saydali_pro.db');
         await File(backupPath).copy(path);
-        
+
         if (mounted) {
-          showSnack(context, 'تم استعادة النسخة الاحتياطية بنجاح ✅ - يرجى إعادة تشغيل التطبيق لتحديث البيانات');
+          showSnack(context,
+              'تم استعادة النسخة الاحتياطية بنجاح ✅ - يرجى إعادة تشغيل التطبيق لتحديث البيانات');
           // Reload settings after restore
           _loadSettings();
         }

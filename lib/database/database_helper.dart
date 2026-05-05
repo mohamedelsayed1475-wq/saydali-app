@@ -189,9 +189,11 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getShortages({String? status}) async {
     final db = await database;
     if (status != null) {
-      return await db.query('shortages', where: 'status = ?', whereArgs: [status], orderBy: 'created_at DESC');
+      return await db.query('shortages',
+          where: 'status = ?', whereArgs: [status], orderBy: 'created_at DESC');
     }
-    return await db.query('shortages', orderBy: 'is_urgent DESC, created_at DESC');
+    return await db.query('shortages',
+        orderBy: 'is_urgent DESC, created_at DESC');
   }
 
   Future<int> updateShortage(int id, Map<String, dynamic> data) async {
@@ -207,11 +209,21 @@ class DatabaseHelper {
 
   Future<Map<String, int>> getShortageStats() async {
     final db = await database;
-    final total = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM shortages')) ?? 0;
-    final covered = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM shortages WHERE status='covered'")) ?? 0;
-    final offered = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM shortages WHERE status='offered'")) ?? 0;
-    final pending = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM shortages WHERE status='pending'")) ?? 0;
-    final stubborn = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM shortages WHERE status='stubborn'")) ?? 0;
+    final total = Sqflite.firstIntValue(
+            await db.rawQuery('SELECT COUNT(*) FROM shortages')) ??
+        0;
+    final covered = Sqflite.firstIntValue(await db.rawQuery(
+            "SELECT COUNT(*) FROM shortages WHERE status='covered'")) ??
+        0;
+    final offered = Sqflite.firstIntValue(await db.rawQuery(
+            "SELECT COUNT(*) FROM shortages WHERE status='offered'")) ??
+        0;
+    final pending = Sqflite.firstIntValue(await db.rawQuery(
+            "SELECT COUNT(*) FROM shortages WHERE status='pending'")) ??
+        0;
+    final stubborn = Sqflite.firstIntValue(await db.rawQuery(
+            "SELECT COUNT(*) FROM shortages WHERE status='stubborn'")) ??
+        0;
     return {
       'total': total,
       'pending': pending,
@@ -223,7 +235,8 @@ class DatabaseHelper {
 
   Future<void> autoCloseOldPendingShortages() async {
     final db = await database;
-    final twentyFourHoursAgo = DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+    final twentyFourHoursAgo =
+        DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
     await db.rawUpdate(
       "UPDATE shortages SET status = 'stubborn' WHERE status = 'pending' AND created_at <= ?",
       [twentyFourHoursAgo],
@@ -239,12 +252,14 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getReps() async {
     final db = await database;
-    return await db.query('representatives', orderBy: 'rating DESC, total_covered DESC');
+    return await db.query('representatives',
+        orderBy: 'rating DESC, total_covered DESC');
   }
 
   Future<int> updateRep(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return await db.update('representatives', data, where: 'id = ?', whereArgs: [id]);
+    return await db
+        .update('representatives', data, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteRep(int id) async {
@@ -272,7 +287,8 @@ class DatabaseHelper {
 
   Future<int> deleteCustomer(int id) async {
     final db = await database;
-    await db.delete('debt_transactions', where: 'customer_id = ?', whereArgs: [id]);
+    await db
+        .delete('debt_transactions', where: 'customer_id = ?', whereArgs: [id]);
     return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -282,32 +298,40 @@ class DatabaseHelper {
     final txId = await db.insert('debt_transactions', data);
 
     // تحديث إجمالي الدين
-    final customer = await db.query('customers', where: 'id = ?', whereArgs: [data['customer_id']]);
+    final customer = await db
+        .query('customers', where: 'id = ?', whereArgs: [data['customer_id']]);
     if (customer.isNotEmpty) {
       double currentDebt = (customer.first['total_debt'] as num).toDouble();
       double amount = (data['amount'] as num).toDouble();
-      double newDebt = data['type'] == 'debt' ? currentDebt + amount : currentDebt - amount;
-      await db.update('customers', {'total_debt': newDebt}, where: 'id = ?', whereArgs: [data['customer_id']]);
+      double newDebt =
+          data['type'] == 'debt' ? currentDebt + amount : currentDebt - amount;
+      await db.update('customers', {'total_debt': newDebt},
+          where: 'id = ?', whereArgs: [data['customer_id']]);
     }
     return txId;
   }
 
-  Future<List<Map<String, dynamic>>> getCustomerTransactions(int customerId) async {
+  Future<List<Map<String, dynamic>>> getCustomerTransactions(
+      int customerId) async {
     final db = await database;
     return await db.query('debt_transactions',
-        where: 'customer_id = ?', whereArgs: [customerId], orderBy: 'transaction_date DESC');
+        where: 'customer_id = ?',
+        whereArgs: [customerId],
+        orderBy: 'transaction_date DESC');
   }
 
   Future<double> getTotalDebt() async {
     final db = await database;
-    final result = await db.rawQuery('SELECT SUM(total_debt) as total FROM customers');
+    final result =
+        await db.rawQuery('SELECT SUM(total_debt) as total FROM customers');
     return (result.first['total'] as num?)?.toDouble() ?? 0.0;
   }
 
   // ── الإعدادات ──────────────────────────────────────────────────
   Future<String?> getSetting(String key) async {
     final db = await database;
-    final result = await db.query('settings', where: 'key = ?', whereArgs: [key]);
+    final result =
+        await db.query('settings', where: 'key = ?', whereArgs: [key]);
     return result.isNotEmpty ? result.first['value'] as String : null;
   }
 
@@ -320,7 +344,8 @@ class DatabaseHelper {
   Future<Map<String, dynamic>?> getActiveAd(String screen) async {
     final db = await database;
     try {
-      final result = await db.query('ads', where: 'is_active = 1 AND screen = ?', whereArgs: [screen], limit: 1);
+      final result = await db.query('ads',
+          where: 'is_active = 1 AND screen = ?', whereArgs: [screen], limit: 1);
       if (result.isNotEmpty) return result.first;
     } catch (_) {}
     return null;
@@ -329,6 +354,8 @@ class DatabaseHelper {
   Future<Map<String, String>> getAllSettings() async {
     final db = await database;
     final result = await db.query('settings');
-    return {for (var row in result) row['key'] as String: row['value'] as String};
+    return {
+      for (var row in result) row['key'] as String: row['value'] as String
+    };
   }
 }

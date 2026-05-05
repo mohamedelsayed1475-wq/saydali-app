@@ -40,8 +40,12 @@ class _DebtsScreenState extends State<DebtsScreen> {
     }
   }
 
-  List<Customer> get _filtered => _customers.where((c) =>
-      _search.isEmpty || c.name.contains(_search) || (c.phone?.contains(_search) ?? false)).toList();
+  List<Customer> get _filtered => _customers
+      .where((c) =>
+          _search.isEmpty ||
+          c.name.contains(_search) ||
+          (c.phone?.contains(_search) ?? false))
+      .toList();
 
   double get _totalDebt => _customers.fold(0, (sum, c) => sum + c.totalDebt);
 
@@ -54,21 +58,38 @@ class _DebtsScreenState extends State<DebtsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(99)))),
+            Center(
+                child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: AppColors.darkBorder,
+                        borderRadius: BorderRadius.circular(99)))),
             const SizedBox(height: 16),
             Text(existing == null ? '➕ إضافة عميل' : '✏️ تعديل العميل',
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16)),
             const SizedBox(height: 16),
             AppTextField(hint: 'اسم العميل *', controller: nameCtrl),
             const SizedBox(height: 10),
-            AppTextField(hint: 'رقم الهاتف', controller: phoneCtrl, keyboardType: TextInputType.phone),
+            AppTextField(
+                hint: 'رقم الهاتف',
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone),
             const SizedBox(height: 10),
             AppTextField(hint: 'العنوان', controller: addressCtrl),
             const SizedBox(height: 16),
@@ -80,15 +101,22 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   showSnack(ctx, 'أدخل اسم العميل', isError: true);
                   return;
                 }
-                final Map<String, dynamic> data = {'name': name, 'phone': phoneCtrl.text.trim(), 'address': addressCtrl.text.trim()};
+                final Map<String, dynamic> data = {
+                  'name': name,
+                  'phone': phoneCtrl.text.trim(),
+                  'address': addressCtrl.text.trim()
+                };
                 if (existing == null) {
                   await DatabaseHelper.instance.insertCustomer(data);
                 } else {
-                  await DatabaseHelper.instance.updateCustomer(existing.id!, data);
+                  await DatabaseHelper.instance
+                      .updateCustomer(existing.id!, data);
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
                 await _loadCustomers();
-                if (mounted) showSnack(context, existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
+                if (mounted)
+                  showSnack(context,
+                      existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
               },
             ),
             const SizedBox(height: 20),
@@ -99,7 +127,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
   }
 
   Future<void> _showTransactions(Customer customer) async {
-    final transactions = await DatabaseHelper.instance.getCustomerTransactions(customer.id!);
+    final transactions =
+        await DatabaseHelper.instance.getCustomerTransactions(customer.id!);
     final txList = transactions.map(DebtTransaction.fromMap).toList();
     final amountCtrl = TextEditingController();
     final descCtrl = TextEditingController();
@@ -110,7 +139,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) => DraggableScrollableSheet(
           initialChildSize: 0.85,
@@ -118,7 +148,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
           maxChildSize: 0.95,
           expand: false,
           builder: (ctx, scroll) => Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
             child: Column(
               children: [
                 Padding(
@@ -126,21 +157,38 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(99)))),
+                      Center(
+                          child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                  color: AppColors.darkBorder,
+                                  borderRadius: BorderRadius.circular(99)))),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(customer.name, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700, fontSize: 16)),
+                          Text(customer.name,
+                              style: const TextStyle(
+                                  color: AppColors.textColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16)),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: customer.totalDebt > 0 ? AppColors.danger.withValues(alpha: 0.1) : AppColors.primaryLight,
+                              color: customer.totalDebt > 0
+                                  ? AppColors.danger.withValues(alpha: 0.1)
+                                  : AppColors.primaryLight,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               '${customer.totalDebt.toStringAsFixed(2)} جنيه',
-                              style: TextStyle(color: customer.totalDebt > 0 ? AppColors.danger : AppColors.primary, fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                  color: customer.totalDebt > 0
+                                      ? AppColors.danger
+                                      : AppColors.primary,
+                                  fontWeight: FontWeight.w800),
                             ),
                           ),
                         ],
@@ -154,13 +202,24 @@ class _DebtsScreenState extends State<DebtsScreen> {
                             child: GestureDetector(
                               onTap: () => setBS(() => txType = 'debt'),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: txType == 'debt' ? AppColors.danger.withValues(alpha: 0.15) : AppColors.dark,
-                                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(10)),
-                                  border: Border.all(color: txType == 'debt' ? AppColors.danger : AppColors.darkBorder),
+                                  color: txType == 'debt'
+                                      ? AppColors.danger.withValues(alpha: 0.15)
+                                      : AppColors.dark,
+                                  borderRadius: const BorderRadius.horizontal(
+                                      right: Radius.circular(10)),
+                                  border: Border.all(
+                                      color: txType == 'debt'
+                                          ? AppColors.danger
+                                          : AppColors.darkBorder),
                                 ),
-                                child: const Center(child: Text('➕ دين', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700))),
+                                child: const Center(
+                                    child: Text('➕ دين',
+                                        style: TextStyle(
+                                            color: AppColors.danger,
+                                            fontWeight: FontWeight.w700))),
                               ),
                             ),
                           ),
@@ -168,13 +227,24 @@ class _DebtsScreenState extends State<DebtsScreen> {
                             child: GestureDetector(
                               onTap: () => setBS(() => txType = 'payment'),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: txType == 'payment' ? AppColors.primaryLight : AppColors.dark,
-                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
-                                  border: Border.all(color: txType == 'payment' ? AppColors.primary : AppColors.darkBorder),
+                                  color: txType == 'payment'
+                                      ? AppColors.primaryLight
+                                      : AppColors.dark,
+                                  borderRadius: const BorderRadius.horizontal(
+                                      left: Radius.circular(10)),
+                                  border: Border.all(
+                                      color: txType == 'payment'
+                                          ? AppColors.primary
+                                          : AppColors.darkBorder),
                                 ),
-                                child: const Center(child: Text('✅ سداد', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700))),
+                                child: const Center(
+                                    child: Text('✅ سداد',
+                                        style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w700))),
                               ),
                             ),
                           ),
@@ -183,9 +253,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          Expanded(child: AppTextField(hint: 'المبلغ', controller: amountCtrl, keyboardType: TextInputType.number)),
+                          Expanded(
+                              child: AppTextField(
+                                  hint: 'المبلغ',
+                                  controller: amountCtrl,
+                                  keyboardType: TextInputType.number)),
                           const SizedBox(width: 8),
-                          Expanded(child: AppTextField(hint: 'وصف (اختياري)', controller: descCtrl)),
+                          Expanded(
+                              child: AppTextField(
+                                  hint: 'وصف (اختياري)', controller: descCtrl)),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -195,7 +271,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
                           onPressed: () async {
                             final amount = double.tryParse(amountCtrl.text);
                             if (amount == null || amount <= 0) {
-                              showSnack(ctx, 'أدخل مبلغاً صحيحاً', isError: true);
+                              showSnack(ctx, 'أدخل مبلغاً صحيحاً',
+                                  isError: true);
                               return;
                             }
                             await DatabaseHelper.instance.addDebtTransaction({
@@ -207,48 +284,72 @@ class _DebtsScreenState extends State<DebtsScreen> {
                             amountCtrl.clear();
                             descCtrl.clear();
                             await _loadCustomers();
-                            final newTransactions = await DatabaseHelper.instance.getCustomerTransactions(customer.id!);
+                            final newTransactions = await DatabaseHelper
+                                .instance
+                                .getCustomerTransactions(customer.id!);
                             setBS(() {
                               txList.clear();
-                              txList.addAll(newTransactions.map(DebtTransaction.fromMap));
+                              txList.addAll(
+                                  newTransactions.map(DebtTransaction.fromMap));
                             });
-                            if (ctx.mounted) showSnack(ctx, txType == 'debt' ? 'تم إضافة الدين ✅' : 'تم تسجيل السداد ✅');
+                            if (ctx.mounted)
+                              showSnack(
+                                  ctx,
+                                  txType == 'debt'
+                                      ? 'تم إضافة الدين ✅'
+                                      : 'تم تسجيل السداد ✅');
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: txType == 'debt' ? AppColors.danger : AppColors.primary,
+                            backgroundColor: txType == 'debt'
+                                ? AppColors.danger
+                                : AppColors.primary,
                           ),
-                          child: Text(txType == 'debt' ? 'إضافة دين' : 'تسجيل سداد'),
+                          child: Text(
+                              txType == 'debt' ? 'إضافة دين' : 'تسجيل سداد'),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('سجل المعاملات', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                          const Text('سجل المعاملات',
+                              style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700)),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               TextButton.icon(
-                                onPressed: () => _showStatementOptions(customer, txList),
-                                icon: const Icon(Icons.picture_as_pdf, size: 14),
-                                label: const Text('كشف حساب', style: TextStyle(fontSize: 12)),
+                                onPressed: () =>
+                                    _showStatementOptions(customer, txList),
+                                icon:
+                                    const Icon(Icons.picture_as_pdf, size: 14),
+                                label: const Text('كشف حساب',
+                                    style: TextStyle(fontSize: 12)),
                                 style: TextButton.styleFrom(
                                   foregroundColor: AppColors.warning,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               TextButton.icon(
-                                onPressed: () => _printReceipt(customer, txList),
+                                onPressed: () =>
+                                    _printReceipt(customer, txList),
                                 icon: const Icon(Icons.receipt_long, size: 14),
-                                label: const Text('إيصال', style: TextStyle(fontSize: 12)),
+                                label: const Text('إيصال',
+                                    style: TextStyle(fontSize: 12)),
                                 style: TextButton.styleFrom(
                                   foregroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
                                   minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
                               ),
                             ],
@@ -258,10 +359,11 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     ],
                   ),
                 ),
-
                 Expanded(
                   child: txList.isEmpty
-                      ? const Center(child: Text('لا توجد معاملات بعد', style: TextStyle(color: AppColors.textMuted)))
+                      ? const Center(
+                          child: Text('لا توجد معاملات بعد',
+                              style: TextStyle(color: AppColors.textMuted)))
                       : ListView.builder(
                           controller: scroll,
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -275,26 +377,43 @@ class _DebtsScreenState extends State<DebtsScreen> {
                               decoration: BoxDecoration(
                                 color: AppColors.dark,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDebt ? AppColors.danger.withValues(alpha: 0.3) : AppColors.primary.withValues(alpha: 0.3)),
+                                border: Border.all(
+                                    color: isDebt
+                                        ? AppColors.danger
+                                            .withValues(alpha: 0.3)
+                                        : AppColors.primary
+                                            .withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 children: [
-                                  Text(isDebt ? '➕' : '✅', style: const TextStyle(fontSize: 18)),
+                                  Text(isDebt ? '➕' : '✅',
+                                      style: const TextStyle(fontSize: 18)),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(tx.description ?? (isDebt ? 'دين' : 'سداد'),
-                                            style: const TextStyle(color: AppColors.textLight, fontSize: 13)),
+                                        Text(
+                                            tx.description ??
+                                                (isDebt ? 'دين' : 'سداد'),
+                                            style: const TextStyle(
+                                                color: AppColors.textLight,
+                                                fontSize: 13)),
                                         Text(_formatDate(tx.transactionDate),
-                                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                            style: const TextStyle(
+                                                color: AppColors.textMuted,
+                                                fontSize: 11)),
                                       ],
                                     ),
                                   ),
                                   Text(
                                     '${isDebt ? '+' : '-'}${tx.amount.toStringAsFixed(2)} جنيه',
-                                    style: TextStyle(color: isDebt ? AppColors.danger : AppColors.primary, fontWeight: FontWeight.w700),
+                                    style: TextStyle(
+                                        color: isDebt
+                                            ? AppColors.danger
+                                            : AppColors.primary,
+                                        fontWeight: FontWeight.w700),
                                   ),
                                 ],
                               ),
@@ -318,14 +437,19 @@ class _DebtsScreenState extends State<DebtsScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.darkCard,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('فترة كشف الحساب', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+            const Text('فترة كشف الحساب',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16)),
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,
@@ -344,7 +468,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
     );
   }
 
-  Widget _periodBtn(BuildContext ctx, Customer customer, List<DebtTransaction> txList, String label, int? months) {
+  Widget _periodBtn(BuildContext ctx, Customer customer,
+      List<DebtTransaction> txList, String label, int? months) {
     return ActionChip(
       label: Text(label, style: const TextStyle(color: AppColors.textColor)),
       backgroundColor: AppColors.dark,
@@ -356,9 +481,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
     );
   }
 
-  Future<void> _printAccountStatement(Customer customer, List<DebtTransaction> txList, int? months) async {
+  Future<void> _printAccountStatement(
+      Customer customer, List<DebtTransaction> txList, int? months) async {
     showSnack(context, 'جاري توليد كشف الحساب...');
-    
+
     final filteredTx = txList.where((tx) {
       if (months == null) return true;
       final limitDate = DateTime.now().subtract(Duration(days: months * 30));
@@ -368,7 +494,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
     filteredTx.sort((a, b) => a.transactionDate.compareTo(b.transactionDate));
 
     final pdf = pw.Document();
-    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدلي PRO';
+    final pharmacyName =
+        await DatabaseHelper.instance.getSetting('pharmacy_name') ??
+            'صيدلي PRO';
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
 
@@ -386,17 +514,28 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('كشف حساب عميل', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                    pw.Text(pharmacyName, style: const pw.TextStyle(fontSize: 14, color: PdfColors.grey700)),
+                    pw.Text('كشف حساب عميل',
+                        style: pw.TextStyle(
+                            fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                    pw.Text(pharmacyName,
+                        style: const pw.TextStyle(
+                            fontSize: 14, color: PdfColors.grey700)),
                   ],
                 ),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
-                    pw.Text('العميل: ${customer.name}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('العميل: ${customer.name}',
+                        style: pw.TextStyle(
+                            fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     if (customer.phone != null && customer.phone!.isNotEmpty)
-                      pw.Text('هاتف: ${customer.phone}', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-                    pw.Text('تاريخ التقرير: ${DateFormat('yyyy/MM/dd').format(DateTime.now())}', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                      pw.Text('هاتف: ${customer.phone}',
+                          style: const pw.TextStyle(
+                              fontSize: 12, color: PdfColors.grey700)),
+                    pw.Text(
+                        'تاريخ التقرير: ${DateFormat('yyyy/MM/dd').format(DateTime.now())}',
+                        style: const pw.TextStyle(
+                            fontSize: 12, color: PdfColors.grey700)),
                   ],
                 ),
               ],
@@ -404,10 +543,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
             pw.SizedBox(height: 20),
             pw.Divider(),
             pw.SizedBox(height: 10),
-            
-            pw.Text(months == null ? 'جميع المعاملات السابقة' : 'المعاملات خلال آخر $months شهر', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            pw.Text(
+                months == null
+                    ? 'جميع المعاملات السابقة'
+                    : 'المعاملات خلال آخر $months شهر',
+                style:
+                    const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
             pw.SizedBox(height: 10),
-
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey300),
               columnWidths: {
@@ -422,7 +564,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   children: ['التاريخ', 'البيان', 'النوع', 'المبلغ']
                       .map((h) => pw.Padding(
                             padding: const pw.EdgeInsets.all(6),
-                            child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                            child: pw.Text(h,
+                                style: pw.TextStyle(
+                                    fontWeight: pw.FontWeight.bold,
+                                    fontSize: 10)),
                           ))
                       .toList(),
                 ),
@@ -437,7 +582,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     ]
                         .map((t) => pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
-                              child: pw.Text(t, style: const pw.TextStyle(fontSize: 10)),
+                              child: pw.Text(t,
+                                  style: const pw.TextStyle(fontSize: 10)),
                             ))
                         .toList(),
                   );
@@ -445,7 +591,6 @@ class _DebtsScreenState extends State<DebtsScreen> {
               ],
             ),
             pw.SizedBox(height: 16),
-            
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
@@ -455,35 +600,51 @@ class _DebtsScreenState extends State<DebtsScreen> {
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('الرصيد النهائي المتبقي على العميل:', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('${customer.totalDebt.toStringAsFixed(2)} جنيه', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: customer.totalDebt > 0 ? PdfColors.red700 : PdfColors.green700)),
+                  pw.Text('الرصيد النهائي المتبقي على العميل:',
+                      style: pw.TextStyle(
+                          fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('${customer.totalDebt.toStringAsFixed(2)} جنيه',
+                      style: pw.TextStyle(
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          color: customer.totalDebt > 0
+                              ? PdfColors.red700
+                              : PdfColors.green700)),
                 ],
               ),
             ),
             pw.SizedBox(height: 20),
             pw.Center(
-              child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
+              child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO',
+                  style: const pw.TextStyle(
+                      fontSize: 9, color: PdfColors.grey500)),
             ),
           ];
         },
       ),
     );
 
-    await Printing.sharePdf(bytes: await pdf.save(), filename: 'statement_${customer.name}.pdf');
+    await Printing.sharePdf(
+        bytes: await pdf.save(), filename: 'statement_${customer.name}.pdf');
   }
 
-  Future<void> _printReceipt(Customer customer, List<DebtTransaction> txList) async {
+  Future<void> _printReceipt(
+      Customer customer, List<DebtTransaction> txList) async {
     showSnack(context, 'جاري توليد الإيصال...');
     final pdf = pw.Document();
-    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدلي PRO';
+    final pharmacyName =
+        await DatabaseHelper.instance.getSetting('pharmacy_name') ??
+            'صيدلي PRO';
 
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBold = await PdfGoogleFonts.cairoBold();
 
-    final lastPayment = txList.firstWhere(
-      (t) => t.type == 'payment', 
-      orElse: () => DebtTransaction(customerId: 0, amount: 0, type: '', transactionDate: DateTime.now())
-    );
+    final lastPayment = txList.firstWhere((t) => t.type == 'payment',
+        orElse: () => DebtTransaction(
+            customerId: 0,
+            amount: 0,
+            type: '',
+            transactionDate: DateTime.now()));
 
     pdf.addPage(
       pw.Page(
@@ -495,16 +656,22 @@ class _DebtsScreenState extends State<DebtsScreen> {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Text(pharmacyName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+              pw.Text(pharmacyName,
+                  style: pw.TextStyle(
+                      fontSize: 16, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 4),
-              pw.Text('إيصال ديون عميل', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              pw.Text('إيصال ديون عميل',
+                  style: const pw.TextStyle(
+                      fontSize: 12, color: PdfColors.grey700)),
               pw.Divider(thickness: 0.5),
               pw.SizedBox(height: 6),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('العميل:', style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text(customer.name, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(customer.name,
+                      style: pw.TextStyle(
+                          fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
               pw.SizedBox(height: 4),
@@ -512,7 +679,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text('التاريخ:', style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text(DateFormat('yyyy/MM/dd HH:mm').format(DateTime.now()), style: const pw.TextStyle(fontSize: 11)),
+                  pw.Text(DateFormat('yyyy/MM/dd HH:mm').format(DateTime.now()),
+                      style: const pw.TextStyle(fontSize: 11)),
                 ],
               ),
               pw.Divider(thickness: 0.5),
@@ -521,35 +689,47 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('آخر سداد:', style: const pw.TextStyle(fontSize: 11)),
-                    pw.Text('${lastPayment.amount} ج.م', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('آخر سداد:',
+                        style: const pw.TextStyle(fontSize: 11)),
+                    pw.Text('${lastPayment.amount} ج.م',
+                        style: pw.TextStyle(
+                            fontSize: 11, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.SizedBox(height: 4),
               ],
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                padding:
+                    const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                 decoration: pw.BoxDecoration(
                   color: PdfColors.grey200,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(4)),
                 ),
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('الرصيد المتبقي:', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('${customer.totalDebt} ج.م', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('الرصيد المتبقي:',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('${customer.totalDebt} ج.م',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
               ),
               pw.SizedBox(height: 16),
-              pw.Text('تمت الطباعة بواسطة صيدلي PRO', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+              pw.Text('تمت الطباعة بواسطة صيدلي PRO',
+                  style: const pw.TextStyle(
+                      fontSize: 8, color: PdfColors.grey600)),
             ],
           );
         },
       ),
     );
 
-    await Printing.sharePdf(bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
+    await Printing.sharePdf(
+        bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
   }
 
   Future<void> _launchWhatsApp(String? phone, double debt, String name) async {
@@ -561,8 +741,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
     if (formattedPhone.startsWith('0')) {
       formattedPhone = '+2$formattedPhone';
     }
-    final message = Uri.encodeComponent('مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} جنيه.\nشكراً لكم.');
-    final url = Uri.parse('whatsapp://send?phone=$formattedPhone&text=$message');
+    final message = Uri.encodeComponent(
+        'مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} جنيه.\nشكراً لكم.');
+    final url =
+        Uri.parse('whatsapp://send?phone=$formattedPhone&text=$message');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     } else {
@@ -587,7 +769,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
     for (var c in _filtered) {
       if (c.totalDebt > 0) {
         buffer.writeln('👤 العميل: ${c.name}');
-        if (c.phone != null && c.phone!.isNotEmpty) buffer.writeln('📱 الهاتف: ${c.phone}');
+        if (c.phone != null && c.phone!.isNotEmpty)
+          buffer.writeln('📱 الهاتف: ${c.phone}');
         buffer.writeln('💵 المديونية: ${c.totalDebt.toStringAsFixed(2)} جنيه');
         buffer.writeln('-------------------');
       }
@@ -598,7 +781,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
   Future<void> _importFromClipboard() async {
     final data = await Clipboard.getData('text/plain');
     if (data == null || data.text == null || data.text!.isEmpty) {
-      showSnack(context, 'الحافظة فارغة! انسخ التقرير من واتساب أولاً', isError: true);
+      showSnack(context, 'الحافظة فارغة! انسخ التقرير من واتساب أولاً',
+          isError: true);
       return;
     }
 
@@ -609,20 +793,20 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
     final blocks = text.split('-------------------');
     int count = 0;
-    
+
     for (var block in blocks) {
       final nameMatch = nameRegex.firstMatch(block);
       if (nameMatch != null) {
         final name = nameMatch.group(1)?.trim() ?? '';
         if (name.isEmpty) continue;
-        
+
         final phoneMatch = phoneRegex.firstMatch(block);
         final phone = phoneMatch?.group(1)?.trim() ?? '';
-        
+
         final debtMatch = debtRegex.firstMatch(block);
         final debtStr = debtMatch?.group(1) ?? '0';
         final totalDebt = double.tryParse(debtStr) ?? 0.0;
-        
+
         if (totalDebt <= 0) continue;
 
         Customer? existing;
@@ -632,7 +816,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
             break;
           }
         }
-        
+
         int customerId;
         double currentTotalDebt = 0;
         if (existing != null) {
@@ -648,7 +832,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
         // Calculate difference
         final amountToUpdate = totalDebt - currentTotalDebt;
-        
+
         if (amountToUpdate != 0) {
           await DatabaseHelper.instance.addDebtTransaction({
             'customer_id': customerId,
@@ -657,7 +841,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
             'description': 'استيراد/مزامنة من المساعد',
           });
         }
-        
+
         count++;
       }
     }
@@ -666,7 +850,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
       await _loadCustomers();
       if (mounted) showSnack(context, 'تم استيراد ديون $count عملاء بنجاح ✅');
     } else {
-      if (mounted) showSnack(context, 'لم يتم العثور على ديون متوافقة في النص المنسوخ', isError: true);
+      if (mounted)
+        showSnack(context, 'لم يتم العثور على ديون متوافقة في النص المنسوخ',
+            isError: true);
     }
   }
 
@@ -683,11 +869,16 @@ class _DebtsScreenState extends State<DebtsScreen> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.danger.withValues(alpha: 0.2), AppColors.darkCard],
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.danger.withValues(alpha: 0.2),
+                    AppColors.darkCard
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                border:
+                    Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -696,24 +887,35 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('إجمالي الديون', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                      const Text('إجمالي الديون',
+                          style: TextStyle(
+                              color: AppColors.textMuted, fontSize: 12)),
                       Text('${_totalDebt.toStringAsFixed(2)} جنيه',
-                          style: const TextStyle(color: AppColors.danger, fontSize: 24, fontWeight: FontWeight.w800)),
-                      Text('${_customers.length} عميل', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                          style: const TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800)),
+                      Text('${_customers.length} عميل',
+                          style: const TextStyle(
+                              color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.paste_rounded, color: Colors.white),
                     tooltip: 'إضافة من رسالة المساعد',
-                    style: IconButton.styleFrom(backgroundColor: AppColors.warning.withValues(alpha: 0.2)),
+                    style: IconButton.styleFrom(
+                        backgroundColor:
+                            AppColors.warning.withValues(alpha: 0.2)),
                     onPressed: _importFromClipboard,
                   ),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.share, color: Colors.white),
                     tooltip: 'مشاركة التقرير مع المدير',
-                    style: IconButton.styleFrom(backgroundColor: AppColors.accent.withValues(alpha: 0.2)),
+                    style: IconButton.styleFrom(
+                        backgroundColor:
+                            AppColors.accent.withValues(alpha: 0.2)),
                     onPressed: _shareDebts,
                   ),
                 ],
@@ -736,7 +938,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
                 : _filtered.isEmpty
                     ? EmptyState(
                         emoji: '👤',
@@ -752,7 +955,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
                           itemCount: _filtered.length,
-                          itemBuilder: (ctx, i) => _buildCustomerCard(_filtered[i]),
+                          itemBuilder: (ctx, i) =>
+                              _buildCustomerCard(_filtered[i]),
                         ),
                       ),
           ),
@@ -762,7 +966,11 @@ class _DebtsScreenState extends State<DebtsScreen> {
         onPressed: () => _showAddCustomer(),
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('إضافة عميل', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
+        label: const Text('إضافة عميل',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Cairo')),
       ),
     );
   }
@@ -780,7 +988,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
               foregroundColor: Colors.white,
               icon: Icons.edit_rounded,
               label: 'تعديل',
-              borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
+              borderRadius:
+                  const BorderRadius.horizontal(right: Radius.circular(14)),
             ),
             SlidableAction(
               onPressed: (_) async {
@@ -806,27 +1015,42 @@ class _DebtsScreenState extends State<DebtsScreen> {
             decoration: BoxDecoration(
               color: AppColors.darkCard,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: customer.totalDebt > 0 ? AppColors.danger.withValues(alpha: 0.3) : AppColors.darkBorder),
+              border: Border.all(
+                  color: customer.totalDebt > 0
+                      ? AppColors.danger.withValues(alpha: 0.3)
+                      : AppColors.darkBorder),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 46, height: 46,
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
                     color: AppColors.accent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                    border: Border.all(
+                        color: AppColors.accent.withValues(alpha: 0.3)),
                   ),
-                  child: Center(child: Text(customer.name[0], style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w800, fontSize: 18))),
+                  child: Center(
+                      child: Text(customer.name[0],
+                          style: const TextStyle(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18))),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(customer.name, style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+                      Text(customer.name,
+                          style: const TextStyle(
+                              color: AppColors.textColor,
+                              fontWeight: FontWeight.w700)),
                       if (customer.phone != null && customer.phone!.isNotEmpty)
-                        Text(customer.phone!, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        Text(customer.phone!,
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -836,21 +1060,28 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     Text(
                       '${customer.totalDebt.toStringAsFixed(2)} جنيه',
                       style: TextStyle(
-                        color: customer.totalDebt > 0 ? AppColors.danger : AppColors.primary,
-                        fontWeight: FontWeight.w800, fontSize: 15,
+                        color: customer.totalDebt > 0
+                            ? AppColors.danger
+                            : AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
                       ),
                     ),
                     Text(customer.totalDebt > 0 ? 'دين متبقي' : 'لا يوجد دين',
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                        style: const TextStyle(
+                            color: AppColors.textMuted, fontSize: 11)),
                   ],
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.green),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded,
+                      color: Colors.green),
                   tooltip: 'إرسال عبر واتساب',
-                  onPressed: () => _launchWhatsApp(customer.phone, customer.totalDebt, customer.name),
+                  onPressed: () => _launchWhatsApp(
+                      customer.phone, customer.totalDebt, customer.name),
                 ),
-                const Icon(Icons.chevron_left, color: AppColors.textMuted, size: 18),
+                const Icon(Icons.chevron_left,
+                    color: AppColors.textMuted, size: 18),
               ],
             ),
           ),

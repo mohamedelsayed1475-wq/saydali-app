@@ -9,16 +9,36 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final map = {
-      'pending': (label: 'بانتظار رد', color: AppColors.warning, bg: const Color(0xFFFEF3C7)),
-      'offered': (label: 'عرض موصول', color: const Color(0xFF2563EB), bg: const Color(0xFFDBEAFE)),
-      'covered': (label: 'تمت التغطية', color: AppColors.primary, bg: AppColors.primaryLight),
-      'stubborn': (label: 'مستعصي', color: AppColors.danger, bg: const Color(0xFFFEE2E2)),
+      'pending': (
+        label: 'بانتظار رد',
+        color: AppColors.warning,
+        bg: const Color(0xFFFEF3C7)
+      ),
+      'offered': (
+        label: 'عرض موصول',
+        color: const Color(0xFF2563EB),
+        bg: const Color(0xFFDBEAFE)
+      ),
+      'covered': (
+        label: 'تمت التغطية',
+        color: AppColors.primary,
+        bg: AppColors.primaryLight
+      ),
+      'stubborn': (
+        label: 'مستعصي',
+        color: AppColors.danger,
+        bg: const Color(0xFFFEE2E2)
+      ),
     };
-    final s = map[status] ?? (label: status, color: AppColors.textMuted, bg: AppColors.darkBorder);
+    final s = map[status] ??
+        (label: status, color: AppColors.textMuted, bg: AppColors.darkBorder);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: s.bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(s.label, style: TextStyle(color: s.color, fontSize: 11, fontWeight: FontWeight.w700)),
+      decoration:
+          BoxDecoration(color: s.bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(s.label,
+          style: TextStyle(
+              color: s.color, fontSize: 11, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -33,11 +53,13 @@ class StarRating extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (i) => Icon(
-        i < count ? Icons.star_rounded : Icons.star_outline_rounded,
-        color: AppColors.warning,
-        size: size,
-      )),
+      children: List.generate(
+          5,
+          (i) => Icon(
+                i < count ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: AppColors.warning,
+                size: size,
+              )),
     );
   }
 }
@@ -72,21 +94,28 @@ class StatCard extends StatelessWidget {
         child: Stack(
           children: [
             Positioned(
-              top: 0, right: 0,
+              top: 0,
+              right: 0,
               child: Text(icon, style: const TextStyle(fontSize: 28)),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),
-                Text(value, style: TextStyle(
-                  fontSize: 28, fontWeight: FontWeight.w800,
-                  color: valueColor ?? AppColors.textColor,
-                )),
-                Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                Text(value,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: valueColor ?? AppColors.textColor,
+                    )),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textMuted)),
                 if (sub != null) ...[
                   const SizedBox(height: 4),
-                  Text(sub!, style: const TextStyle(fontSize: 11, color: AppColors.primary)),
+                  Text(sub!,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.primary)),
                 ],
               ],
             ),
@@ -117,7 +146,8 @@ class GradientProgressBar extends StatelessWidget {
         widthFactor: value.clamp(0.0, 1.0),
         child: Container(
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [AppColors.primaryDark, AppColors.primary]),
+            gradient: const LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primary]),
             borderRadius: BorderRadius.circular(99),
           ),
         ),
@@ -192,11 +222,18 @@ class PrimaryButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onTap,
         child: isLoading
-            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
+                  if (icon != null) ...[
+                    Icon(icon, size: 18),
+                    const SizedBox(width: 8)
+                  ],
                   Text(text),
                 ],
               ),
@@ -212,12 +249,16 @@ Future<bool?> showDeleteDialog(BuildContext context, String itemName) {
     builder: (ctx) => AlertDialog(
       backgroundColor: AppColors.darkCard,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text('تأكيد الحذف', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-      content: Text('هل تريد حذف "$itemName"؟', style: const TextStyle(color: AppColors.textLight)),
+      title: const Text('تأكيد الحذف',
+          style: TextStyle(
+              color: AppColors.textColor, fontWeight: FontWeight.w700)),
+      content: Text('هل تريد حذف "$itemName"؟',
+          style: const TextStyle(color: AppColors.textLight)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+          child:
+              const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(ctx, true),
@@ -267,9 +308,16 @@ class EmptyState extends StatelessWidget {
           children: [
             Text(emoji, style: const TextStyle(fontSize: 60)),
             const SizedBox(height: 16),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textColor)),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textColor)),
             const SizedBox(height: 8),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted, fontSize: 14)),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(color: AppColors.textMuted, fontSize: 14)),
             if (buttonText != null && onButton != null) ...[
               const SizedBox(height: 24),
               ElevatedButton(onPressed: onButton, child: Text(buttonText!)),
@@ -302,19 +350,35 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(label,
+              style: const TextStyle(
+                  color: AppColors.textColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: AppColors.dark, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.darkBorder)),
+            decoration: BoxDecoration(
+                color: AppColors.dark,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.darkBorder)),
             child: DropdownButton<int>(
               value: value,
               isExpanded: true,
               dropdownColor: AppColors.dark,
               underline: const SizedBox(),
               items: [
-                const DropdownMenuItem(value: -1, child: Text('غير موجود (تجاهل)', style: TextStyle(color: AppColors.textMuted))),
-                ...List.generate(widget.headers.length, (i) => DropdownMenuItem(value: i, child: Text(widget.headers[i], style: const TextStyle(color: AppColors.textColor)))),
+                const DropdownMenuItem(
+                    value: -1,
+                    child: Text('غير موجود (تجاهل)',
+                        style: TextStyle(color: AppColors.textMuted))),
+                ...List.generate(
+                    widget.headers.length,
+                    (i) => DropdownMenuItem(
+                        value: i,
+                        child: Text(widget.headers[i],
+                            style:
+                                const TextStyle(color: AppColors.textColor)))),
               ],
               onChanged: onChanged,
             ),
@@ -329,25 +393,35 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
     return AlertDialog(
       backgroundColor: AppColors.darkCard,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('تحديد الأعمدة', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+      title: const Text('تحديد الأعمدة',
+          style:
+              TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildDropdown('الاسم الإنجليزي (إجباري)', _enNameIdx, (v) => setState(() => _enNameIdx = v ?? -1)),
-            _buildDropdown('الاسم العربي', _arNameIdx, (v) => setState(() => _arNameIdx = v ?? -1)),
-            _buildDropdown('المادة الفعالة', _activeIdx, (v) => setState(() => _activeIdx = v ?? -1)),
-            _buildDropdown('الباركود', _barcodeIdx, (v) => setState(() => _barcodeIdx = v ?? -1)),
+            _buildDropdown('الاسم الإنجليزي (إجباري)', _enNameIdx,
+                (v) => setState(() => _enNameIdx = v ?? -1)),
+            _buildDropdown('الاسم العربي', _arNameIdx,
+                (v) => setState(() => _arNameIdx = v ?? -1)),
+            _buildDropdown('المادة الفعالة', _activeIdx,
+                (v) => setState(() => _activeIdx = v ?? -1)),
+            _buildDropdown('الباركود', _barcodeIdx,
+                (v) => setState(() => _barcodeIdx = v ?? -1)),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted))),
+        TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('إلغاء',
+                style: TextStyle(color: AppColors.textMuted))),
         ElevatedButton(
           onPressed: () {
             if (_enNameIdx == -1) {
-               showSnack(context, 'يجب تحديد عمود الاسم الإنجليزي', isError: true);
-               return;
+              showSnack(context, 'يجب تحديد عمود الاسم الإنجليزي',
+                  isError: true);
+              return;
             }
             Navigator.pop(context, {
               'enName': _enNameIdx,
@@ -362,4 +436,3 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
     );
   }
 }
-
