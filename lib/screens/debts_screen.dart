@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
+import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
 
 class DebtsScreen extends StatefulWidget {
@@ -23,6 +24,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
   List<Customer> _customers = [];
   bool _loading = true;
   String _search = '';
+  String _currency = 'ج.م';
+  String _countryCode = 'EG';
 
   @override
   void initState() {
@@ -32,9 +35,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
   Future<void> _loadCustomers() async {
     final data = await DatabaseHelper.instance.getCustomers();
+    final currency = await DatabaseHelper.instance.getCurrency();
+    final countryCode = await DatabaseHelper.instance.getCountryCode();
     if (mounted) {
       setState(() {
         _customers = data.map(Customer.fromMap).toList();
+        _currency = currency;
+        _countryCode = countryCode;
         _loading = false;
       });
     }
@@ -183,7 +190,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              '${customer.totalDebt.toStringAsFixed(2)} جنيه',
+                              '${customer.totalDebt.toStringAsFixed(2)} $_currency',
                               style: TextStyle(
                                   color: customer.totalDebt > 0
                                       ? AppColors.danger
@@ -408,7 +415,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '${isDebt ? '+' : '-'}${tx.amount.toStringAsFixed(2)} جنيه',
+                                    '${isDebt ? '+' : '-'}${tx.amount.toStringAsFixed(2)} $_currency',
                                     style: TextStyle(
                                         color: isDebt
                                             ? AppColors.danger
@@ -603,7 +610,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   pw.Text('الرصيد النهائي المتبقي على العميل:',
                       style: pw.TextStyle(
                           fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('${customer.totalDebt.toStringAsFixed(2)} جنيه',
+                  pw.Text('${customer.totalDebt.toStringAsFixed(2)} $_currency',
                       style: pw.TextStyle(
                           fontSize: 16,
                           fontWeight: pw.FontWeight.bold,
@@ -737,12 +744,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
       showSnack(context, 'لا يوجد رقم هاتف مسجل لهذا العميل', isError: true);
       return;
     }
-    String formattedPhone = phone.trim();
-    if (formattedPhone.startsWith('0')) {
-      formattedPhone = '+2$formattedPhone';
-    }
+    String formattedPhone = CountryConfig.formatPhone(phone, _countryCode);
     final message = Uri.encodeComponent(
-        'مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} جنيه.\nشكراً لكم.');
+        'مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} $_currency.\nشكراً لكم.');
     final url =
         Uri.parse('whatsapp://send?phone=$formattedPhone&text=$message');
     if (await canLaunchUrl(url)) {
@@ -764,14 +768,16 @@ class _DebtsScreenState extends State<DebtsScreen> {
     }
     final buffer = StringBuffer();
     buffer.writeln('💰 تقرير المديونيات (${_filtered.length} عملاء):');
-    buffer.writeln('إجمالي الديون: ${_totalDebt.toStringAsFixed(2)} جنيه');
+    buffer
+        .writeln('إجمالي الديون: ${_totalDebt.toStringAsFixed(2)} $_currency');
     buffer.writeln('-------------------');
     for (var c in _filtered) {
       if (c.totalDebt > 0) {
         buffer.writeln('👤 العميل: ${c.name}');
         if (c.phone != null && c.phone!.isNotEmpty)
           buffer.writeln('📱 الهاتف: ${c.phone}');
-        buffer.writeln('💵 المديونية: ${c.totalDebt.toStringAsFixed(2)} جنيه');
+        buffer.writeln(
+            '💵 المديونية: ${c.totalDebt.toStringAsFixed(2)} $_currency');
         buffer.writeln('-------------------');
       }
     }
@@ -890,7 +896,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                       const Text('إجمالي الديون',
                           style: TextStyle(
                               color: AppColors.textMuted, fontSize: 12)),
-                      Text('${_totalDebt.toStringAsFixed(2)} جنيه',
+                      Text('${_totalDebt.toStringAsFixed(2)} $_currency',
                           style: const TextStyle(
                               color: AppColors.danger,
                               fontSize: 24,
@@ -1058,7 +1064,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${customer.totalDebt.toStringAsFixed(2)} جنيه',
+                      '${customer.totalDebt.toStringAsFixed(2)} $_currency',
                       style: TextStyle(
                         color: customer.totalDebt > 0
                             ? AppColors.danger

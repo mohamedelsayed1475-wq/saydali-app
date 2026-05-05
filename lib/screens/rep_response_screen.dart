@@ -23,16 +23,23 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   RepResponse? _response;
   String _searchQuery = '';
   bool _showSearch = false;
+  String _currency = 'ج.م';
 
   @override
   void initState() {
     super.initState();
     _codeCtrl = TextEditingController(text: widget.initialCode ?? '');
+    _loadCurrency();
     if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fetchResponse();
       });
     }
+  }
+
+  Future<void> _loadCurrency() async {
+    final c = await DatabaseHelper.instance.getCurrency();
+    if (mounted) setState(() => _currency = c);
   }
 
   @override
@@ -218,7 +225,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                         item.company,
                         '${item.quantity}',
                         '${item.discount.toStringAsFixed(0)}%',
-                        '${item.finalPrice.toStringAsFixed(2)} جنيه',
+                        '${item.finalPrice.toStringAsFixed(2)} $_currency',
                       ]
                           .map((t) => pw.Padding(
                                 padding: const pw.EdgeInsets.all(6),
@@ -233,7 +240,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             pw.Align(
               alignment: pw.Alignment.centerLeft,
               child: pw.Text(
-                'إجمالي: ${_response!.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} جنيه',
+                'إجمالي: ${_response!.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} $_currency',
                 style: pw.TextStyle(
                     fontWeight: pw.FontWeight.bold,
                     fontSize: 12,
@@ -290,7 +297,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             '- ${item.drugName} (${item.quantity} علبة) - ${item.finalPrice.toStringAsFixed(2)}ج\n';
       }
       msg +=
-          '\n💰 الإجمالي: ${r.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} جنيه\n';
+          '\n💰 الإجمالي: ${r.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} $_currency\n';
     }
 
     if (r.unavailableItems.isNotEmpty) {
@@ -543,7 +550,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
               Text('✅ متاح (${filteredAvailable.length})',
                   style: const TextStyle(
                       color: AppColors.primary, fontWeight: FontWeight.w700)),
-              Text('${total.toStringAsFixed(2)} جنيه',
+              Text('${total.toStringAsFixed(2)} $_currency',
                   style: const TextStyle(
                       color: AppColors.primary, fontWeight: FontWeight.w800)),
             ],
@@ -624,7 +631,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${item.finalPrice.toStringAsFixed(2)} جنيه',
+                  Text('${item.finalPrice.toStringAsFixed(2)} $_currency',
                       style: const TextStyle(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w800)),

@@ -22,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalDebt = 0;
   bool _loading = true;
   static bool _adShown = false;
+  String _currency = 'ج.م';
 
   @override
   void initState() {
@@ -48,11 +49,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadData() async {
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();
+    final currency = await DatabaseHelper.instance.getCurrency();
 
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
+        _currency = currency;
         _loading = false;
       });
     }
@@ -243,7 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(
                             color: AppColors.textMuted, fontSize: 12)),
                     Text(
-                      '${_totalDebt.toStringAsFixed(2)} جنيه',
+                      '${_totalDebt.toStringAsFixed(2)} $_currency',
                       style: const TextStyle(
                           color: AppColors.danger,
                           fontSize: 22,

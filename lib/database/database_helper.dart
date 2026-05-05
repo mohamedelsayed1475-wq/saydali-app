@@ -358,4 +358,14 @@ class DatabaseHelper {
       for (var row in result) row['key'] as String: row['value'] as String
     };
   }
+
+  /// جلب رمز العملة (ج.م، ر.س، إلخ)
+  Future<String> getCurrency() async {
+    return await getSetting('currency_symbol') ?? 'ج.م';
+  }
+
+  /// جلب كود الدولة (EG، SA، إلخ)
+  Future<String> getCountryCode() async {
+    return await getSetting('country_code') ?? 'EG';
+  }
 }

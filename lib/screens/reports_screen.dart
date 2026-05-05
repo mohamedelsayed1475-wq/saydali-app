@@ -21,6 +21,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Map<String, int> _stats = {};
   double _totalDebt = 0;
   bool _loading = true;
+  String _currency = 'ج.م';
 
   @override
   void initState() {
@@ -31,10 +32,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Future<void> _loadData() async {
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();
+    final currency = await DatabaseHelper.instance.getCurrency();
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
+        _currency = currency;
         _loading = false;
       });
     }
@@ -88,7 +91,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   children: [
                     _summaryItem('$rate%', 'معدل التغطية'),
                     const SizedBox(width: 24),
-                    _summaryItem('${_totalDebt.toStringAsFixed(0)} جنيه',
+                    _summaryItem('${_totalDebt.toStringAsFixed(0)} $_currency',
                         'إجمالي الديون'),
                     const SizedBox(width: 24),
                     _summaryItem('$covered صنف', 'تمت تغطيته'),
@@ -306,7 +309,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           pw.SizedBox(height: 8),
           pw.Text('إجمالي النواقص: ${_stats['total'] ?? 0}'),
           pw.Text('تمت التغطية: ${_stats['covered'] ?? 0}'),
-          pw.Text('إجمالي الديون: $_totalDebt جنيه'),
+          pw.Text('إجمالي الديون: $_totalDebt $_currency'),
           pw.SizedBox(height: 20),
           pw.Text('سجل النواقص',
               style:

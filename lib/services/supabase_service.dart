@@ -28,6 +28,7 @@ class SupabaseService {
     required String repPhone,
     required String pharmacyName,
     required List<Map<String, dynamic>> items,
+    String currency = 'ج.م',
   }) async {
     if (!isConfigured) {
       debugPrint('❌ Supabase key غير مضبوط');
@@ -45,6 +46,7 @@ class SupabaseService {
               'rep_name': repName,
               'rep_phone': repPhone,
               'pharmacy_name': pharmacyName,
+              'currency': currency,
               'status': 'pending',
               'expires_at': DateTime.now()
                   .add(const Duration(hours: 4))

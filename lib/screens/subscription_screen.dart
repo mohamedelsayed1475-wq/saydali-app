@@ -22,6 +22,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   int _selectedPlan = 0; // 0=premium
   double _currentPrice = 200;
   int _discountPercent = 0;
+  String _currency = 'ج.م';
 
   final _plans = [
     (
@@ -276,7 +277,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             style: TextStyle(
                                 color: AppColors.textColor,
                                 fontWeight: FontWeight.w700)),
-                        Text('$_currentPrice جنيه',
+                        Text('$_currentPrice $_currency',
                             style: const TextStyle(
                                 color: AppColors.primary,
                                 fontSize: 18,
@@ -426,7 +427,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                                 fontSize: 22,
                                 fontFamily: 'Cairo')),
                         const TextSpan(
-                            text: ' جنيه/شهر',
+                            text: '/شهر',
                             style: TextStyle(
                                 color: AppColors.textMuted,
                                 fontSize: 12,

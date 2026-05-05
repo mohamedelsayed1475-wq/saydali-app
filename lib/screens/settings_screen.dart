@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
+import '../utils/country_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
@@ -27,6 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _loading = true;
   int _devTapCount = 0;
+  String _selectedCountryCode = 'EG';
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _nameCtrl.text = settings['pharmacy_name'] ?? 'صيدليتي';
         _pharmacistCtrl.text = settings['pharmacist_name'] ?? 'الصيدلي';
         _phoneCtrl.text = settings['pharmacy_phone'] ?? '';
+        _selectedCountryCode = settings['country_code'] ?? 'EG';
         _notificationsEnabled =
             (settings['notifications_enabled'] ?? '1') == '1';
         _loading = false;
@@ -56,6 +59,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await DatabaseHelper.instance
         .setSetting('pharmacy_phone', _phoneCtrl.text.trim());
     await DatabaseHelper.instance
+        .setSetting('country_code', _selectedCountryCode);
+    final country = CountryConfig.getByCode(_selectedCountryCode);
+    await DatabaseHelper.instance
+        .setSetting('currency_symbol', country.currency);
+    await DatabaseHelper.instance.setSetting('phone_code', country.phoneCode);
+    await DatabaseHelper.instance
         .setSetting('notifications_enabled', _notificationsEnabled ? '1' : '0');
     if (mounted) showSnack(context, 'تم حفظ الإعدادات ✅');
   }
@@ -69,6 +78,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Country Selector
+        _sectionTitle('🌍 الدولة والعملة'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: DropdownButtonFormField<String>(
+            initialValue: _selectedCountryCode,
+            dropdownColor: AppColors.darkCard,
+            style: const TextStyle(
+                color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 14),
+            decoration: InputDecoration(
+              labelText: 'اختر دولتك',
+              labelStyle: const TextStyle(color: AppColors.textMuted),
+              prefixIcon: Text(
+                '  ${CountryConfig.getByCode(_selectedCountryCode).flag}  ',
+                style: const TextStyle(fontSize: 22),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 40, minHeight: 0),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.darkBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              filled: true,
+              fillColor: AppColors.dark,
+            ),
+            items: CountryConfig.countries
+                .map((c) => DropdownMenuItem(
+                      value: c.code,
+                      child: Text('${c.flag}  ${c.name}  (${c.currency})'),
+                    ))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) setState(() => _selectedCountryCode = v);
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+
         // Pharmacy Info
         _sectionTitle('🏥 بيانات الصيدلية'),
         Container(

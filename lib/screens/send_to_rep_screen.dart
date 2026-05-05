@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../utils/app_theme.dart';
+import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
 import 'rep_response_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -23,6 +24,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
   bool _sending = false;
   String? _generatedLink;
   String? _sessionCode;
+  String _countryCode = 'EG';
 
   @override
   void initState() {
@@ -59,6 +61,8 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
         _shortages.where((s) => _selected.contains(s.id)).toList();
     final pharmacyName =
         await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
+    final currency = await DatabaseHelper.instance.getCurrency();
+    _countryCode = await DatabaseHelper.instance.getCountryCode();
 
     final items = selectedItems
         .map((s) => {
@@ -74,6 +78,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       repPhone: widget.rep.phone ?? '',
       pharmacyName: pharmacyName,
       items: items,
+      currency: currency,
     );
 
     if (mounted) {
@@ -162,12 +167,13 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                       final msg =
                           'مرحباً ${widget.rep.name}،\nيرجى مراجعة النواقص والرد عبر الرابط:\n$_generatedLink';
                       // فتح واتساب
-                      final phone = widget.rep.phone
-                              ?.replaceAll('+', '')
-                              .replaceAll(' ', '') ??
-                          '';
-                      final urlStr = phone.isNotEmpty
-                          ? 'https://wa.me/$phone?text=${Uri.encodeComponent(msg)}'
+                      final phone = widget.rep.phone ?? '';
+                      final formattedPhone = phone.isNotEmpty
+                          ? CountryConfig.formatPhone(phone, _countryCode)
+                              .replaceAll('+', '')
+                          : '';
+                      final urlStr = formattedPhone.isNotEmpty
+                          ? 'https://wa.me/$formattedPhone?text=${Uri.encodeComponent(msg)}'
                           : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
                       final url = Uri.parse(urlStr);
                       try {
