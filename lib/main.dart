@@ -115,9 +115,9 @@ class _SplashScreenState extends State<SplashScreen>
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => PinLockScreen(
+            builder: (ctx) => PinLockScreen(
               onSuccess: () => Navigator.pushReplacement(
-                context,
+                ctx,
                 MaterialPageRoute(builder: (_) => const MainScreen()),
               ),
             ),

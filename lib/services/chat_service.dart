@@ -1,6 +1,12 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:excel/excel.dart' as ex;
+import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf;
+import 'package:archive/archive.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../database/database_helper.dart';
 import 'platform_service.dart';
 
@@ -21,6 +27,8 @@ enum ChatIntent {
   showStats,
   apiSettings,
   help,
+  addCustomer,
+  addShortagesFromImage,
   unknown,
 }
 
@@ -101,13 +109,29 @@ class ChatService {
     if (RegExp(r'(مساعده|مساعدة|ايه|ازاي|كيف|ايش|امر|اوامر)').hasMatch(n)) {
       return ChatIntent.help;
     }
+    if (RegExp(r'(اعمل|ضيف|سجل|انشئ|أنشئ)').hasMatch(n) &&
+        RegExp(r'(حساب|عميل|زبون)').hasMatch(n)) {
+      return ChatIntent.addCustomer;
+    }
+    if (RegExp(r'(ضيف|اضف|سجل|استخرج)').hasMatch(n) &&
+        RegExp(r'(الاصناف|النواقص|الادوية|الادويه|الصور|الصوره|الصورة|روشته|روشتة|الصنف|صنف|صوره)').hasMatch(n)) {
+      return ChatIntent.addShortagesFromImage;
+    }
     if (n.length > 2) return ChatIntent.searchDrug;
     return ChatIntent.unknown;
   }
 
   // ── تنفيذ الأمر ──────────────────────────────────────────────────
-  Future<ChatResponse> execute(String text) async {
+  Future<ChatResponse> execute(String text, {List<String>? filePaths}) async {
     final intent = _classify(text);
+
+    if (intent == ChatIntent.addShortagesFromImage) {
+      return _extractAndAddItemsFromImage(text, filePaths);
+    }
+
+    if (filePaths != null && filePaths.isNotEmpty && intent != ChatIntent.addShortagesFromImage) {
+      return _searchViaApi(text, filePaths: filePaths);
+    }
     switch (intent) {
       case ChatIntent.addShortage:
         return _handleAddShortage(text);
@@ -135,6 +159,8 @@ class ChatService {
         return _handleAnalyzePatterns();
       case ChatIntent.searchPlatform:
         return _handleSearchPlatform(text);
+      case ChatIntent.addCustomer:
+        return _handleAddCustomer(text);
       default:
         return _handleSearchDrug(text);
     }
@@ -199,6 +225,146 @@ class ChatService {
       text: '📋 النواقص $label (${shortages.length}):\n\n$lines$more',
       intent: ChatIntent.showShortages,
     );
+  }
+
+  // ── إضافة عميل ──────────────────────────────────────────────────
+  Future<ChatResponse> _handleAddCustomer(String text) async {
+    final nameRegex = RegExp(r'(?:باسم|اسم|اسمه)\s+([^\s\d]+(?:\s+[^\s\d]+)*)');
+    final phoneRegex = RegExp(r'(?:ورقمه|رقم|رقمه|تليفونه|موبايله)\s+([\d\-\+]+)');
+    
+    final nameMatch = nameRegex.firstMatch(text);
+    final phoneMatch = phoneRegex.firstMatch(text);
+    
+    if (nameMatch == null) {
+       return ChatResponse(
+         text: '❓ يرجى كتابة الأمر بوضوح مثل:\n"اعمل حساب باسم محمد السيد ورقمه 01012345678"', 
+         intent: ChatIntent.addCustomer, 
+         success: false
+       );
+    }
+    
+    final name = nameMatch.group(1)!.trim();
+    final phone = phoneMatch != null ? phoneMatch.group(1)!.trim() : '';
+    
+    await DatabaseHelper.instance.insertCustomer({
+      'name': name,
+      'phone': phone,
+      'address': '',
+    });
+    
+    return ChatResponse(
+      text: '✅ تم إنشاء حساب للعميل "$name" ${phone.isNotEmpty ? "برقم $phone" : ""} بنجاح!',
+      intent: ChatIntent.addCustomer,
+    );
+  }
+
+  // ── استخراج النواقص من صورة ──────────────────────────────────────────────────
+  Future<ChatResponse> _extractAndAddItemsFromImage(String text, List<String>? filePaths) async {
+    final prefs = await SharedPreferences.getInstance();
+    final customKey = prefs.getString('custom_api_key') ?? '';
+    final customType = prefs.getString('custom_api_type') ?? 'openai';
+
+    if (filePaths == null || filePaths.isEmpty) {
+      return ChatResponse(text: '❓ أين الصورة؟ قم بإرفاق صورة أولاً مع رسالتك.', intent: ChatIntent.addShortagesFromImage, success: false);
+    }
+    
+    // محاولة استخدام Gemini أولاً لو موجود (لأنه الأذكى في الاستخراج المنسق)
+    if (customKey.isNotEmpty && customType == 'gemini') {
+      try {
+        final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: customKey);
+        final prompt = 'استخرج جميع أسماء الأدوية أو الأصناف من هذه الصورة وضعها في قائمة JSON بالضبط بهذا الشكل: [{"name": "اسم الدواء", "company": "اسم الشركة", "quantity": 1}]. لا تقم بإضافة أي نصوص أو شروحات إضافية غير مصفوفة الـ JSON فقط.';
+        
+        final parts = <Part>[TextPart(prompt)];
+        for (final path in filePaths) {
+           if (!File(path).existsSync()) continue;
+           final bytes = File(path).readAsBytesSync();
+           final ext = path.split('.').last.toLowerCase();
+           String mime = 'image/jpeg';
+           if (ext == 'png') mime = 'image/png';
+           if (ext == 'pdf') mime = 'application/pdf';
+           parts.add(DataPart(mime, bytes));
+        }
+        
+        final response = await model.generateContent([Content.multi(parts)]);
+        final resText = response.text ?? '';
+        
+        final jsonMatch = RegExp(r'\[.*\]', dotAll: true).firstMatch(resText);
+        if (jsonMatch != null) {
+          final List<dynamic> items = jsonDecode(jsonMatch.group(0)!);
+          int added = 0;
+          final buffer = StringBuffer();
+          for (final item in items) {
+             final name = item['name']?.toString() ?? '';
+             if (name.isEmpty) continue;
+             final company = item['company']?.toString() ?? 'غير محدد';
+             final quantity = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
+             
+             await DatabaseHelper.instance.insertShortage({
+               'name': name,
+               'company': company,
+               'quantity': quantity,
+               'status': 'pending',
+               'is_urgent': 0,
+               'notes': 'مستخرج من صورة عبر ذكاء اصطناعي',
+             });
+             buffer.writeln('💊 $name | $company');
+             added++;
+          }
+          if (added > 0) {
+             return ChatResponse(text: '✅ تم استخراج وإضافة $added صنف للنواقص بنجاح!\n\n${buffer.toString()}', intent: ChatIntent.addShortagesFromImage);
+          }
+        }
+      } catch (e) {
+        // Fallback to offline...
+      }
+    }
+    
+    // الاستخراج المحلي (بدون إنترنت/بدون API)
+    try {
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      int added = 0;
+      final buffer = StringBuffer();
+      
+      for (final path in filePaths) {
+         if (!File(path).existsSync()) continue;
+         final ext = path.split('.').last.toLowerCase();
+         if (ext == 'jpg' || ext == 'jpeg' || ext == 'png' || ext == 'webp') {
+            final inputImage = InputImage.fromFilePath(path);
+            final recognizedText = await textRecognizer.processImage(inputImage);
+            
+            final lines = recognizedText.text.split('\n');
+            for (var line in lines) {
+               line = line.trim();
+               // تجاهل السطور القصيرة جداً والأرقام
+               if (line.isEmpty || line.length <= 2 || RegExp(r'^\d+$').hasMatch(line)) continue;
+               
+               // بعض الفلاتر البسيطة
+               if (line.toLowerCase().contains('total') || line.toLowerCase().contains('discount')) continue;
+
+               await DatabaseHelper.instance.insertShortage({
+                 'name': line,
+                 'company': 'غير محدد',
+                 'quantity': 1,
+                 'status': 'pending',
+                 'is_urgent': 0,
+                 'notes': 'مستخرج من صورة محلياً (تأكد من صحة الاسم)',
+               });
+               buffer.writeln('💊 $line');
+               added++;
+               if(added >= 20) break; // للحد من إضافة نصوص عشوائية كثيرة
+            }
+         }
+      }
+      textRecognizer.close();
+      
+      if (added > 0) {
+         return ChatResponse(text: '✅ قرأت الصورة محلياً (بدون نت) وتم استخراج $added سطر ووضعه في النواقص:\n\n${buffer.toString()}\n\n💡 ملاحظة: راجع شاشة النواقص لتعديل الأسماء أو حذف المكتوب بالخطأ.', intent: ChatIntent.addShortagesFromImage);
+      } else {
+         return ChatResponse(text: '❌ لم أستطع إيجاد نصوص واضحة في الصورة.', intent: ChatIntent.addShortagesFromImage, success: false);
+      }
+    } catch (e) {
+      return ChatResponse(text: '⚠️ استخراج البيانات محلياً فشل. $e', intent: ChatIntent.addShortagesFromImage, success: false);
+    }
   }
 
   // ── تعليم متوفر ──────────────────────────────────────────────────
@@ -469,11 +635,11 @@ class ChatService {
 
   // ── مطابقة ضبابية (fuzzy) ──────────────────────────────────────────────────
   bool _fuzzyMatch(String query, String text) {
-    final q = query.toLowerCase().trim();
-    if (q.isEmpty) return false;
-    final t = text.toLowerCase();
+    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (q.isEmpty) return true;
+    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
     if (t.contains(q)) return true;
-    // مطابقة حروف متتابعة
+
     int i = 0;
     for (int j = 0; j < t.length && i < q.length; j++) {
       if (t[j] == q[i]) i++;
@@ -571,14 +737,54 @@ class ChatService {
   }
 
   // ── البحث عبر API ──────────────────────────────────────────────────
-  Future<ChatResponse> _searchViaApi(String query) async {
+  Future<ChatResponse> _searchViaApi(String query, {List<String>? filePaths}) async {
     final prefs = await SharedPreferences.getInstance();
     final customUrl = prefs.getString('custom_api_url') ?? '';
     final customKey = prefs.getString('custom_api_key') ?? '';
     final customType = prefs.getString('custom_api_type') ?? 'openai';
+    final savedFiles = prefs.getStringList('custom_api_files') ?? [];
+
+    final allFiles = <String>[];
+    if (filePaths != null) allFiles.addAll(filePaths);
+    allFiles.addAll(savedFiles);
+
+    // 💡 بحث محلي وذكي داخل الملفات أولاً (سريع ومجاني)
+    if (allFiles.isNotEmpty) {
+      final localRes = await _searchLocalFiles(query.isEmpty ? 'ملخص' : query, allFiles);
+      if (localRes.success) {
+        return localRes; // إذا وجدها في الملفات، يعرضها مباشرة
+      }
+    }
 
     try {
-      // API مخصص من المستخدم
+      if (customKey.isNotEmpty && customType == 'gemini') {
+        final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: customKey);
+        final prompt = query.isEmpty && allFiles.isNotEmpty ? 'اشرح ما في هذه الملفات.' : query;
+        final parts = <Part>[TextPart(prompt)];
+        
+        for (final path in allFiles) {
+          if (!File(path).existsSync()) continue;
+          final bytes = File(path).readAsBytesSync();
+          final ext = path.split('.').last.toLowerCase();
+          String mime = 'image/jpeg';
+          if (ext == 'png') mime = 'image/png';
+          if (ext == 'pdf') mime = 'application/pdf';
+          if (ext == 'xlsx') mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          if (ext == 'xls') mime = 'application/vnd.ms-excel';
+          if (ext == 'csv') mime = 'text/csv';
+          if (ext == 'doc') mime = 'application/msword';
+          if (ext == 'docx') mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          parts.add(DataPart(mime, bytes));
+        }
+        
+        final response = await model.generateContent([Content.multi(parts)]);
+        return ChatResponse(
+          text: response.text ?? 'لا توجد إجابة',
+          intent: ChatIntent.searchDrug,
+        );
+      }
+
+      // API مخصص من المستخدم (OpenAI)
       if (customUrl.isNotEmpty && customKey.isNotEmpty) {
         if (customType == 'openai') {
           return await _callOpenAIApi(customUrl, customKey, query);
@@ -611,6 +817,95 @@ class ChatService {
         success: false,
       );
     }
+  }
+
+  // ── بحث ذكي ومحلي داخل الملفات المرفوعة ───────────────────────────────
+  Future<ChatResponse> _searchLocalFiles(String query, List<String> files) async {
+    final buffer = StringBuffer();
+    int foundCount = 0;
+    
+    final terms = query.toLowerCase().split(' ').where((w) => w.length > 2).toList();
+    if (terms.isEmpty) terms.add(query.toLowerCase());
+
+    for (final path in files) {
+      if (!File(path).existsSync()) continue;
+      final ext = path.split('.').last.toLowerCase();
+      final file = File(path);
+      String text = '';
+      
+      try {
+        if (ext == 'pdf') {
+          final document = pdf.PdfDocument(inputBytes: file.readAsBytesSync());
+          text = pdf.PdfTextExtractor(document).extractText();
+          document.dispose();
+        } else if (ext == 'xlsx' || ext == 'xls') {
+          final bytes = file.readAsBytesSync();
+          final excel = ex.Excel.decodeBytes(bytes);
+          final tb = StringBuffer();
+          for (final table in excel.tables.keys) {
+            for (final row in excel.tables[table]!.rows) {
+              tb.writeln(row.map((e) => e?.value?.toString() ?? '').join(' | '));
+            }
+          }
+          text = tb.toString();
+        } else if (ext == 'docx') {
+          final bytes = file.readAsBytesSync();
+          final archive = ZipDecoder().decodeBytes(bytes);
+          final docXml = archive.findFile('word/document.xml');
+          if (docXml != null) {
+            final content = utf8.decode(docXml.content as List<int>);
+            final regex = RegExp(r'<w:t[^>]*>(.*?)<\/w:t>');
+            text = regex.allMatches(content).map((m) => m.group(1)).join(' ');
+          }
+        } else if (ext == 'csv' || ext == 'txt') {
+          text = file.readAsStringSync(encoding: utf8);
+        } else if (ext == 'jpg' || ext == 'jpeg' || ext == 'png' || ext == 'webp') {
+          final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+          final inputImage = InputImage.fromFilePath(path);
+          final recognizedText = await textRecognizer.processImage(inputImage);
+          text = recognizedText.text;
+          textRecognizer.close();
+        }
+      } catch (_) {}
+      
+      if (text.isEmpty) continue;
+      
+      final lines = text.split(RegExp(r'\n|\r|\. '));
+      for (final line in lines) {
+        // نستخدم البحث التقريبي المتقدم بدلاً من البحث الحرفي
+        bool matches = false;
+        if (terms.length == 1) {
+          matches = _fuzzyMatch(terms.first, line);
+        } else {
+          matches = terms.every((term) => line.toLowerCase().contains(term));
+        }
+        
+        if (matches) {
+          if (buffer.length < 2000) {
+            final name = path.split(Platform.pathSeparator).last;
+            buffer.writeln('📄 من ملف ($name):');
+            buffer.writeln('"... ${line.trim()} ..."');
+            buffer.writeln();
+            foundCount++;
+            if (foundCount > 7) break;
+          }
+        }
+      }
+      if (foundCount > 7) break;
+    }
+    
+    if (foundCount > 0) {
+      return ChatResponse(
+        text: '📚 بحثت محلياً (بدون إنترنت) في ملفاتك المرفقة ووجدت:\n\n${buffer.toString()}',
+        intent: ChatIntent.searchDrug,
+      );
+    }
+    
+    return ChatResponse(
+      text: '❌ لم أجد أي معلومات عن "$query" داخل الملفات التي رفعتها.\n\n💡 جرب كلمة بحث أبسط.',
+      intent: ChatIntent.searchDrug,
+      success: false,
+    );
   }
 
   // ── DuckDuckGo مجاني ──────────────────────────────────────────────────
@@ -731,6 +1026,29 @@ class ChatService {
   Future<List<Map<String, dynamic>>> suggestDrugNames(String query) async {
     if (query.trim().length < 3) return [];
     final prefs = await SharedPreferences.getInstance();
+    
+    // 💡 1️⃣ البحث المحلي السريع في الملفات المرفوعة (مثل الإكسيل) 💡
+    final savedFiles = prefs.getStringList('custom_api_files') ?? [];
+    if (savedFiles.isNotEmpty) {
+      final localRes = await _searchLocalFiles(query, savedFiles);
+      if (localRes.success && localRes.text.contains('📄')) {
+        final lines = localRes.text.split('\n');
+        final foundItems = <String>{};
+        for (final line in lines) {
+          if (line.contains('"...') && _fuzzyMatch(query, line)) {
+            var clean = line.replaceAll('"...', '').replaceAll('..."', '').trim();
+            if (clean.contains('|')) {
+               clean = clean.split('|').firstWhere((p) => _fuzzyMatch(query, p), orElse: () => clean.split('|').first).trim();
+            }
+            if (clean.length > 2) foundItems.add(clean);
+          }
+        }
+        if (foundItems.isNotEmpty) {
+          return foundItems.take(5).map((s) => <String, dynamic>{'enName': s, 'arName': '', 'source': 'local_file'}).toList();
+        }
+      }
+    }
+
     final url = prefs.getString('custom_api_url') ?? '';
     final key = prefs.getString('custom_api_key') ?? '';
 
@@ -782,7 +1100,7 @@ class ChatService {
           'https://api.duckduckgo.com/?q=${Uri.encodeComponent("$query drug")}&format=json&no_html=1';
       final res = await http
           .get(Uri.parse(ddgUrl))
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 2));
       if (res.statusCode == 200) {
         final d = jsonDecode(res.body);
         final topics = d['RelatedTopics'] as List? ?? [];
@@ -810,21 +1128,24 @@ class ChatService {
     required String key,
     required String type,
     required String name,
+    List<String> files = const [],
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('custom_api_url', url);
     await prefs.setString('custom_api_key', key);
     await prefs.setString('custom_api_type', type);
     await prefs.setString('custom_api_name', name);
+    await prefs.setStringList('custom_api_files', files);
   }
 
-  Future<Map<String, String>> getApiSettings() async {
+  Future<Map<String, dynamic>> getApiSettings() async {
     final prefs = await SharedPreferences.getInstance();
     return {
       'url': prefs.getString('custom_api_url') ?? '',
       'key': prefs.getString('custom_api_key') ?? '',
       'type': prefs.getString('custom_api_type') ?? 'openai',
       'name': prefs.getString('custom_api_name') ?? '',
+      'files': prefs.getStringList('custom_api_files') ?? [],
     };
   }
 
@@ -834,5 +1155,6 @@ class ChatService {
     await prefs.remove('custom_api_key');
     await prefs.remove('custom_api_type');
     await prefs.remove('custom_api_name');
+    await prefs.remove('custom_api_files');
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/chat_service.dart';
+import 'app_providers.dart';
 
 // ── نموذج الرسالة ──────────────────────────────────────────────────
 class ChatMessage {
@@ -32,14 +34,14 @@ class ChatProvider extends ChangeNotifier {
     ));
   }
 
-  Future<void> send(String text) async {
-    if (text.trim().isEmpty) return;
-    _messages.insert(0, ChatMessage(text: text.trim(), isUser: true));
+  Future<void> send(String text, {BuildContext? context, List<String>? filePaths}) async {
+    if (text.trim().isEmpty && (filePaths == null || filePaths.isEmpty)) return;
+    _messages.insert(0, ChatMessage(text: text.trim().isNotEmpty ? text.trim() : '📄 مرفق', isUser: true));
     _loading = true;
     notifyListeners();
 
     try {
-      final response = await ChatService.instance.execute(text.trim());
+      final response = await ChatService.instance.execute(text.trim(), filePaths: filePaths);
       _messages.insert(
         0,
         ChatMessage(
@@ -48,6 +50,18 @@ class ChatProvider extends ChangeNotifier {
           isError: !response.success,
         ),
       );
+
+      // Refresh global state if needed
+      if (context != null && response.success) {
+        if (response.intent == ChatIntent.addShortage || 
+            response.intent == ChatIntent.addShortagesFromImage || 
+            response.intent == ChatIntent.markCovered) {
+          context.read<ShortagesProvider>().load();
+        } else if (response.intent == ChatIntent.addCustomer) {
+          context.read<CustomersProvider>().load();
+        }
+      }
+
     } catch (e) {
       _messages.insert(
         0,

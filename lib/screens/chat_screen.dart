@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../providers/chat_provider.dart';
 import '../services/chat_service.dart';
 import '../utils/app_theme.dart';
@@ -43,9 +45,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _send(String text) {
-    if (text.trim().isEmpty) return;
-    context.read<ChatProvider>().send(text.trim());
+  void _send(String text, [List<String>? files]) {
+    if (text.trim().isEmpty && (files == null || files.isEmpty)) return;
+    context.read<ChatProvider>().send(text.trim(), context: context, filePaths: files);
     _ctrl.clear();
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scroll.hasClients) {
@@ -320,12 +322,36 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ── حقل الإدخال ──────────────────────────────────────────────────
-class _InputBar extends StatelessWidget {
+class _InputBar extends StatefulWidget {
   final TextEditingController ctrl;
-  final void Function(String) onSend;
+  final void Function(String, List<String>?) onSend;
   final bool loading;
-  const _InputBar(
-      {required this.ctrl, required this.onSend, required this.loading});
+  const _InputBar({required this.ctrl, required this.onSend, required this.loading});
+
+  @override
+  State<_InputBar> createState() => _InputBarState();
+}
+
+class _InputBarState extends State<_InputBar> {
+  List<String> _attachedFiles = [];
+
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg', 'xlsx', 'xls', 'csv', 'doc', 'docx'],
+      allowMultiple: true,
+    );
+    if (result != null) {
+      setState(() {
+        _attachedFiles = result.paths.whereType<String>().toList();
+      });
+    }
+  }
+
+  void _handleSend() {
+    widget.onSend(widget.ctrl.text, _attachedFiles);
+    setState(() => _attachedFiles = []);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,37 +361,64 @@ class _InputBar extends StatelessWidget {
         border: Border(top: BorderSide(color: AppColors.darkBorder)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextField(
-              controller: ctrl,
-              textDirection: TextDirection.rtl,
-              textInputAction: TextInputAction.send,
-              onSubmitted: loading ? null : onSend,
-              style: const TextStyle(color: AppColors.textColor, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'اكتب أمراً أو سؤالاً...',
-                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-                filled: true,
-                fillColor: AppColors.dark,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: AppColors.darkBorder)),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: const BorderSide(color: AppColors.darkBorder)),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide:
-                        const BorderSide(color: AppColors.primary, width: 1.5)),
+          if (_attachedFiles.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Wrap(
+                spacing: 8,
+                children: _attachedFiles.map((path) {
+                  final name = path.split(Platform.pathSeparator).last;
+                  return Chip(
+                    label: Text(name, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                    onDeleted: () {
+                      setState(() => _attachedFiles.remove(path));
+                    },
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                    deleteIconColor: Colors.redAccent,
+                  );
+                }).toList(),
               ),
             ),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.attach_file, color: AppColors.textMuted),
+                onPressed: _pickFiles,
+              ),
+              Expanded(
+                child: TextField(
+                  controller: widget.ctrl,
+                  textDirection: TextDirection.rtl,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: widget.loading ? null : (_) => _handleSend(),
+                  style: const TextStyle(color: AppColors.textColor, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'اكتب أمراً أو سؤالاً...',
+                    hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    filled: true,
+                    fillColor: AppColors.dark,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.darkBorder)),
+                    enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: const BorderSide(color: AppColors.darkBorder)),
+                    focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary, width: 1.5)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _SendButton(onTap: _handleSend, loading: widget.loading),
+            ],
           ),
-          const SizedBox(width: 8),
-          _SendButton(onTap: () => onSend(ctrl.text), loading: loading),
         ],
       ),
     );
@@ -421,6 +474,7 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
   final _urlCtrl = TextEditingController();
   final _keyCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
+  List<String> _knowledgeFiles = [];
   String _type = 'openai';
   bool _loading = true;
   bool _keyVisible = false;
@@ -438,8 +492,23 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
       _keyCtrl.text = s['key'] ?? '';
       _nameCtrl.text = s['name'] ?? '';
       _type = s['type'] ?? 'openai';
+      _knowledgeFiles = List<String>.from(s['files'] ?? []);
       _loading = false;
     });
+  }
+
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx'],
+      allowMultiple: true,
+    );
+    if (result != null) {
+      setState(() {
+        _knowledgeFiles.addAll(result.paths.whereType<String>());
+        _knowledgeFiles = _knowledgeFiles.toSet().toList();
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -448,6 +517,7 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
       key: _keyCtrl.text.trim(),
       type: _type,
       name: _nameCtrl.text.trim(),
+      files: _knowledgeFiles,
     );
     if (mounted) {
       Navigator.pop(context);
@@ -465,7 +535,10 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
     _urlCtrl.clear();
     _keyCtrl.clear();
     _nameCtrl.clear();
-    setState(() => _type = 'openai');
+    setState(() {
+      _type = 'openai';
+      _knowledgeFiles = [];
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -552,6 +625,15 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
                   Row(
                     children: [
                       _TypeChip(
+                          label: 'Gemini',
+                          value: 'gemini',
+                          selected: _type == 'gemini',
+                          onTap: () => setState(() {
+                                _type = 'gemini';
+                                _urlCtrl.text = ''; // Gemini doesn't need URL, just key
+                              })),
+                      const SizedBox(width: 8),
+                      _TypeChip(
                           label: 'OpenAI',
                           value: 'openai',
                           selected: _type == 'openai',
@@ -576,15 +658,16 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
                   const SizedBox(height: 12),
 
                   // رابط الـ API
-                  _ApiField(
-                    controller: _urlCtrl,
-                    label: 'رابط الـ API',
-                    hint: _type == 'openai'
-                        ? 'https://api.openai.com/v1'
-                        : 'https://your-api.com/endpoint',
-                    icon: Icons.link,
-                  ),
-                  const SizedBox(height: 12),
+                  if (_type != 'gemini')
+                    _ApiField(
+                      controller: _urlCtrl,
+                      label: 'رابط الـ API',
+                      hint: _type == 'openai'
+                          ? 'https://api.openai.com/v1'
+                          : 'https://your-api.com/endpoint',
+                      icon: Icons.link,
+                    ),
+                  if (_type != 'gemini') const SizedBox(height: 12),
 
                   // مفتاح الـ API
                   _ApiField(
@@ -625,6 +708,61 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
                         textDirection: TextDirection.rtl,
                       ),
                     ),
+                  const SizedBox(height: 20),
+
+                  // ── قاعدة المعرفة (Knowledge Base) ──
+                  const Text('قاعدة المعرفة (ملفات PDF/Excel/Word):',
+                      style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.dark,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.darkBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_knowledgeFiles.isNotEmpty)
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _knowledgeFiles.map((path) {
+                              final name = path.split(Platform.pathSeparator).last;
+                              return Chip(
+                                label: Text(name, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                                onDeleted: () {
+                                  setState(() => _knowledgeFiles.remove(path));
+                                },
+                                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                                deleteIconColor: Colors.redAccent,
+                              );
+                            }).toList(),
+                          )
+                        else
+                          const Text('لم تقم برفع أي ملفات حتى الآن.',
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _pickFiles,
+                          icon: const Icon(Icons.upload_file, size: 16),
+                          label: const Text('رفع ملفات (PDF/Excel/Word)'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // أزرار

@@ -58,6 +58,11 @@ dependencies:
 
   # قفل التطبيق
   crypto: ^3.0.3
+  google_generative_ai: ^0.4.7
+  image_picker: ^1.2.2
+  syncfusion_flutter_pdf: ^33.2.5
+  archive: ^3.6.1
+  google_mlkit_text_recognition: ^0.15.1
 
 dev_dependencies:
   flutter_test:

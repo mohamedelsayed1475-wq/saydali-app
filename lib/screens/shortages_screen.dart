@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -8,6 +9,7 @@ import 'dart:async';
 import '../services/chat_service.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../providers/app_providers.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
@@ -25,10 +27,8 @@ class ShortagesScreen extends StatefulWidget {
 }
 
 class _ShortagesScreenState extends State<ShortagesScreen> {
-  List<Shortage> _shortages = [];
   String _filter = 'all';
   String _search = '';
-  bool _loading = true;
   List<Map<String, dynamic>> _suggestions = [];
   List<Map<String, dynamic>> _aiDrugSuggestions = [];
   bool _aiSearching = false;
@@ -62,7 +62,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       try {
         final List<dynamic> decoded = jsonDecode(dictStr);
         if (mounted)
-          setState(() => _suggestions = decoded.cast<Map<String, dynamic>>());
+          setState(() => _suggestions = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       } catch (e) {}
     } else {
       final oldDictStr =
@@ -86,11 +86,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       onUpdate();
       return;
     }
-    final q = query.toLowerCase();
     final hasLocal = _suggestions.any((s) {
-      final en = s['enName']?.toString().toLowerCase() ?? '';
-      final ar = s['arName']?.toString().toLowerCase() ?? '';
-      return en.contains(q) || ar.contains(q);
+      final en = s['enName']?.toString() ?? '';
+      final ar = s['arName']?.toString() ?? '';
+      return _fuzzyMatch(query, en) || _fuzzyMatch(query, ar);
     });
     if (hasLocal) {
       _aiDrugSuggestions = [];
@@ -109,19 +108,13 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _loadShortages() async {
-    final data = await DatabaseHelper.instance.getShortages();
-    if (mounted) {
-      setState(() {
-        _shortages = data.map(Shortage.fromMap).toList();
-        _loading = false;
-      });
-    }
+    await context.read<ShortagesProvider>().load();
   }
 
   bool _fuzzyMatch(String query, String text) {
-    String q = query.toLowerCase().trim();
+    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
     if (q.isEmpty) return true;
-    String t = text.toLowerCase();
+    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
     if (t.contains(q)) return true;
 
     int i = 0;
@@ -131,7 +124,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     return i == q.length;
   }
 
-  List<Shortage> get _filtered => _shortages.where((s) {
+  List<Shortage> _getFiltered(List<Shortage> items) => items.where((s) {
         final matchFilter = _filter == 'all' || s.status == _filter;
         if (!matchFilter) return false;
         if (_search.isEmpty) return true;
@@ -592,14 +585,16 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _shareShortages() async {
-    if (_filtered.isEmpty) {
+    final provider = context.read<ShortagesProvider>();
+    final filtered = _getFiltered(provider.shortages);
+    if (filtered.isEmpty) {
       showSnack(context, 'لا توجد نواقص للمشاركة', isError: true);
       return;
     }
     final buffer = StringBuffer();
-    buffer.writeln('📋 تقرير النواقص (${_filtered.length} أصناف):');
+    buffer.writeln('📋 تقرير النواقص (${filtered.length} أصناف):');
     buffer.writeln('-------------------');
-    for (var s in _filtered) {
+    for (var s in filtered) {
       buffer.writeln('💊 الدواء: ${s.name}');
       buffer.writeln('🏢 الشركة: ${s.company}');
       buffer.writeln('📦 الكمية: ${s.quantity}');
@@ -664,6 +659,11 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<ShortagesProvider>();
+    final _shortages = provider.shortages;
+    final _filtered = _getFiltered(_shortages);
+    final _loading = provider.loading;
+
     return Scaffold(
       backgroundColor: AppColors.dark,
       body: Column(
