@@ -43,16 +43,21 @@ class SaydaliApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ShortagesProvider()..load()),
         ChangeNotifierProvider(create: (_) => CustomersProvider()..load()),
         ChangeNotifierProvider(create: (_) => RepsProvider()..load()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
-      child: MaterialApp(
-        title: 'صيدلي PRO',
-        theme: AppTheme.theme,
-        debugShowCheckedModeBanner: false,
-        home: const SplashScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (ctx, themeProvider, _) => MaterialApp(
+          title: 'صيدلي PRO',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeProvider.mode,
+          debugShowCheckedModeBanner: false,
+          home: const SplashScreen(),
+        ),
       ),
     );
   }

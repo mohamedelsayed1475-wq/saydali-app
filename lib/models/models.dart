@@ -147,6 +147,7 @@ class Customer {
   final String? phone;
   final String? address;
   final double totalDebt;
+  final DateTime? dueDate;
   final DateTime createdAt;
 
   Customer({
@@ -155,6 +156,7 @@ class Customer {
     this.phone,
     this.address,
     this.totalDebt = 0.0,
+    this.dueDate,
     required this.createdAt,
   });
 
@@ -164,6 +166,7 @@ class Customer {
         phone: map['phone'],
         address: map['address'],
         totalDebt: (map['total_debt'] as num?)?.toDouble() ?? 0.0,
+        dueDate: map['due_date'] != null ? DateTime.tryParse(map['due_date']) : null,
         createdAt: DateTime.parse(map['created_at']),
       );
 
@@ -173,6 +176,7 @@ class Customer {
         'phone': phone,
         'address': address,
         'total_debt': totalDebt,
+        'due_date': dueDate?.toIso8601String(),
       };
 }
 

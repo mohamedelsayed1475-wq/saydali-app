@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../utils/app_theme.dart';
+import '../providers/app_providers.dart';
+import 'invoice_screen.dart';
 import '../utils/country_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
@@ -234,6 +237,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
             contentPadding: EdgeInsets.zero,
           ),
+        ),
+        const SizedBox(height: 16),
+
+        // Theme Toggle
+        _sectionTitle('🎨 المظهر'),
+        Consumer<ThemeProvider>(
+          builder: (ctx, themeProvider, _) => _settingsTile(
+            emoji: themeProvider.isDark ? '🌙' : '☀️',
+            title: themeProvider.isDark ? 'الوضع الليلي' : 'الوضع النهاري',
+            subtitle: 'اضغط للتبديل بين الوضعين',
+            onTap: () => themeProvider.toggle(),
+            trailing: Switch(
+              value: themeProvider.isDark,
+              onChanged: (_) => themeProvider.toggle(),
+              activeThumbColor: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Invoices
+        _sectionTitle('🧾 الفواتير'),
+        _settingsTile(
+          emoji: '🧾',
+          title: 'الفواتير',
+          subtitle: 'إنشاء وعرض فواتير البيع',
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const InvoiceScreen())),
+          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
         ),
         const SizedBox(height: 16),
 

@@ -60,6 +60,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final nameCtrl = TextEditingController(text: existing?.name);
     final phoneCtrl = TextEditingController(text: existing?.phone);
     final addressCtrl = TextEditingController(text: existing?.address);
+    DateTime? dueDate = existing?.dueDate;
 
     await showModalBottomSheet(
       context: context,
@@ -67,67 +68,125 @@ class _DebtsScreenState extends State<DebtsScreen> {
       backgroundColor: AppColors.darkCard,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            left: 20,
-            right: 20,
-            top: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20,
+              right: 20,
+              top: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: AppColors.darkBorder,
+                          borderRadius: BorderRadius.circular(99)))),
+              const SizedBox(height: 16),
+              Text(existing == null ? '➕ إضافة عميل' : '✏️ تعديل العميل',
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
+              const SizedBox(height: 16),
+              AppTextField(hint: 'اسم العميل *', controller: nameCtrl),
+              const SizedBox(height: 10),
+              AppTextField(
+                  hint: 'رقم الهاتف',
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone),
+              const SizedBox(height: 10),
+              AppTextField(hint: 'العنوان', controller: addressCtrl),
+              const SizedBox(height: 10),
+              // تاريخ الاستحقاق
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: ctx,
+                    initialDate: dueDate ?? DateTime.now().add(const Duration(days: 7)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                    builder: (c, child) => Theme(
+                      data: Theme.of(c).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: AppColors.primary,
+                          surface: AppColors.darkCard,
+                        ),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) setBS(() => dueDate = picked);
+                },
                 child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                        color: AppColors.darkBorder,
-                        borderRadius: BorderRadius.circular(99)))),
-            const SizedBox(height: 16),
-            Text(existing == null ? '➕ إضافة عميل' : '✏️ تعديل العميل',
-                style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16)),
-            const SizedBox(height: 16),
-            AppTextField(hint: 'اسم العميل *', controller: nameCtrl),
-            const SizedBox(height: 10),
-            AppTextField(
-                hint: 'رقم الهاتف',
-                controller: phoneCtrl,
-                keyboardType: TextInputType.phone),
-            const SizedBox(height: 10),
-            AppTextField(hint: 'العنوان', controller: addressCtrl),
-            const SizedBox(height: 16),
-            PrimaryButton(
-              text: existing == null ? 'إضافة' : 'حفظ',
-              onTap: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) {
-                  showSnack(ctx, 'أدخل اسم العميل', isError: true);
-                  return;
-                }
-                final Map<String, dynamic> data = {
-                  'name': name,
-                  'phone': phoneCtrl.text.trim(),
-                  'address': addressCtrl.text.trim()
-                };
-                if (existing == null) {
-                  await DatabaseHelper.instance.insertCustomer(data);
-                } else {
-                  await DatabaseHelper.instance
-                      .updateCustomer(existing.id!, data);
-                }
-                if (ctx.mounted) Navigator.pop(ctx);
-                await _loadCustomers();
-                if (mounted)
-                  showSnack(context,
-                      existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: dueDate != null
+                            ? AppColors.warning.withValues(alpha: 0.5)
+                            : AppColors.darkBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month,
+                          color: dueDate != null ? AppColors.warning : AppColors.textMuted,
+                          size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        dueDate != null
+                            ? '📅 موعد السداد: ${dueDate!.day}/${dueDate!.month}/${dueDate!.year}'
+                            : 'تحديد موعد سداد (اختياري)',
+                        style: TextStyle(
+                            color: dueDate != null ? AppColors.warning : AppColors.textMuted,
+                            fontSize: 13),
+                      ),
+                      const Spacer(),
+                      if (dueDate != null)
+                        GestureDetector(
+                          onTap: () => setBS(() => dueDate = null),
+                          child: const Icon(Icons.close, color: AppColors.textMuted, size: 18),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              PrimaryButton(
+                text: existing == null ? 'إضافة' : 'حفظ',
+                onTap: () async {
+                  final name = nameCtrl.text.trim();
+                  if (name.isEmpty) {
+                    showSnack(ctx, 'أدخل اسم العميل', isError: true);
+                    return;
+                  }
+                  final Map<String, dynamic> data = {
+                    'name': name,
+                    'phone': phoneCtrl.text.trim(),
+                    'address': addressCtrl.text.trim(),
+                    'due_date': dueDate?.toIso8601String(),
+                  };
+                  if (existing == null) {
+                    await DatabaseHelper.instance.insertCustomer(data);
+                  } else {
+                    await DatabaseHelper.instance
+                        .updateCustomer(existing.id!, data);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await _loadCustomers();
+                  if (mounted)
+                    showSnack(context,
+                        existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );

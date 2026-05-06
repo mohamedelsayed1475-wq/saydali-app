@@ -9,6 +9,8 @@ import 'shortages_screen.dart';
 import 'debts_screen.dart';
 import 'rep_response_screen.dart';
 import 'reports_screen.dart';
+import 'invoice_screen.dart';
+import 'chat_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -85,6 +87,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'title': '${highDebt.length} عميل عليه دين كبير',
         'subtitle': 'إجمالي: ${debt.toStringAsFixed(0)} $currency',
         'color': AppColors.danger,
+      });
+    }
+
+    // 2.5 ديون مستحقة اليوم/غداً
+    final dueDebts = await DatabaseHelper.instance.getDueDebts();
+    if (dueDebts.isNotEmpty) {
+      alerts.add({
+        'icon': '📅',
+        'title': '${dueDebts.length} عميل ميعاد سداده قرب!',
+        'subtitle': 'تواصل معاهم لتحصيل الديون',
+        'color': AppColors.warning,
       });
     }
 
@@ -361,6 +374,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _quickAction('📊', 'التقارير', AppColors.warning, () {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const ReportsScreen()));
+              }),
+              _quickAction('🧾', 'فاتورة جديدة', const Color(0xFF8B5CF6), () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const InvoiceScreen()));
+              }),
+              _quickAction('🤖', 'حكيم', const Color(0xFF06B6D4), () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ChatScreen()));
               }),
             ],
           ),

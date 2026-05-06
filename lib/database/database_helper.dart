@@ -17,7 +17,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -52,6 +52,26 @@ class DatabaseHelper {
           is_active INTEGER DEFAULT 1,
           screen TEXT DEFAULT 'home',
           skip_duration INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      // إضافة تاريخ الاستحقاق للعملاء
+      try {
+        await db.execute('ALTER TABLE customers ADD COLUMN due_date TEXT');
+      } catch (_) {}
+      // جدول الفواتير
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS invoices (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER,
+          customer_name TEXT NOT NULL,
+          items TEXT NOT NULL,
+          subtotal REAL NOT NULL,
+          discount REAL DEFAULT 0,
+          total REAL NOT NULL,
+          notes TEXT,
           created_at TEXT NOT NULL
         )
       ''');
@@ -112,6 +132,22 @@ class DatabaseHelper {
         phone TEXT,
         address TEXT,
         total_debt REAL DEFAULT 0,
+        due_date TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // جدول الفواتير
+    await db.execute('''
+      CREATE TABLE invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER,
+        customer_name TEXT NOT NULL,
+        items TEXT NOT NULL,
+        subtotal REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        total REAL NOT NULL,
+        notes TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -367,5 +403,27 @@ class DatabaseHelper {
   /// جلب كود الدولة (EG، SA، إلخ)
   Future<String> getCountryCode() async {
     return await getSetting('country_code') ?? 'EG';
+  }
+
+  // ── الديون المستحقة ──────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getDueDebts() async {
+    final db = await database;
+    final tomorrow = DateTime.now().add(const Duration(days: 1)).toIso8601String().substring(0, 10);
+    return await db.query('customers',
+        where: "due_date IS NOT NULL AND due_date <= ? AND total_debt > 0",
+        whereArgs: [tomorrow],
+        orderBy: 'due_date ASC');
+  }
+
+  // ── الفواتير ──────────────────────────────────────────────────
+  Future<int> insertInvoice(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = DateTime.now().toIso8601String();
+    return await db.insert('invoices', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getInvoices() async {
+    final db = await database;
+    return await db.query('invoices', orderBy: 'created_at DESC');
   }
 }
