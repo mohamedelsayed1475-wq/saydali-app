@@ -12,6 +12,8 @@ import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_providers.dart';
 
 class DebtsScreen extends StatefulWidget {
   const DebtsScreen({super.key});
@@ -34,12 +36,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
   }
 
   Future<void> _loadCustomers() async {
-    final data = await DatabaseHelper.instance.getCustomers();
     final currency = await DatabaseHelper.instance.getCurrency();
     final countryCode = await DatabaseHelper.instance.getCountryCode();
+    
     if (mounted) {
+      await context.read<CustomersProvider>().load();
       setState(() {
-        _customers = data.map(Customer.fromMap).toList();
+        _customers = context.read<CustomersProvider>().customers;
         _currency = currency;
         _countryCode = countryCode;
         _loading = false;
@@ -172,10 +175,9 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     'due_date': dueDate?.toIso8601String(),
                   };
                   if (existing == null) {
-                    await DatabaseHelper.instance.insertCustomer(data);
+                    await context.read<CustomersProvider>().add(data);
                   } else {
-                    await DatabaseHelper.instance
-                        .updateCustomer(existing.id!, data);
+                    await context.read<CustomersProvider>().update(existing.id!, data);
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
                   await _loadCustomers();
@@ -341,7 +343,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                   isError: true);
                               return;
                             }
-                            await DatabaseHelper.instance.addDebtTransaction({
+                            await context.read<CustomersProvider>().addTransaction({
                               'customer_id': customer.id,
                               'amount': amount,
                               'type': txType,
@@ -899,7 +901,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
         final amountToUpdate = totalDebt - currentTotalDebt;
 
         if (amountToUpdate != 0) {
-          await DatabaseHelper.instance.addDebtTransaction({
+          await context.read<CustomersProvider>().addTransaction({
             'customer_id': customerId,
             'amount': amountToUpdate.abs(),
             'type': amountToUpdate > 0 ? 'debt' : 'payment',
@@ -1060,8 +1062,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
               onPressed: (_) async {
                 final confirm = await showDeleteDialog(context, customer.name);
                 if (confirm == true) {
-                  await DatabaseHelper.instance.deleteCustomer(customer.id!);
-                  await _loadCustomers();
+                  await context.read<CustomersProvider>().delete(customer.id!);
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },

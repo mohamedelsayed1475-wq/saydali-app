@@ -20,6 +20,7 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   Map<String, int> _stats = {};
   double _totalDebt = 0;
+  List<int> _weeklyData = [0, 0, 0, 0];
   bool _loading = true;
   String _currency = 'ج.م';
 
@@ -33,11 +34,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();
     final currency = await DatabaseHelper.instance.getCurrency();
+    final weeklyData = await DatabaseHelper.instance.getWeeklyShortages();
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
         _currency = currency;
+        _weeklyData = weeklyData;
         _loading = false;
       });
     }
@@ -54,8 +57,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final rate = total > 0 ? (covered / total * 100).toStringAsFixed(0) : '0';
 
     final weeks = ['الأسبوع 1', 'الأسبوع 2', 'الأسبوع 3', 'الأسبوع 4'];
-    final values = [8, 15, 12, total];
-    final maxVal = values.reduce((a, b) => a > b ? a : b);
+    final values = _weeklyData;
+    final maxVal = values.isNotEmpty ? values.reduce((a, b) => a > b ? a : b) : 0;
 
     return RefreshIndicator(
       color: AppColors.primary,

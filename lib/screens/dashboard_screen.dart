@@ -50,8 +50,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    // تشغيل الإغلاق التلقائي للنواقص القديمة
-    await DatabaseHelper.instance.autoCloseOldPendingShortages();
+    // الإغلاق التلقائي الآن يعمل فقط في ShortagesProvider.load() لمنع التكرار
 
     final stats = await DatabaseHelper.instance.getShortageStats();
     final debt = await DatabaseHelper.instance.getTotalDebt();

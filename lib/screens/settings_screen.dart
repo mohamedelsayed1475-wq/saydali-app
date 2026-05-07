@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../utils/app_theme.dart';
-import '../providers/app_providers.dart';
 import 'invoice_screen.dart';
 import '../utils/country_config.dart';
 import '../database/database_helper.dart';
@@ -35,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _loading = true;
   int _devTapCount = 0;
   String _selectedCountryCode = 'EG';
+  bool _autoCloseEnabled = false;
 
   @override
   void initState() {
@@ -50,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _pharmacistCtrl.text = settings['pharmacist_name'] ?? 'الصيدلي';
         _phoneCtrl.text = settings['pharmacy_phone'] ?? '';
         _selectedCountryCode = settings['country_code'] ?? 'EG';
+        _autoCloseEnabled = (settings['auto_close_enabled'] ?? '0') == '1';
         _notificationsEnabled =
             (settings['notifications_enabled'] ?? '1') == '1';
         _loading = false;
@@ -240,19 +240,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Theme Toggle
-        _sectionTitle('🎨 المظهر'),
-        Consumer<ThemeProvider>(
-          builder: (ctx, themeProvider, _) => _settingsTile(
-            emoji: themeProvider.isDark ? '🌙' : '☀️',
-            title: themeProvider.isDark ? 'الوضع الليلي' : 'الوضع النهاري',
-            subtitle: 'اضغط للتبديل بين الوضعين',
-            onTap: () => themeProvider.toggle(),
-            trailing: Switch(
-              value: themeProvider.isDark,
-              onChanged: (_) => themeProvider.toggle(),
-              activeThumbColor: AppColors.primary,
-            ),
+
+
+        // Auto Close Settings
+        _sectionTitle('⚙️ إغلاق النواقص'),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: SwitchListTile(
+            title: const Text('إغلاق النواقص القديمة تلقائياً',
+                style: TextStyle(color: AppColors.textColor)),
+            subtitle: const Text('بعد 24 ساعة تنتقل لـ "مستعصي"',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            value: _autoCloseEnabled,
+            onChanged: (v) async {
+              setState(() => _autoCloseEnabled = v);
+              await DatabaseHelper.instance
+                  .setSetting('auto_close_enabled', v ? '1' : '0');
+            },
+            activeTrackColor: AppColors.primary,
           ),
         ),
         const SizedBox(height: 16),

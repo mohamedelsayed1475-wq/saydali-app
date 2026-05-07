@@ -270,13 +270,38 @@ class DatabaseHelper {
   }
 
   Future<void> autoCloseOldPendingShortages() async {
+    // ✅ افحص الإعداد الأول
+    final enabled = await getSetting('auto_close_enabled');
+    if (enabled != '1') return; // مش مفعّل؟ وقف
+    
     final db = await database;
-    final twentyFourHoursAgo =
-        DateTime.now().subtract(const Duration(hours: 24)).toIso8601String();
+    final hoursStr = await getSetting('auto_close_hours') ?? '24';
+    final hours = int.tryParse(hoursStr) ?? 24;
+    final cutoff = DateTime.now()
+        .subtract(Duration(hours: hours))
+        .toIso8601String();
+        
     await db.rawUpdate(
-      "UPDATE shortages SET status = 'stubborn' WHERE status = 'pending' AND created_at <= ?",
-      [twentyFourHoursAgo],
+      "UPDATE shortages SET status='stubborn' WHERE status='pending' AND created_at <= ?",
+      [cutoff],
     );
+  }
+
+  Future<List<int>> getWeeklyShortages() async {
+    final db = await database;
+    final now = DateTime.now();
+    final results = <int>[];
+    
+    for (int i = 3; i >= 0; i--) {
+      final weekStart = now.subtract(Duration(days: (i + 1) * 7));
+      final weekEnd = now.subtract(Duration(days: i * 7));
+      final count = Sqflite.firstIntValue(await db.rawQuery(
+        "SELECT COUNT(*) FROM shortages WHERE created_at >= ? AND created_at < ?",
+        [weekStart.toIso8601String(), weekEnd.toIso8601String()],
+      )) ?? 0;
+      results.add(count);
+    }
+    return results;
   }
 
   // ── المندوبين ──────────────────────────────────────────────────
@@ -313,7 +338,16 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getCustomers() async {
     final db = await database;
-    return await db.query('customers', orderBy: 'total_debt DESC');
+    return await db.rawQuery('''
+      SELECT c.*, 
+        (
+          SELECT COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE 0 END), 0) -
+                 COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0)
+          FROM debt_transactions dt WHERE dt.customer_id = c.id
+        ) as total_debt
+      FROM customers c
+      ORDER BY total_debt DESC
+    ''');
   }
 
   Future<int> updateCustomer(int id, Map<String, dynamic> data) async {
@@ -333,17 +367,23 @@ class DatabaseHelper {
     data['transaction_date'] = DateTime.now().toIso8601String();
     final txId = await db.insert('debt_transactions', data);
 
-    // تحديث إجمالي الدين
-    final customer = await db
-        .query('customers', where: 'id = ?', whereArgs: [data['customer_id']]);
-    if (customer.isNotEmpty) {
-      double currentDebt = (customer.first['total_debt'] as num).toDouble();
-      double amount = (data['amount'] as num).toDouble();
-      double newDebt =
-          data['type'] == 'debt' ? currentDebt + amount : currentDebt - amount;
-      await db.update('customers', {'total_debt': newDebt},
-          where: 'id = ?', whereArgs: [data['customer_id']]);
-    }
+    // ✅ احسب من الأول من جدول المعاملات (أكثر أمانًا)
+    final result = await db.rawQuery(
+      """SELECT 
+          COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE 0 END), 0) -
+          COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0) 
+          as net
+         FROM debt_transactions WHERE customer_id = ?""",
+      [data['customer_id']],
+    );
+    final newDebt = (result.first['net'] as num?)?.toDouble() ?? 0.0;
+    
+    await db.update(
+      'customers',
+      {'total_debt': newDebt < 0 ? 0.0 : newDebt},
+      where: 'id = ?',
+      whereArgs: [data['customer_id']],
+    );
     return txId;
   }
 
@@ -358,8 +398,13 @@ class DatabaseHelper {
 
   Future<double> getTotalDebt() async {
     final db = await database;
-    final result =
-        await db.rawQuery('SELECT SUM(total_debt) as total FROM customers');
+    final result = await db.rawQuery('''
+      SELECT 
+          COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE 0 END), 0) -
+          COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0) 
+          as total
+         FROM debt_transactions
+    ''');
     return (result.first['total'] as num?)?.toDouble() ?? 0.0;
   }
 

@@ -5,6 +5,8 @@ import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_providers.dart';
 
 class RepsScreen extends StatefulWidget {
   const RepsScreen({super.key});
@@ -24,10 +26,10 @@ class _RepsScreenState extends State<RepsScreen> {
   }
 
   Future<void> _loadReps() async {
-    final data = await DatabaseHelper.instance.getReps();
     if (mounted) {
+      await context.read<RepsProvider>().load();
       setState(() {
-        _reps = data.map(Representative.fromMap).toList();
+        _reps = context.read<RepsProvider>().reps;
         _loading = false;
       });
     }
@@ -120,10 +122,9 @@ class _RepsScreenState extends State<RepsScreen> {
                       'notes': notesCtrl.text.trim(),
                     };
                     if (existing == null) {
-                      await DatabaseHelper.instance.insertRep(data);
+                      await context.read<RepsProvider>().add(data);
                     } else {
-                      await DatabaseHelper.instance
-                          .updateRep(existing.id!, data);
+                      await context.read<RepsProvider>().update(existing.id!, data);
                     }
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadReps();
@@ -216,8 +217,7 @@ class _RepsScreenState extends State<RepsScreen> {
               onPressed: (_) async {
                 final confirm = await showDeleteDialog(context, rep.name);
                 if (confirm == true) {
-                  await DatabaseHelper.instance.deleteRep(rep.id!);
-                  await _loadReps();
+                  await context.read<RepsProvider>().delete(rep.id!);
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },

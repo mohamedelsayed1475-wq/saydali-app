@@ -219,7 +219,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
               ? (int.tryParse(row[2]?.value?.toString() ?? '') ?? 1)
               : 1;
 
-          await DatabaseHelper.instance.insertShortage({
+          await context.read<ShortagesProvider>().add({
             'name': name,
             'company': company,
             'quantity': qty,
@@ -562,10 +562,9 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     };
 
                     if (existing == null) {
-                      await DatabaseHelper.instance.insertShortage(data);
+                      await context.read<ShortagesProvider>().add(data);
                     } else {
-                      await DatabaseHelper.instance
-                          .updateShortage(existing.id!, data);
+                      await context.read<ShortagesProvider>().update(existing.id!, data);
                     }
 
                     if (ctx.mounted) Navigator.pop(ctx);
@@ -636,7 +635,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
         final isUrgent = urgentRegex.hasMatch(block);
 
-        await DatabaseHelper.instance.insertShortage({
+        await context.read<ShortagesProvider>().add({
           'name': name,
           'company': company,
           'quantity': qty,
@@ -821,8 +820,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
               onPressed: (_) async {
                 final confirm = await showDeleteDialog(context, item.name);
                 if (confirm == true) {
-                  await DatabaseHelper.instance.deleteShortage(item.id!);
-                  await _loadShortages();
+                  await context.read<ShortagesProvider>().delete(item.id!);
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },
