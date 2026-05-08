@@ -819,7 +819,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
             SlidableAction(
               onPressed: (_) async {
                 final confirm = await showDeleteDialog(context, item.name);
-                if (confirm == true) {
+                if (confirm == true && item.id != null) {
                   await context.read<ShortagesProvider>().delete(item.id!);
                   if (mounted) showSnack(context, 'تم الحذف');
                 }

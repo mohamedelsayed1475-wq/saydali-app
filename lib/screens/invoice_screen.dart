@@ -193,9 +193,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 width: 60,
                                 height: 32,
                                 child: TextField(
-                                  onChanged: (v) =>
-                                      setBS(() => discount =
-                                          double.tryParse(v) ?? 0),
+                                  onChanged: (v) {
+                                    final parsed = double.tryParse(v);
+                                    // Clamp discount between 0 and 100
+                                    final clamped = parsed == null ? 0.0 : parsed.clamp(0.0, 100.0);
+                                    setBS(() => discount = clamped);
+                                  },
                                   keyboardType: TextInputType.number,
                                   style: const TextStyle(
                                       color: AppColors.warning, fontSize: 14),
@@ -302,7 +305,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             onPressed: () {
               final name = itemNameCtrl.text.trim();
               final price = double.tryParse(priceCtrl.text) ?? 0;
-              final qty = int.tryParse(qtyCtrl.text) ?? 1;
+              // Validate and clamp quantity between 1 and 9999
+              final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
+              final qty = rawQty.clamp(1, 9999);
               if (name.isEmpty || price <= 0) return;
               setBS(() => items.add({
                     'name': name,

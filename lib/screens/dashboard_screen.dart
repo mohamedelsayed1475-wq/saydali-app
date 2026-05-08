@@ -50,11 +50,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    // الإغلاق التلقائي الآن يعمل فقط في ShortagesProvider.load() لمنع التكرار
+    // Load all queries in parallel for better performance
+    final results = await Future.wait([
+      DatabaseHelper.instance.getShortageStats(),
+      DatabaseHelper.instance.getTotalDebt(),
+      DatabaseHelper.instance.getCurrency(),
+    ]);
 
-    final stats = await DatabaseHelper.instance.getShortageStats();
-    final debt = await DatabaseHelper.instance.getTotalDebt();
-    final currency = await DatabaseHelper.instance.getCurrency();
+    final stats = results[0] as Map<String, int>;
+    final debt = results[1] as double;
+    final currency = results[2] as String;
 
     // بناء التنبيهات الذكية
     final alerts = <Map<String, dynamic>>[];

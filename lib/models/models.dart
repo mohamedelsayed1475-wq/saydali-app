@@ -30,8 +30,8 @@ class Shortage {
         status: map['status'] ?? 'pending',
         isUrgent: (map['is_urgent'] ?? 0) == 1,
         notes: map['notes'],
-        createdAt: DateTime.parse(map['created_at']),
-        updatedAt: DateTime.parse(map['updated_at']),
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+        updatedAt: DateTime.tryParse(map['updated_at']?.toString() ?? '') ?? DateTime.now(),
       );
 
   Map<String, dynamic> toMap() => {

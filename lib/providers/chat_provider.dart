@@ -20,6 +20,7 @@ class ChatMessage {
 
 // ── Provider الشات ──────────────────────────────────────────────────
 class ChatProvider extends ChangeNotifier {
+  static const int _maxMessages = 100; // Limit to prevent memory leak
   final List<ChatMessage> _messages = [];
   bool _loading = false;
 
@@ -34,16 +35,23 @@ class ChatProvider extends ChangeNotifier {
     ));
   }
 
+  void _addMessage(ChatMessage msg) {
+    _messages.insert(0, msg);
+    // Keep message count under limit to prevent memory leak
+    if (_messages.length > _maxMessages) {
+      _messages.removeRange(_maxMessages, _messages.length);
+    }
+  }
+
   Future<void> send(String text, {BuildContext? context, List<String>? filePaths}) async {
     if (text.trim().isEmpty && (filePaths == null || filePaths.isEmpty)) return;
-    _messages.insert(0, ChatMessage(text: text.trim().isNotEmpty ? text.trim() : '📄 مرفق', isUser: true));
+    _addMessage(ChatMessage(text: text.trim().isNotEmpty ? text.trim() : '📄 مرفق', isUser: true));
     _loading = true;
     notifyListeners();
 
     try {
       final response = await ChatService.instance.execute(text.trim(), filePaths: filePaths);
-      _messages.insert(
-        0,
+      _addMessage(
         ChatMessage(
           text: response.text,
           isUser: false,
@@ -63,8 +71,7 @@ class ChatProvider extends ChangeNotifier {
       }
 
     } catch (e) {
-      _messages.insert(
-        0,
+      _addMessage(
         ChatMessage(
           text: '⚠️ حدث خطأ غير متوقع: $e',
           isUser: false,
