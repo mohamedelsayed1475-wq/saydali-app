@@ -1313,39 +1313,132 @@ $userPrompt
 ''';
 
   // ── اقتراح أسماء أدوية عبر API (للـ autocomplete) ──────────────────────────
+  // ▌ محسّن: يرجع قائمة أسماء أدوية فقط - مش محادثة
   Future<List<Map<String, dynamic>>> suggestDrugNames(String query) async {
     if (query.trim().length < 3) return [];
     final prefs = await SharedPreferences.getInstance();
 
-    // ▌ البحث المحلي أولاً
+    // ▌ 1️⃣ البحث في الملفات المحلية أولاً (أسرع)
     final savedFiles = prefs.getStringList('custom_api_files') ?? [];
     if (savedFiles.isNotEmpty) {
-      final localRes = await _searchLocalFiles(query, savedFiles);
-      if (localRes.success && localRes.text.contains('📄')) {
-        final lines = localRes.text.split('\n');
-        final foundItems = <String>{};
-        for (final line in lines) {
-          if (line.contains('"...') && _fuzzyMatch(query, line)) {
-            var clean = line.replaceAll('"...', '').replaceAll('..."', '').trim();
-            if (clean.contains('|')) {
-              clean = clean.split('|').firstWhere((p) => _fuzzyMatch(query, p), orElse: () => clean.split('|').first).trim();
-            }
-            if (clean.length > 2) foundItems.add(clean);
-          }
-        }
-        if (foundItems.isNotEmpty) {
-          return foundItems.take(5).map((s) => <String, dynamic>{'enName': s, 'arName': '', 'source': 'local_file'}).toList();
-        }
-      }
+      final results = await _findDrugNamesInFiles(query, savedFiles);
+      if (results.isNotEmpty) return results;
     }
 
-    final url = prefs.getString('custom_api_url') ?? '';
+    // ▌ 2️⃣ البحث في القاموس المحلي
+    final dictionaryResults = await _searchInLocalDictionary(query);
+    if (dictionaryResults.isNotEmpty) return dictionaryResults;
+
+    // ▌ 3️⃣ استخدام API لاقتراح أسماء أدوية (بدون محادثة)
+    return await _getAiDrugSuggestions(query);
+  }
+
+  /// ▌ البحث في القاموس المحلي
+  Future<List<Map<String, dynamic>>> _searchInLocalDictionary(String query) async {
+    final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    if (dictStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(dictStr);
+        final normalized = query.toLowerCase().trim();
+        final results = <Map<String, dynamic>>[];
+        for (final drug in decoded) {
+          final en = drug['enName']?.toString() ?? '';
+          final ar = drug['arName']?.toString() ?? '';
+          if (en.toLowerCase().contains(normalized) ||
+              ar.toLowerCase().contains(normalized) ||
+              _fuzzyMatch(normalized, en)) {
+            results.add({
+              'enName': en,
+              'arName': ar,
+              'source': 'dictionary',
+            });
+            if (results.length >= 8) break;
+          }
+        }
+        return results;
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  /// ▌ البحث في الملفات المحلية عن أسماء أدوية
+  Future<List<Map<String, dynamic>>> _findDrugNamesInFiles(String query, List<String> files) async {
+    final results = <String>{};
+    final normalized = query.toLowerCase().trim();
+
+    for (final path in files) {
+      if (!File(path).existsSync()) continue;
+      final ext = path.split('.').last.toLowerCase();
+
+      try {
+        if (ext == 'xlsx' || ext == 'xls') {
+          final bytes = File(path).readAsBytesSync();
+          final excel = ex.Excel.decodeBytes(bytes);
+          for (final table in excel.tables.keys) {
+            for (final row in excel.tables[table]!.rows) {
+              for (final cell in row) {
+                final val = cell?.value?.toString() ?? '';
+                if (val.length > 3 && (val.toLowerCase().contains(normalized) || _fuzzyMatch(normalized, val))) {
+                  results.add(val.trim());
+                }
+              }
+            }
+          }
+        } else if (ext == 'csv' || ext == 'txt') {
+          final lines = File(path).readAsStringSync(encoding: utf8).split('\n');
+          for (final line in lines) {
+            final parts = line.split(',');
+            for (final part in parts) {
+              final val = part.trim();
+              if (val.length > 3 && (val.toLowerCase().contains(normalized) || _fuzzyMatch(normalized, val))) {
+                results.add(val);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      if (results.length >= 8) break;
+    }
+
+    return results.take(8).map((s) => {'enName': s, 'arName': '', 'source': 'file'}).toList();
+  }
+
+  /// ▌ الحصول على اقتراحات أدوية من AI
+  Future<List<Map<String, dynamic>>> _getAiDrugSuggestions(String query) async {
+    final prefs = await SharedPreferences.getInstance();
     final key = prefs.getString('custom_api_key') ?? '';
+    final type = prefs.getString('custom_api_type') ?? 'openai';
+
+    // ▌ Gemini API
+    if (key.isNotEmpty && type == 'gemini') {
+      try {
+        final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: key);
+        final prompt = '''
+اقترح أسماء أدوية حقيقية مطابقة أو مشابهة لـ: "$query"
+- كل اسم في سطر منفصل
+- بدون أرقام أو شروحات
+- من 3-8 نتائج فقط
+''';
+        final response = await model.generateContent([Content.text(prompt)])
+            .timeout(const Duration(seconds: 8));
+        final text = response.text ?? '';
+
+        return text.toString().split('\n')
+            .map((s) => s.replaceAll(RegExp(r'^[\d\-\.\*\)\)]+\s*'), '').trim())
+            .where((s) => s.isNotEmpty && s.length > 2 && s.length < 50)
+            .take(8)
+            .map((s) => {'enName': s, 'arName': '', 'source': 'gemini'})
+            .toList();
+      } catch (_) {}
+    }
 
     // ▌ OpenAI API
-    if (url.isNotEmpty && key.isNotEmpty) {
+    if (key.isNotEmpty && type == 'openai') {
       try {
+        final url = prefs.getString('custom_api_url') ?? 'https://api.openai.com/v1';
         final endpoint = url.endsWith('/') ? '${url}chat/completions' : '$url/chat/completions';
+
         final res = await http.post(
           Uri.parse(endpoint),
           headers: {
@@ -1355,21 +1448,23 @@ $userPrompt
           body: jsonEncode({
             'model': 'gpt-3.5-turbo',
             'messages': [
-              {'role': 'system', 'content': getDrugSuggestionsPrompt()},
-              {'role': 'user', 'content': query},
+              {'role': 'system', 'content': 'أنت مساعد صيدلي. اقترح أسماء أدوية حقيقية فقط.'},
+              {'role': 'user', 'content': 'اقترح أدوية مطابقة لـ: $query\nاكتب كل اسم في سطر منفصل بدون أرقام.'},
             ],
-            'max_tokens': 80,
+            'max_tokens': 100,
             'temperature': 0.3,
           }),
-        ).timeout(const Duration(seconds: 5));
+        ).timeout(const Duration(seconds: 8));
+
         if (res.statusCode == 200) {
           final d = jsonDecode(res.body);
           final text = d['choices']?[0]?['message']?['content'] ?? '';
+
           return text.toString().split('\n')
-              .map((s) => s.replaceAll(RegExp(r'^[\d\-\.\)]+\s*'), '').trim())
-              .where((s) => s.isNotEmpty && s.length > 2)
-              .take(5)
-              .map((s) => <String, dynamic>{'enName': s, 'arName': '', 'source': 'ai'})
+              .map((s) => s.replaceAll(RegExp(r'^[\d\-\.\*\)\)]+\s*'), '').trim())
+              .where((s) => s.isNotEmpty && s.length > 2 && s.length < 50)
+              .take(8)
+              .map((s) => {'enName': s, 'arName': '', 'source': 'openai'})
               .toList();
         }
       } catch (_) {}
@@ -1377,19 +1472,58 @@ $userPrompt
 
     // ▌ DuckDuckGo fallback
     try {
-      final ddgUrl = 'https://api.duckduckgo.com/?q=${Uri.encodeComponent("$query drug")}&format=json&no_html=1';
-      final res = await http.get(Uri.parse(ddgUrl)).timeout(const Duration(seconds: 2));
+      final ddgUrl = 'https://api.duckduckgo.com/?q=${Uri.encodeComponent("$query drug name")}&format=json&no_html=1';
+      final res = await http.get(Uri.parse(ddgUrl)).timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final d = jsonDecode(res.body);
         final topics = d['RelatedTopics'] as List? ?? [];
-        return topics.take(5).map((t) {
+        final results = <String>{};
+
+        for (final t in topics) {
           final text = t['Text']?.toString() ?? '';
-          final name = text.split(' - ').first.split(':').first.trim();
-          return <String, dynamic>{'enName': name, 'arName': '', 'source': 'web'};
-        }).where((m) => (m['enName'] as String).length > 2).toList();
+          if (text.contains(' - ')) {
+            final name = text.split(' - ').first.split(':').first.trim();
+            if (name.length > 2 && name.length < 40 && _fuzzyMatch(query.toLowerCase(), name)) {
+              results.add(name);
+            }
+          }
+        }
+
+        if (results.isNotEmpty) {
+          return results.take(8).map((s) => {'enName': s, 'arName': '', 'source': 'web'}).toList();
+        }
       }
     } catch (_) {}
-    return [];
+
+    // ▌ Fallback: أدوية شائعة
+    return _getCommonDrugSuggestions(query);
+  }
+
+  /// ▌ اقتراحات من قائمة أدوية شائعة
+  List<Map<String, dynamic>> _getCommonDrugSuggestions(String query) {
+    final commonDrugs = [
+      'Panadol', 'Panadol Extra', 'Brufen', 'Brufen 400', 'Advil',
+      'Nurofen', 'Voltaren', 'Aspirin', 'Paracetamol', 'Acetaminophen',
+      'Augmentin', 'Amoxicillin', 'Azithromycin', 'Ciproxin', 'Ciprofloxacin',
+      'Omeprazole', 'Losec', 'Pantosec', 'Famotidine', 'Ranitidine',
+      'Metformin', 'Glucophage', 'Sitagliptin', 'Janumet',
+      'Atorvastatin', 'Lipitor', 'Rosuvastatin', 'Crestor',
+      'Amlodipine', 'Norvasc', 'Amlor', 'Bisoprolol', 'Concor',
+      'Lisinopril', 'Zestril', 'Enalapril', 'Renitec',
+      'Vitamin C', 'Vitamin D', 'Vitamin B12', 'Folic Acid',
+      'Calcium', 'Magnesium', 'Zinc', 'Iron',
+      'Claritine', 'Cetirizine', 'Loratadine', 'Telfast',
+      'Dexamethasone', 'Prednisolone', 'Cortisone',
+      'Lasix', 'Furosemide', 'Aldactone', 'Spironolactone',
+      'Glimepiride', 'Amaryl', 'Diabeta', 'Glibenclamide',
+    ];
+
+    final normalized = query.toLowerCase();
+    final matches = commonDrugs.where((d) =>
+        d.toLowerCase().contains(normalized) || _fuzzyMatch(normalized, d)
+    ).take(8).map((d) => {'enName': d, 'arName': '', 'source': 'common'}).toList();
+
+    return matches;
   }
 
   // ── إدارة إعدادات API ──────────────────────────────────────────────────

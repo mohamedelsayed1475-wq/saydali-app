@@ -86,25 +86,50 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       onUpdate();
       return;
     }
-    final hasLocal = _suggestions.any((s) {
-      final en = s['enName']?.toString() ?? '';
-      final ar = s['arName']?.toString() ?? '';
-      return _fuzzyMatch(query, en) || _fuzzyMatch(query, ar);
-    });
-    if (hasLocal) {
-      _aiDrugSuggestions = [];
+
+    // ▌ 1️⃣ البحث المحلي أولاً (الأساس - القاموس والملفات)
+    final localResults = _getLocalSuggestions(query);
+    if (localResults.isNotEmpty) {
+      _aiDrugSuggestions = localResults;
       _aiSearching = false;
       onUpdate();
       return;
     }
+
+    // ▌ 2️⃣ لو مفيش نتائج محلية، استخدم الذكاء الاصطناعي
     _aiSearching = true;
     onUpdate();
-    _aiDebounce = Timer(const Duration(milliseconds: 600), () async {
+    _aiDebounce = Timer(const Duration(milliseconds: 800), () async {
       final results = await ChatService.instance.suggestDrugNames(query);
       _aiDrugSuggestions = results;
       _aiSearching = false;
       if (mounted) onUpdate();
     });
+  }
+
+  /// ▌ البحث المحلي السريع في القاموس والملفات
+  List<Map<String, dynamic>> _getLocalSuggestions(String query) {
+    final normalized = query.toLowerCase().trim();
+    if (normalized.isEmpty) return [];
+
+    final results = <Map<String, dynamic>>[];
+
+    // ▌ البحث في القاموس المحلي
+    for (final s in _suggestions) {
+      final en = s['enName']?.toString() ?? '';
+      final ar = s['arName']?.toString() ?? '';
+      final act = s['activeIngredient']?.toString() ?? '';
+
+      if (en.toLowerCase().contains(normalized) ||
+          ar.toLowerCase().contains(normalized) ||
+          act.toLowerCase().contains(normalized) ||
+          _fuzzyMatch(normalized, en)) {
+        results.add(s);
+        if (results.length >= 10) break;
+      }
+    }
+
+    return results;
   }
 
   Future<void> _loadShortages() async {
