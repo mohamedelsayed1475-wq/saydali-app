@@ -471,4 +471,14 @@ class DatabaseHelper {
     final db = await database;
     return await db.query('invoices', orderBy: 'created_at DESC');
   }
+
+  Future<int> updateInvoice(int id, Map<String, dynamic> data) async {
+    final db = await database;
+    return await db.update('invoices', data, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteInvoice(int id) async {
+    final db = await database;
+    await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
+  }
 }

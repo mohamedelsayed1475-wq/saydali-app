@@ -16,6 +16,7 @@ import 'dart:convert';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -299,6 +300,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: _uploadDictionary,
           trailing: const Icon(Icons.upload_file, color: AppColors.primary),
         ),
+        const SizedBox(height: 10),
+        // Export & Delete Dictionary
+        Row(
+          children: [
+            Expanded(
+              child: _settingsTile(
+                emoji: '📤',
+                title: 'تصدير القاموس',
+                subtitle: 'حفظ كملف Excel',
+                onTap: _exportDictionary,
+                trailing: const Icon(Icons.download, color: AppColors.primary),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _settingsTile(
+                emoji: '🗑️',
+                title: 'مسح القاموس',
+                subtitle: 'حذف كل الأدوية',
+                onTap: _deleteDictionary,
+                trailing: const Icon(Icons.delete_outline, color: AppColors.danger),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
 
         // Pharmacy Platforms
@@ -518,6 +544,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _exportDictionary() async {
+    final docs = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    if (docs == null) {
+      if (mounted) showSnack(context, 'القاموس فارغ', isError: true);
+      return;
+    }
+    
+    try {
+      final List<dynamic> decoded = jsonDecode(docs);
+      if (decoded.isEmpty) {
+        if (mounted) showSnack(context, 'القاموس فارغ', isError: true);
+        return;
+      }
+      
+      var excel = Excel.createExcel();
+      var sheet = excel['Sheet1'];
+      
+      sheet.appendRow([
+        TextCellValue('English Name'),
+        TextCellValue('Arabic Name'),
+        TextCellValue('Active Ingredient'),
+        TextCellValue('Barcode')
+      ]);
+      
+      for (var item in decoded) {
+        sheet.appendRow([
+          TextCellValue(item['enName']?.toString() ?? ''),
+          TextCellValue(item['arName']?.toString() ?? ''),
+          TextCellValue(item['activeIngredient']?.toString() ?? ''),
+          TextCellValue(item['barcode']?.toString() ?? '')
+        ]);
+      }
+      
+      final bytes = excel.encode();
+      if (bytes != null) {
+        final dir = await getTemporaryDirectory();
+        final path = p.join(dir.path, 'drug_dictionary.xlsx');
+        final file = File(path);
+        await file.writeAsBytes(bytes);
+        
+        await Share.shareXFiles([XFile(path)], subject: 'قاموس الأدوية');
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, 'خطأ في التصدير: $e', isError: true);
+    }
+  }
+
+  Future<void> _deleteDictionary() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        title: const Text('مسح القاموس', style: TextStyle(color: AppColors.danger)),
+        content: const Text('هل أنت متأكد من مسح جميع الأدوية؟\n⚠️ لا يمكن التراجع.', style: TextStyle(color: AppColors.textMuted)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('مسح'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await DatabaseHelper.instance.setSetting('drug_dictionary_v2', '[]');
+      if (mounted) showSnack(context, 'تم مسح القاموس بنجاح ✅');
+    }
+  }
+
   Future<void> _backupDB() async {
     try {
       final dbPath = await getDatabasesPath();
@@ -562,5 +659,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (mounted) showSnack(context, 'حدث خطأ أثناء الاستعادة', isError: true);
     }
+  }
+}
+
+class ColumnMappingDialog extends StatefulWidget {
+  final List<String> headers;
+  const ColumnMappingDialog({super.key, required this.headers});
+
+  @override
+  State<ColumnMappingDialog> createState() => _ColumnMappingDialogState();
+}
+
+class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
+  final Map<String, int> mapping = {
+    'enName': -1,
+    'arName': -1,
+    'activeIngredient': -1,
+    'barcode': -1,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.darkCard,
+      title: const Text('ربط الأعمدة', style: TextStyle(color: AppColors.primary)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDropdown('الاسم الإنجليزي (مطلوب)', 'enName'),
+            _buildDropdown('الاسم العربي', 'arName'),
+            _buildDropdown('المادة الفعالة', 'activeIngredient'),
+            _buildDropdown('الباركود', 'barcode'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          onPressed: () {
+            if (mapping['enName'] == -1) {
+              showSnack(context, 'يجب اختيار عمود الاسم الإنجليزي', isError: true);
+              return;
+            }
+            Navigator.pop(context, mapping);
+          },
+          child: const Text('تأكيد'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown(String label, String key) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.textColor, fontSize: 12)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: AppColors.dark,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: DropdownButton<int>(
+              isExpanded: true,
+              dropdownColor: AppColors.dark,
+              underline: const SizedBox(),
+              value: mapping[key],
+              items: [
+                const DropdownMenuItem(value: -1, child: Text('تجاهل', style: TextStyle(color: AppColors.textMuted))),
+                ...widget.headers.asMap().entries.map((e) => DropdownMenuItem(
+                  value: e.key,
+                  child: Text(e.value, style: const TextStyle(color: AppColors.textColor)),
+                )),
+              ],
+              onChanged: (v) {
+                if (v != null) setState(() => mapping[key] = v);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

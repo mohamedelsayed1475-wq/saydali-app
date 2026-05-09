@@ -1,12 +1,16 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
+import '../services/chat_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'scanner_screen.dart';
 
 class InvoiceScreen extends StatefulWidget {
   const InvoiceScreen({super.key});
@@ -18,11 +22,18 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   List<Map<String, dynamic>> _invoices = [];
   bool _loading = true;
   String _currency = 'ج.م';
+  
+  // ▌ اقتراحات الأصناف
+  List<Map<String, dynamic>> _suggestions = [];
+  List<Map<String, dynamic>> _aiSuggestions = [];
+  bool _aiSearching = false;
+  Timer? _aiDebounce;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadSuggestions();
   }
 
   Future<void> _load() async {
@@ -35,6 +46,58 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         _loading = false;
       });
     }
+  }
+
+  void _searchSuggestions(String query) {
+    _aiDebounce?.cancel();
+    if (query.length < 2) {
+      _aiSuggestions = [];
+      _aiSearching = false;
+      return;
+    }
+
+    // ▌ البحث المحلي في القائمة
+    final local = _suggestions.where((s) {
+      final name = s['name']?.toString().toLowerCase() ?? '';
+      return name.contains(query.toLowerCase());
+    }).take(5).toList();
+
+    if (local.isNotEmpty) {
+      _aiSuggestions = local;
+      _aiSearching = false;
+      return;
+    }
+
+    // ▌ البحث بالذكاء الاصطناعي
+    _aiSearching = true;
+    _aiDebounce = Timer(const Duration(milliseconds: 600), () async {
+      final results = await ChatService.instance.suggestDrugNames(query);
+      if (mounted) {
+        setState(() {
+          _aiSuggestions = results;
+          _aiSearching = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _loadSuggestions() async {
+    // ▌ تحميل قائمة منتجات من قاعدة البيانات
+    final products = await DatabaseHelper.instance.getSetting('products_list');
+    if (products != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(products);
+        setState(() {
+          _suggestions = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        });
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _aiDebounce?.cancel();
+    super.dispose();
   }
 
   Future<void> _createInvoice() async {
@@ -266,59 +329,214 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final itemNameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
     final qtyCtrl = TextEditingController(text: '1');
+    List<Map<String, dynamic>> localSuggestions = [];
 
     showDialog(
       context: ctx,
-      builder: (dCtx) => AlertDialog(
-        backgroundColor: AppColors.darkCard,
-        title: const Text('إضافة صنف',
-            style: TextStyle(color: AppColors.primary, fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(hint: 'اسم الصنف', controller: itemNameCtrl),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                    child: AppTextField(
-                        hint: 'السعر',
-                        controller: priceCtrl,
-                        keyboardType: TextInputType.number)),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: AppTextField(
-                        hint: 'الكمية',
-                        controller: qtyCtrl,
-                        keyboardType: TextInputType.number)),
-              ],
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, setDBS) => AlertDialog(
+          backgroundColor: AppColors.darkCard,
+          title: Row(
+            children: [
+              const Text('إضافة صنف',
+                  style: TextStyle(color: AppColors.primary, fontSize: 16)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
+                tooltip: 'مسح QR/باركود',
+                onPressed: () async {
+                  final code = await Navigator.push<String>(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ScannerScreen()),
+                  );
+                  if (code != null) {
+                    itemNameCtrl.text = code;
+                    setDBS(() {});
+                  }
+                },
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ▌ اسم الصنف مع اقتراحات
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: itemNameCtrl,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'اسم الصنف',
+                            hintStyle: const TextStyle(color: AppColors.textMuted),
+                            filled: true,
+                            fillColor: AppColors.dark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          onChanged: (val) {
+                            // ▌ البحث المحلي
+                            final local = _suggestions.where((s) {
+                              final name = s['name']?.toString().toLowerCase() ?? '';
+                              return name.contains(val.toLowerCase());
+                            }).take(5).toList();
+                            setDBS(() {
+                              localSuggestions = local;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.dark,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.darkBorder),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 20),
+                          onPressed: () async {
+                            final code = await Navigator.push<String>(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ScannerScreen()),
+                            );
+                            if (code != null) {
+                              itemNameCtrl.text = code;
+                              setDBS(() {});
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  // ▌ عرض الاقتراحات المحلية
+                  if (localSuggestions.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 100),
+                      decoration: BoxDecoration(
+                        color: AppColors.dark,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: localSuggestions.length,
+                        itemBuilder: (ctx, i) {
+                          final s = localSuggestions[i];
+                          return ListTile(
+                            dense: true,
+                            title: Text(s['name'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            subtitle: s['price'] != null 
+                                ? Text('${s['price']} $_currency', style: const TextStyle(color: AppColors.primary, fontSize: 11))
+                                : null,
+                            onTap: () {
+                              itemNameCtrl.text = s['name']?.toString() ?? '';
+                              if (s['price'] != null) {
+                                priceCtrl.text = s['price'].toString();
+                              }
+                              setDBS(() {
+                                localSuggestions = [];
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                      child: TextField(
+                          controller: priceCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'السعر',
+                            hintStyle: const TextStyle(color: AppColors.textMuted),
+                            filled: true,
+                            fillColor: AppColors.dark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ))),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: TextField(
+                          controller: qtyCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'الكمية',
+                            hintStyle: const TextStyle(color: AppColors.textMuted),
+                            filled: true,
+                            fillColor: AppColors.dark,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppColors.darkBorder),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ))),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: const Text('إلغاء',
+                  style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              onPressed: () {
+                final name = itemNameCtrl.text.trim();
+                final price = double.tryParse(priceCtrl.text) ?? 0;
+                final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
+                final qty = rawQty.clamp(1, 9999);
+                if (name.isEmpty) {
+                  showSnack(dCtx, 'أدخل اسم الصنف', isError: true);
+                  return;
+                }
+                if (price <= 0) {
+                  showSnack(dCtx, 'أدخل السعر', isError: true);
+                  return;
+                }
+                setBS(() => items.add({
+                      'name': name,
+                      'price': price,
+                      'qty': qty,
+                    }));
+                Navigator.pop(dCtx);
+              },
+              child: const Text('إضافة'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dCtx),
-            child: const Text('إلغاء',
-                style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = itemNameCtrl.text.trim();
-              final price = double.tryParse(priceCtrl.text) ?? 0;
-              // Validate and clamp quantity between 1 and 9999
-              final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
-              final qty = rawQty.clamp(1, 9999);
-              if (name.isEmpty || price <= 0) return;
-              setBS(() => items.add({
-                    'name': name,
-                    'price': price,
-                    'qty': qty,
-                  }));
-              Navigator.pop(dCtx);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
       ),
     );
   }
@@ -479,6 +697,320 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         bytes: await pdf.save(), filename: 'invoice_$customerName.pdf');
   }
 
+  // ▌ تعديل فاتورة
+  Future<void> _editInvoice(Map<String, dynamic> invoice) async {
+    final invoiceId = invoice['id'] as int;
+    final nameCtrl = TextEditingController(text: invoice['customer_name'] ?? '');
+    final items = (jsonDecode(invoice['items'] as String) as List)
+        .cast<Map<String, dynamic>>();
+    double discount = (invoice['discount'] as num).toDouble();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) {
+          double subtotal = items.fold(0, (s, i) => s + (i['price'] * i['qty']));
+          double total = subtotal - (subtotal * discount / 100);
+
+          return DraggableScrollableSheet(
+            initialChildSize: 0.9,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (ctx, scroll) => Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40, height: 4,
+                            decoration: BoxDecoration(
+                              color: AppColors.darkBorder,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('✏️ تعديل الفاتورة',
+                            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+                        const SizedBox(height: 12),
+                        AppTextField(hint: 'اسم العميل', controller: nameCtrl),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _addItemToExisting(ctx, items, setBS),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('إضافة صنف'),
+                            style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: items.isEmpty
+                        ? const Center(child: Text('لا توجد أصناف', style: TextStyle(color: AppColors.textMuted)))
+                        : ListView.builder(
+                            controller: scroll,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: items.length,
+                            itemBuilder: (ctx, i) {
+                              final item = items[i];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.dark,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.darkBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(item['name'], style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w600)),
+                                          Text('${item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
+                                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    Text('${(item['qty'] * item['price']).toStringAsFixed(2)}',
+                                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => setBS(() => items.removeAt(i)),
+                                      child: const Icon(Icons.close, color: AppColors.danger, size: 18),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  if (items.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: AppColors.dark,
+                        border: Border(top: BorderSide(color: AppColors.darkBorder)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('المجموع', style: TextStyle(color: AppColors.textMuted)),
+                              Text('${subtotal.toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.textLight)),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Text('خصم %  ', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                              SizedBox(
+                                width: 60, height: 32,
+                                child: TextField(
+                                  controller: TextEditingController(text: discount.toStringAsFixed(0)),
+                                  onChanged: (v) {
+                                    final parsed = double.tryParse(v);
+                                    setBS(() => discount = parsed == null ? 0.0 : parsed.clamp(0.0, 100.0));
+                                  },
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(color: AppColors.warning, fontSize: 14),
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              const Text('الإجمالي: ', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+                              Text('${total.toStringAsFixed(2)} $_currency',
+                                  style: const TextStyle(color: AppColors.primary, fontSize: 18, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          PrimaryButton(
+                            text: '💾 حفظ التعديلات',
+                            onTap: () async {
+                              if (nameCtrl.text.trim().isEmpty) {
+                                showSnack(ctx, 'أدخل اسم العميل', isError: true);
+                                return;
+                              }
+                              if (items.isEmpty) {
+                                showSnack(ctx, 'أضف أصناف', isError: true);
+                                return;
+                              }
+                              await DatabaseHelper.instance.updateInvoice(invoiceId, {
+                                'customer_name': nameCtrl.text.trim(),
+                                'items': jsonEncode(items),
+                                'subtotal': subtotal,
+                                'discount': discount,
+                                'total': total,
+                              });
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              await _load();
+                              if (mounted) showSnack(context, 'تم تعديل الفاتورة ✅');
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ▌ إضافة صنف للفاتورة المعدلة
+  void _addItemToExisting(BuildContext ctx, List<Map<String, dynamic>> items, StateSetter setBS) {
+    final itemNameCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '1');
+
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        title: const Text('إضافة صنف', style: TextStyle(color: AppColors.primary, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppTextField(hint: 'اسم الصنف', controller: itemNameCtrl),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: AppTextField(hint: 'السعر', controller: priceCtrl, keyboardType: TextInputType.number)),
+                const SizedBox(width: 8),
+                Expanded(child: AppTextField(hint: 'الكمية', controller: qtyCtrl, keyboardType: TextInputType.number)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              final name = itemNameCtrl.text.trim();
+              final price = double.tryParse(priceCtrl.text) ?? 0;
+              final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
+              final qty = rawQty.clamp(1, 9999);
+              if (name.isEmpty || price <= 0) return;
+              setBS(() => items.add({'name': name, 'price': price, 'qty': qty}));
+              Navigator.pop(dCtx);
+            },
+            child: const Text('إضافة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ▌ عرض تفاصيل فاتورة
+  void _viewInvoiceDetails(Map<String, dynamic> invoice) {
+    final items = (jsonDecode(invoice['items'] as String) as List).cast<Map<String, dynamic>>();
+    final date = DateTime.tryParse(invoice['created_at'] ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.darkBorder, borderRadius: BorderRadius.circular(99))),
+            ),
+            const SizedBox(height: 16),
+            Text('🧾 الفاتورة - ${invoice['customer_name']}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+            if (date != null)
+              Text(DateFormat('yyyy/MM/dd HH:mm').format(date), style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+            const SizedBox(height: 16),
+            const Divider(color: AppColors.darkBorder),
+            ...items.map((item) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('${item['name']} × ${item['qty']}', style: const TextStyle(color: AppColors.textColor)),
+                  Text('${(item['price'] * item['qty']).toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            )),
+            const Divider(color: AppColors.darkBorder),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('الإجمالي', style: TextStyle(color: AppColors.textMuted)),
+                Text('${(invoice['total'] as num).toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _generatePDF(invoice['customer_name'], items, (invoice['subtotal'] as num).toDouble(),
+                      (invoice['discount'] as num).toDouble(), (invoice['total'] as num).toDouble());
+                },
+                icon: const Icon(Icons.share), label: const Text('مشاركة PDF'),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ▌ حذف فاتورة
+  Future<void> _deleteInvoice(Map<String, dynamic> invoice) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        title: const Text('حذف الفاتورة', style: TextStyle(color: AppColors.danger)),
+        content: Text('هل تريد حذف فاتورة "${invoice['customer_name']}"؟\n⚠️ لا يمكن التراجع عن هذا الإجراء.',
+            style: const TextStyle(color: AppColors.textMuted)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await DatabaseHelper.instance.deleteInvoice(invoice['id'] as int);
+      await _load();
+      if (mounted) showSnack(context, 'تم حذف الفاتورة ✅');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -519,82 +1051,108 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     final date = DateTime.tryParse(inv['created_at'] ?? '');
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.darkCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.darkBorder),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color:
-                                  AppColors.primary.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
+                      child: Slidable(
+                        endActionPane: ActionPane(
+                          motion: const DrawerMotion(),
+                          children: [
+                            // ▌ زر التعديل
+                            SlidableAction(
+                              onPressed: (_) => _editInvoice(inv),
+                              backgroundColor: const Color(0xFF2563EB),
+                              foregroundColor: Colors.white,
+                              icon: Icons.edit_rounded,
+                              label: 'تعديل',
+                              borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
                             ),
-                            child: const Center(
-                                child:
-                                    Text('🧾', style: TextStyle(fontSize: 20))),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            // ▌ زر الحذف
+                            SlidableAction(
+                              onPressed: (_) => _deleteInvoice(inv),
+                              backgroundColor: AppColors.danger,
+                              foregroundColor: Colors.white,
+                              icon: Icons.delete_rounded,
+                              label: 'حذف',
+                              borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+                            ),
+                          ],
+                        ),
+                        child: InkWell(
+                          onTap: () => _viewInvoiceDetails(inv),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.darkCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.darkBorder),
+                            ),
+                            child: Row(
                               children: [
-                                Text(inv['customer_name'] ?? '',
-                                    style: const TextStyle(
-                                        color: AppColors.textColor,
-                                        fontWeight: FontWeight.w700)),
-                                if (date != null)
-                                  Text(
-                                    DateFormat('yyyy/MM/dd HH:mm')
-                                        .format(date),
-                                    style: const TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 11),
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
+                                  child: const Center(
+                                    child: Text('🧾', style: TextStyle(fontSize: 20)),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(inv['customer_name'] ?? '',
+                                          style: const TextStyle(
+                                              color: AppColors.textColor,
+                                              fontWeight: FontWeight.w700)),
+                                      if (date != null)
+                                        Text(
+                                          DateFormat('yyyy/MM/dd HH:mm').format(date),
+                                          style: const TextStyle(
+                                              color: AppColors.textMuted, fontSize: 11),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      '${(inv['total'] as num).toStringAsFixed(2)} $_currency',
+                                      style: const TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15),
+                                    ),
+                                    if ((inv['discount'] as num) > 0)
+                                      Text(
+                                        'خصم ${(inv['discount'] as num).toStringAsFixed(0)}%',
+                                        style: const TextStyle(
+                                            color: AppColors.warning, fontSize: 11),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(width: 6),
+                                IconButton(
+                                  icon: const Icon(Icons.share, color: AppColors.primary, size: 20),
+                                  onPressed: () async {
+                                    final items = (jsonDecode(inv['items']) as List)
+                                        .cast<Map<String, dynamic>>();
+                                    await _generatePDF(
+                                      inv['customer_name'],
+                                      items,
+                                      (inv['subtotal'] as num).toDouble(),
+                                      (inv['discount'] as num).toDouble(),
+                                      (inv['total'] as num).toDouble(),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '${(inv['total'] as num).toStringAsFixed(2)} $_currency',
-                                style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15),
-                              ),
-                              if ((inv['discount'] as num) > 0)
-                                Text(
-                                  'خصم ${(inv['discount'] as num).toStringAsFixed(0)}%',
-                                  style: const TextStyle(
-                                      color: AppColors.warning, fontSize: 11),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            icon: const Icon(Icons.share,
-                                color: AppColors.primary, size: 20),
-                            onPressed: () async {
-                              final items = (jsonDecode(inv['items'])
-                                      as List)
-                                  .cast<Map<String, dynamic>>();
-                              await _generatePDF(
-                                inv['customer_name'],
-                                items,
-                                (inv['subtotal'] as num).toDouble(),
-                                (inv['discount'] as num).toDouble(),
-                                (inv['total'] as num).toDouble(),
-                              );
-                            },
-                          ),
-                        ],
+                        ),
                       ),
                     );
                   },

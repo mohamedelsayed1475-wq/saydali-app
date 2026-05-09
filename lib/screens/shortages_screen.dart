@@ -275,6 +275,51 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  /// ▌ حفظ دواء جديد في القاموس المحلي تلقائياً
+  Future<void> _saveDrugToDictionary(String drugName, {String? company}) async {
+    try {
+      // ▌ جيب القاموس الحالي
+      final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+      List<Map<String, dynamic>> drugList = [];
+      
+      if (dictStr != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(dictStr);
+          drugList = decoded.cast<Map<String, dynamic>>();
+        } catch (_) {}
+      }
+
+      // ▌ تأكد إن الدواء مش موجود بالفعل
+      final exists = drugList.any((d) => 
+        (d['enName']?.toString().toLowerCase() ?? '') == drugName.toLowerCase()
+      );
+
+      if (exists) return; // مفيش لازمة نضيفه تاني
+
+      // ▌ أضف الدواء الجديد
+      drugList.add({
+        'enName': drugName,
+        'arName': '',
+        'activeIngredient': '',
+        'company': company ?? 'غير محدد',
+        'barcode': '',
+        'price': 0,
+      });
+
+      // ▌ خزّن القاموس المحدث
+      await DatabaseHelper.instance.setSetting('drug_dictionary_v2', jsonEncode(drugList));
+
+      // ▌ حدّث القائمة في الميموري
+      setState(() {
+        _suggestions = drugList;
+      });
+
+      debugPrint('✅ تم حفظ "$drugName" في القاموس المحلي');
+    } catch (e) {
+      debugPrint('❌ فشل حفظ الدواء: $e');
+    }
+  }
+
   Future<void> _showAddSheet({Shortage? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name);
     final companyCtrl = TextEditingController(text: existing?.company);
@@ -487,12 +532,27 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     runSpacing: 6,
                     children: _aiDrugSuggestions.map((d) {
                       final name = d['enName']?.toString() ?? '';
+                      final source = d['source']?.toString() ?? '';
                       return ActionChip(
-                        label: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(name, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Icon(
+                              source == 'dictionary' ? Icons.storage : Icons.smart_toy,
+                              size: 12,
+                              color: source == 'dictionary' ? Colors.green : Colors.amber,
+                            ),
+                          ],
+                        ),
                         backgroundColor: AppColors.primary.withValues(alpha: 0.2),
                         side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                         onPressed: () {
                           nameCtrl.text = name;
+                          nameCtrl.selection = TextSelection.fromPosition(
+                            TextPosition(offset: name.length),
+                          );
                           setBS(() => _aiDrugSuggestions = []);
                         },
                       );
@@ -588,6 +648,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
                     if (existing == null) {
                       await context.read<ShortagesProvider>().add(data);
+                      
+                      // ▌ حفظ الدواء في القاموس المحلي تلقائياً
+                      await _saveDrugToDictionary(name, company: companyCtrl.text.trim());
+                      
                     } else {
                       await context.read<ShortagesProvider>().update(existing.id!, data);
                     }

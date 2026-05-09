@@ -363,35 +363,83 @@ class ChatService {
 
   // ── إضافة عميل ──────────────────────────────────────────────────
   Future<ChatResponse> _handleAddCustomer(String text) async {
-    final nameRegex = RegExp(r'(?:باسم|اسم|اسمه)\s+([^\s\d]+(?:\s+[^\s\d]+)*)');
-    final phoneRegex = RegExp(r'(?:ورقمه|رقم|رقمه|تليفونه|موبايله)\s+([\d\-\+]+)');
+    // ▌ أنماط متعددة لاستخراج اسم العميل
+    final patterns = [
+      // باسم/اسم/اسمه + [اسم]
+      RegExp(r'(?:باسم|اسم|اسمه)\s+([^\s\d]+(?:\s+[^\s\d]+)*)'),
+      // عميل اسمه/مسمى + [اسم]
+      RegExp(r'(?:عميل\s+(?:اسمه|مسمى)?)\s*([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
+      // اعمل حساب/أنشئ حساب لـ + [اسم]
+      RegExp(r'(?:اعمل\s+(?:حساب|عميل)|أنشئ\s+(?:حساب|عميل))\s*(?:باسم\s+)?([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
+      // أضف/ضيف + عميل + [اسم] مباشرة
+      RegExp(r'(?:أضف|ضيف)\s+(?:عميل\s+)?([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
+    ];
 
-    final nameMatch = nameRegex.firstMatch(text);
+    // ▌ استخرج الاسم من أي نمط
+    String? extractedName;
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(text);
+      if (match != null && match.group(1) != null) {
+        extractedName = match.group(1)!.trim();
+        break;
+      }
+    }
+
+    // ▌ لو مفيش اسم استخرج، جرب نستخرج أي كلمة كبيرة (اسم شخص)
+    if (extractedName == null || extractedName.isEmpty) {
+      // استخرج كلمة من 2-4 أحرف عربية أو إنجليزية
+      final words = text.split(RegExp(r'[\s\،\,\.]+'));
+      for (final word in words) {
+        final clean = word.trim();
+        // تجاهل الكلمات القصيرة والمkeywords
+        if (clean.length >= 2 && clean.length <= 15 &&
+            !RegExp(r'^(عميل|باسم|اسم|اعمل|أنشئ|أضف|ضيف|حساب|رقم|تليفون|موبايل)$', caseSensitive: false).hasMatch(clean)) {
+          // تجاهل الأرقام
+          if (!RegExp(r'^[\d\-]+$').hasMatch(clean)) {
+            extractedName = clean;
+            break;
+          }
+        }
+      }
+    }
+
+    // ▌ استخرج رقم التليفون
+    final phoneRegex = RegExp(r'[\d\-\+]{8,15}');
     final phoneMatch = phoneRegex.firstMatch(text);
+    final phone = phoneMatch?.group(0)?.trim() ?? '';
 
-    if (nameMatch == null) {
+    // ▌ لو مش قادر تستخرج اسم
+    if (extractedName == null || extractedName.isEmpty) {
       return ChatResponse(
-        text: '❓ طريقة إضافة عميل جديد:\n\n'
-            '💡 اكتب: "اعمل حساب باسم [الاسم] ورقمه [الرقم]"\n\n'
-            '📌 مثال: "اعمل حساب باسم أحمد محمد ورقمه 01012345678"',
+        text: '❓ أحتاج اسم العميل!\n\n'
+            '💡 اكتب: "أضف عميل [الاسم]"\n\n'
+            '📌 مثال: "أضف عميل أحمد" أو "اعمل حساب باسم محمد"',
         intent: ChatIntent.addCustomer,
         success: false,
       );
     }
 
-    final name = nameMatch.group(1)!.trim();
-    final phone = phoneMatch != null ? phoneMatch.group(1)!.trim() : '';
+    // ▌ أضف العميل في قاعدة البيانات
+    try {
+      await DatabaseHelper.instance.insertCustomer({
+        'name': extractedName,
+        'phone': phone,
+        'address': '',
+      });
 
-    await DatabaseHelper.instance.insertCustomer({
-      'name': name,
-      'phone': phone,
-      'address': '',
-    });
-
-    return ChatResponse(
-      text: '✅ تم إنشاء حساب العميل "$name"${phone.isNotEmpty ? ' برقم $phone' : ''} بنجاح!',
-      intent: ChatIntent.addCustomer,
-    );
+      return ChatResponse(
+        text: '✅ تم إنشاء حساب العميل "$extractedName"${phone.isNotEmpty ? ' برقم $phone' : ''} بنجاح!',
+        intent: ChatIntent.addCustomer,
+        success: true,
+      );
+    } catch (e) {
+      return ChatResponse(
+        text: '⚠️ حدث خطأ أثناء إضافة العميل "$extractedName".\n\n'
+            '💡 تأكد من قاعدة البيانات وحاول مرة أخرى.',
+        intent: ChatIntent.addCustomer,
+        success: false,
+      );
+    }
   }
 
   // ── استخراج النواقص من صورة ──────────────────────────────────────────────────
