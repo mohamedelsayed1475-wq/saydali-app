@@ -30,9 +30,17 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK
+      - name: Decode Keystore
         run: |
-          flutter build apk --release \
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+
+      - name: Build AppBundle for Play Store
+        run: |
+          flutter build appbundle --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
             --dart-define=SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} \
             --dart-define=DEV_PASS=${{ secrets.DEV_PASS }} \
@@ -40,8 +48,8 @@ jobs:
             --dart-define=ADMIN_CODE_2=${{ secrets.ADMIN_CODE_2 }} \
             --dart-define=WEB_PORTAL_URL=${{ secrets.WEB_PORTAL_URL }}
 
-      - name: Upload APK
+      - name: Upload AppBundle
         uses: actions/upload-artifact@v4
         with:
-          name: saydali-pro-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: saydali-pro-aab
+          path: build/app/outputs/bundle/release/app-release.aab

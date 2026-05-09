@@ -21,6 +21,7 @@ android/app/build/
 android/build/
 android/key.properties
 android/local.properties
+*.jks
 android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 
 # iOS

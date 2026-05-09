@@ -322,6 +322,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   Future<void> _showAddSheet({Shortage? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name);
+    TextEditingController? autoCtrl; // Reference to Autocomplete's internal controller
     final companyCtrl = TextEditingController(text: existing?.company);
     final qtyCtrl =
         TextEditingController(text: existing?.quantity.toString() ?? '1');
@@ -390,6 +391,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         onSelected: (s) =>
                             nameCtrl.text = s['enName']?.toString() ?? '',
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                          autoCtrl = ctrl; // Save the reference
                           if (existing != null &&
                               ctrl.text.isEmpty &&
                               existing.name.isNotEmpty)
@@ -491,6 +493,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                   builder: (_) => const ScannerScreen()));
                           if (code != null) {
                             nameCtrl.text = code;
+                            if (autoCtrl != null) {
+                              autoCtrl!.text = code;
+                              autoCtrl!.selection = TextSelection.fromPosition(
+                                TextPosition(offset: code.length),
+                              );
+                            }
                             setBS(() {});
                           }
                         },
@@ -550,9 +558,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
                         onPressed: () {
                           nameCtrl.text = name;
-                          nameCtrl.selection = TextSelection.fromPosition(
-                            TextPosition(offset: name.length),
-                          );
+                          if (autoCtrl != null) {
+                            autoCtrl!.text = name;
+                            autoCtrl!.selection = TextSelection.fromPosition(
+                              TextPosition(offset: name.length),
+                            );
+                          }
                           setBS(() => _aiDrugSuggestions = []);
                         },
                       );
