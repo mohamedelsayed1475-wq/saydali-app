@@ -103,6 +103,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           onTypeSelected: _selectType,
           showAll: _showTypeSelector,
           onToggle: () => setState(() => _showTypeSelector = !_showTypeSelector),
+          chips: _chips,
+          onSend: _send,
         ),
 
         const Divider(height: 1, color: AppColors.darkBorder),
@@ -125,7 +127,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       message: msg,
                       onCopy: () {
                         Clipboard.setData(ClipboardData(text: msg.text));
-                        showSnack(context, 'تم النسخ');
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم النسخ')));
                       },
                       onShare: () => Share.share(msg.text),
                     );
@@ -157,12 +159,16 @@ class _MessageTypeBar extends StatelessWidget {
   final void Function(MessageType) onTypeSelected;
   final bool showAll;
   final VoidCallback onToggle;
+  final List<(String, String)> chips;
+  final void Function(String, [List<String>?]) onSend;
 
   const _MessageTypeBar({
     required this.selectedType,
     required this.onTypeSelected,
     required this.showAll,
     required this.onToggle,
+    required this.chips,
+    required this.onSend,
   });
 
   @override
@@ -288,7 +294,7 @@ class _MessageTypeBar extends StatelessWidget {
           ),
 
           // ═══ اقتراحات سريعة ════
-          _QuickChips(chips: _chips, onTap: _send, selectedType: selectedType),
+          _QuickChips(chips: chips, onTap: onSend, selectedType: selectedType),
         ],
       ),
     );
