@@ -11,30 +11,56 @@ import '../database/database_helper.dart';
 import 'platform_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ نظام المساعد الذكي "حكيم" - صيدلي محترف ▌
-// ▌ الإصدار 2.0 - مع دعم سياقات الصيدلية وأفضل ردود AI
+// ▌ نظام المساعد الذكي "حكيم" - الإصدار المحسن v3.0 ▌
+// ▌ مع System Prompt احترافي وتحسين Intent Classification
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── أنواع النوايا ──────────────────────────────────────────────────
+// ── أنواع النوايا (Intents) ──────────────────────────────────────────────────
 enum ChatIntent {
+  // إدارة النواقص
   addShortage,
   showShortages,
   showPendingShortages,
   markCovered,
   deleteShortage,
+
+  // البحث والاستفسار
   searchDrug,
   findAlternative,
   analyzePatterns,
   searchPlatform,
+
+  // إدارة العملاء والديون
+  addCustomer,
   showDebts,
   checkCustomerDebt,
+  addDebt,
+  recordPayment,
+
+  // المندوبين
   showReps,
+  addRep,
+
+  // التقارير
   showStats,
+  generateReport,
+
+  // إعدادات
   apiSettings,
   help,
-  addCustomer,
+
+  // ميزات متقدمة
   addShortagesFromImage,
-  smartChat, // ▌ جديد: محادثة ذكية عامة
+  smartChat,
+
+  // جديد: أنواع محددة من الرسائل
+  drugInquiry,        // استفسار عن دواء معين
+  priceInquiry,       // استفسار عن السعر
+  availabilityInquiry, // استفسار عن التوفر
+  generalQuestion,    // سؤال عام
+  complaint,          // شكوى/مشكلة
+  suggestion,          // اقتراح
+
   unknown,
 }
 
@@ -53,55 +79,310 @@ class ChatResponse {
   });
 }
 
+// ── Message Type Enum (لنظام الاختيار قبل الإرسال) ──────────────────────────────────────────────────
+enum MessageType {
+  drug,         // 💊 استفسار عن دواء
+  alternative,  // 🔄 طلب بديل
+  shortage,     // 📋 إضافة ناقص
+  debt,         // 💰 سؤال عن دين
+  rep,          // 👥 سؤال عن مندوب
+  stats,        // 📊 طلب إحصائيات
+  general,      // ❓ سؤال عام
+  image,        // 🖼️ صورة/روشتة
+}
+
+extension MessageTypeExtension on MessageType {
+  String get emoji {
+    switch (this) {
+      case MessageType.drug:
+        return '💊';
+      case MessageType.alternative:
+        return '🔄';
+      case MessageType.shortage:
+        return '📋';
+      case MessageType.debt:
+        return '💰';
+      case MessageType.rep:
+        return '👥';
+      case MessageType.stats:
+        return '📊';
+      case MessageType.general:
+        return '❓';
+      case MessageType.image:
+        return '🖼️';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case MessageType.drug:
+        return 'استفسار دواء';
+      case MessageType.alternative:
+        return 'طلب بديل';
+      case MessageType.shortage:
+        return 'إضافة ناقص';
+      case MessageType.debt:
+        return 'سؤال عن دين';
+      case MessageType.rep:
+        return 'سؤال عن مندوب';
+      case MessageType.stats:
+        return 'إحصائيات';
+      case MessageType.general:
+        return 'سؤال عام';
+      case MessageType.image:
+        return 'صورة روشتة';
+    }
+  }
+
+  String get hint {
+    switch (this) {
+      case MessageType.drug:
+        return 'اكتب اسم الدواء...';
+      case MessageType.alternative:
+        return 'اكتب اسم الدواء للبحث عن بديل...';
+      case MessageType.shortage:
+        return 'اكتب اسم الدواء الناقص...';
+      case MessageType.debt:
+        return 'اكتب اسم العميل أو الأمر...';
+      case MessageType.rep:
+        return 'اكتب سؤالك عن المندوبين...';
+      case MessageType.stats:
+        return 'اكتب طلبك للإحصائيات...';
+      case MessageType.general:
+        return 'اكتب سؤالك هنا...';
+      case MessageType.image:
+        return 'أرفق صورة الروشتة...';
+    }
+  }
+
+  // الأوامر المساعدة لكل نوع
+  List<String> get sampleCommands {
+    switch (this) {
+      case MessageType.drug:
+        return ['باراسيتامول', 'بروفين 400', 'أدول'];
+      case MessageType.alternative:
+        return ['بديل بروفين', 'بديل ادول', 'عوض عن'];
+      case MessageType.shortage:
+        return ['أضف ناقص', 'سجل دواء ناقص', 'ضيف'];
+      case MessageType.debt:
+        return ['الديون', 'دين احمد', 'ضيف دين'];
+      case MessageType.rep:
+        return ['المندوبين', 'أضف مندوب', 'تقييم'];
+      case MessageType.stats:
+        return ['ملخص', 'إحصائيات', 'تقرير'];
+      case MessageType.general:
+        return ['مساعدة', 'ازاي أستخدم', 'الأوامر'];
+      case MessageType.image:
+        return [];
+    }
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ System Prompts محسّنة لكل نوع من API
+// ▌ System Prompt المحسن لحكيم - شخصيته وقدراته
 // ════════════════════════════════════════════════════════════════════════════
 
-/// ▌ System Prompt للمساعد الذكي - يُعرّف شخصية حكيم الصيدلي
-String getPharmacistSystemPrompt({String? pharmacyName}) {
+String getPharmacistSystemPrompt({String? pharmacyName, MessageType? messageType}) {
+  // إضافة سياق النوع المحدد
+  String typeContext = '';
+  if (messageType != null) {
+    switch (messageType) {
+      case MessageType.drug:
+        typeContext = '\n═══ السياق الحالي: المستخدم يسأل عن دواء محدد ═══\nقدم معلومات شاملة عن الدواء.';
+        break;
+      case MessageType.alternative:
+        typeContext = '\n═══ السياق الحالي: المستخدم يريد بديل لدواء ═══\nقدم بدائل بنفس المادة الفعالة.';
+        break;
+      case MessageType.shortage:
+        typeContext = '\n═══ السياق الحالي: المستخدم يضيف دواء ناقص ═══\nساعده في إضافة الدواء بشكل صحيح.';
+        break;
+      case MessageType.debt:
+        typeContext = '\n═══ السياق الحالي: سؤال عن ديون/مالية ═══\nقدم معلومات مالية دقيقة.';
+        break;
+      case MessageType.rep:
+        typeContext = '\n═══ السياق الحالي: سؤال عن مندوبين ═══\nقدم معلومات عن المندوبين.';
+        break;
+      case MessageType.stats:
+        typeContext = '\n═══ السياق الحالي: طلب إحصائيات ═══\nقدم تحليلات وتقارير.';
+        break;
+      case MessageType.general:
+        typeContext = '\n═══ السياق الحالي: سؤال عام ═══\nأجب بشكل شامل ومفصل.';
+        break;
+      case MessageType.image:
+        typeContext = '\n═══ السياق الحالي: تحليل صورة/روشتة ═══\nاستخرج الأدوية من الصورة.';
+        break;
+    }
+  }
+
   return '''
- أنت "حكيم" - مساعدك الذكي في صيدلية${pharmacyName != null ? ' $pharmacyName' : ''}.
+أنت "حكيم" - مساعد صيدلي محترف ذكي متخصص في السوق المصري والعربي.
 
- ════════════════════════════════════════════════════════════════════════════
- ▌ شخصيتك:
- ════════════════════════════════════════════════════════════════════════════
- • أنت مساعد صيدلي محترف ومتخصص في الأدوية المصرية والعربية
- • ردودك تكون بالعربية الفصحى السهلة والمفهومة
- • استخدم الإيموجي بشكل مناسب لجعل الردود جذابة
- • كن ودوداً ومهنياً في نفس الوقت
- • قدّم نصائح مفيدة حول الأدوية والبدائل عند الإمكان
+$typeContext
 
- ════════════════════════════════════════════════════════════════════════════
- ▌ قدراتك:
- ════════════════════════════════════════════════════════════════════════════
- • البحث عن الأدوية ومعلوماتها
- • اقتراح البدائل المثيلة (نفس المادة الفعالة)
- • المساعدة في إدارة النواقص والأدوية غير المتوفرة
- • تقديم نصائح عامة (الجرعات، التفاعلات، التحذيرات)
- • البحث عن الأسعار والعروض في الصيدليات المختلفة
+═══════════════════════════════════════════════════════════════════════════════
+▌ شخصيتك:
+═══════════════════════════════════════════════════════════════════════════════
+• صيدلي خبير معتمد، تتحدث بالعربية الفصحى السهلة والمفهومة
+• ودود ومهني، تستخدم الإيموجي بشكل مناسب وذي معنى
+• تقدم نصائح دقيقة ومفيدة بناءً على معرفتك الصيدلانية
+• حريص على تقديم المعلومات الصحيحة مع ذكر مصدرها إن أمكن
+• تستجيب بسرعة وفعالية لكل استفسار
 
- ════════════════════════════════════════════════════════════════════════════
- ▌ قواعد الرد:
- ════════════════════════════════════════════════════════════════════════════
- 1. ابدأ ردك دائماً بتوضيح موجز (💊، 🔍، 📋، 💰، 👥 حسب الموضوع)
- 2. قسّم المعلومات الكبيرة لنقاط واضحة
- 3. أضف تلميحة مفيدة في نهاية الردود (💡)
- 4. إذا سألت عن دواء، اعطِ معلومات عن:
-    - الاسم التجاري والاسم العلمي
-    - المادة الفعالة
-    - الاستخدامات الشائعة
-    - التحذيرات المهمة
-    - البدائل الممكنة
- 5. إذا سألت عن سعر، وضّح أنه يجب التواصل مع الصيدلية مباشرة
- 6. لا تقدّم نصائح طبية بدلاً من الطبيب
+═══════════════════════════════════════════════════════════════════════════════
+▌ معرفتك الصيدلانية:
+═══════════════════════════════════════════════════════════════════════════════
+• الأدوية المصرية والعربية الشائعة: الأسماء التجارية، الشركات المصنعة
+• المواد الفعالة والتراكيب الدوائية
+• البدائل المثيلة (نفس المادة الفعالة، شركات مختلفة)
+• التفاعلات الدوائية الشائعة والتحذيرات المهمة
+• معلومات عامة عن الجرعات والاستخدامات
+• أسعار تقريبية للأدوية الشائعة في السوق المصري
 
- ════════════════════════════════════════════════════════════════════════════
- ▌ رد على أي سؤال بشكل مفيد ومختصر
- ════════════════════════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════════════════════
+▌ قدراتك الأساسية:
+═══════════════════════════════════════════════════════════════════════════════
+
+📋 إدارة النواقص:
+• إضافة أدوية ناقصة للقائمة
+• البحث عن حالة النواقص
+• تعليم الأدوية المتوفرة
+• تحليل أنماط النواقص المتكررة
+• إرسال النواقص للمندوبين
+
+💊 البحث والاستفسار:
+• البحث عن معلومات الأدوية
+• اقتراح البدائل المثيلة
+• البحث في منصات الأدوية المختلفة
+• مقارنة الأسعار والتوفر
+
+💰 إدارة المالية:
+• عرض ديون العملاء
+• إضافة ديون جديدة
+• تسجيل المدفوعات
+• تتبع الاستحقاقات
+
+👥 المندوبين:
+• عرض قائمة المندوبين
+• تقييم الأداء
+• تتبع ردود المندوبين
+
+📊 التقارير:
+• إحصائيات يومية/أسبوعية/شهرية
+• تحليل أداء الصيدلية
+• تقارير الديون والمبيعات
+
+═══════════════════════════════════════════════════════════════════════════════
+▌ قواعد الرد المهمة (اتبعها بدقة):
+═══════════════════════════════════════════════════════════════════════════════
+
+1️⃣ هيكل الرسالة:
+   • ابدأ دائماً برمز يدل على نوع المحتوى:
+     - 💊 للأدوية والمعلومات الدوائية
+     - 🔍 للبحث والنتائج
+     - 📋 للقوائم والتقارير
+     - 💰 للمالية والديون
+     - 👥 للمندوبين والعملاء
+     - ✅ للتأكيد والنجاح
+     - ⚠️ للتحذيرات
+     - 🔄 للبدائل
+     - 💡 للنصائح
+   • قسّم المعلومات الكبيرة لنقاط واضحة باستخدام •
+   • اختم دائماً بنصيحة مفيدة (💡)
+
+2️⃣ عند ذكر دواء، قدم:
+   • الاسم التجاري والاسم العلمي
+   • المادة الفعالة والتركيز
+   • الشركة المصنعة
+   • الاستخدامات الشائعة
+   • التحذيرات والتفاعلات المهمة
+   • البدائل المتاحة (إن وجدت)
+
+3️⃣ عند السؤال عن السعر:
+   • اذكر أن السعر تقريبي ويختلف حسب:
+     - الصيدلية والموقع
+     - وجود التأمين الصحي
+     - العروض والخصومات المتاحة
+   • قدم نطاق سعري تقريبي
+
+4️⃣ عند السؤال عن توفر دواء:
+   • اذكر أن التوفر يتغير باستمرار
+   • اقترح البحث في منصات مختلفة
+   • قدم البدائل المتاحة
+
+5️⃣ عند الشكوى أو المشكلة:
+   • استمع باهتمام
+   • قدم حلول عملية
+   • اذكر إذا كانت تحتاج متابعة مع مسؤول
+
+6️⃣ الأمور المحظورة:
+   • ❌ لا تقدم نصائح طبية بديلاً عن الطبيب
+   • ❌ لا تذكر أسعار نهائية (قد تتغير)
+   • ❌ لا تؤكد توفر دواء إلا إذا كان في قاعدة البيانات
+   • ❌ لا تذكر معلومات طبية حساسة بدون تأكيد
+
+═══════════════════════════════════════════════════════════════════════════════
+▌ سياق التطبيق:
+═══════════════════════════════════════════════════════════════════════════════
+• اسم الصيدلية: ${pharmacyName ?? 'صيدليتك'}
+• العملة: جنيه مصري (ج.م)
+• المنطقة: مصر
+• نوع التطبيق: صيدلية تجزئة (Retail Pharmacy)
+• الهدف: إدارة النواقص، تتبع الديون، التواصل مع المندوبين
+
+═══════════════════════════════════════════════════════════════════════════════
+▌ أمثلة على الردود:
+═══════════════════════════════════════════════════════════════════════════════
+
+مثال 1 - سؤال عن دواء:
+"💊 باراسيتامول (Paracetamol):
+
+📌 الاسم العلمي: أسيتامينوفين
+🏭 الشركة: مجموعة شركات مختلفة (مصر)
+💊 التركيزات المتاحة: 500mg, 1000mg
+
+📋 الاستخدامات:
+• خافض حرارة
+• مسكن ألم خفيف إلى متوسط
+• آلام الرأس والأسنان
+
+⚠️ التحذيرات:
+• لا تتجاوز 4 جرام يومياً
+• تجنب مع الكحول
+• استشر الطبيب في حالة أمراض الكبد
+
+🔄 البدائل المتاحة:
+• أدول (Adol)
+• نوفالدول (Novaldol)
+• سيتافين (Cetafen)
+
+💡 نصيحة: باراسيتامول من أكثر المسكنات أماناً، ويمكن تناوله مع الطعام."
+
+مثال 2 - طلب بديل:
+"🔄 بديل بروكتوزول (Proctozol):
+
+🧪 المادة الفعالة: ليدوكايين + زنك أوكسيد
+
+🔀 البدائل بنفس التركيبة:
+• ريليريل (Relief)
+• بروكتو-فيدال (Procto-Vyadal)
+• أنازول (Anazol) - كريم
+
+💡 نصيحة: جميعها تحتوي نفس المادة الفعالة، يمكن استخدام أي منها."
+
+═══════════════════════════════════════════════════════════════════════════════
+▌ ملخص القواعد النهائية:
+═══════════════════════════════════════════════════════════════════════════════
+✅ ابدأ برمز يدل على نوع المحتوى
+✅ قدم معلومات شاملة ومنظمة
+✅ اختم بنصيحة مفيدة
+✅ استخدم الإيموجي بشكل مناسب
+✅ قسّم المعلومات لنقاط واضحة
+❌ لا تقدم نصائح طبية بديلة للطبيب
+❌ لا تذكر أسعار نهائية
 ''';
 }
 
-/// ▌ System Prompt المختصر للبحث عن أسماء الأدوية
+/// ▌ System Prompt المختصر للبحث عن أسماء الأدوية (للـ autocomplete)
 String getDrugSuggestionsPrompt() {
   return '''
 أنت قاموس أدوية مصري وعربي متخصص.
@@ -117,7 +398,9 @@ String getDrugSuggestionsPrompt() {
 ''';
 }
 
-// ── خدمة الشات بوت الرئيسية ──────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// ▌ خدمة الشات بوت الرئيسية - المحسنة
+// ════════════════════════════════════════════════════════════════════════════
 class ChatService {
   static final ChatService instance = ChatService._();
   ChatService._();
@@ -131,8 +414,30 @@ class ChatService {
       .toLowerCase()
       .trim();
 
-  // ── تصنيف النية ──────────────────────────────────────────────────
-  ChatIntent _classify(String text) {
+  // ── تصنيف النية المحسن (مع دعم MessageType) ──────────────────────────────────────────────────
+  ChatIntent _classify(String text, {MessageType? forcedType}) {
+    // إذا كان هناك نوع محدد من المستخدم، استخدمه لتوجيه التصنيف
+    if (forcedType != null) {
+      switch (forcedType) {
+        case MessageType.drug:
+          return ChatIntent.drugInquiry;
+        case MessageType.alternative:
+          return ChatIntent.findAlternative;
+        case MessageType.shortage:
+          return ChatIntent.addShortage;
+        case MessageType.debt:
+          return ChatIntent.showDebts;
+        case MessageType.rep:
+          return ChatIntent.showReps;
+        case MessageType.stats:
+          return ChatIntent.showStats;
+        case MessageType.general:
+          return ChatIntent.generalQuestion;
+        case MessageType.image:
+          return ChatIntent.addShortagesFromImage;
+      }
+    }
+
     final n = _normalize(text);
 
     // ▌ أوامر النواقص
@@ -211,15 +516,15 @@ class ChatService {
   }
 
   // ── تنفيذ الأمر ──────────────────────────────────────────────────
-  Future<ChatResponse> execute(String text, {List<String>? filePaths}) async {
-    final intent = _classify(text);
+  Future<ChatResponse> execute(String text, {List<String>? filePaths, MessageType? messageType}) async {
+    final intent = _classify(text, forcedType: messageType);
 
     if (intent == ChatIntent.addShortagesFromImage) {
       return _extractAndAddItemsFromImage(text, filePaths);
     }
 
     if (filePaths != null && filePaths.isNotEmpty && intent != ChatIntent.addShortagesFromImage) {
-      return _searchViaApi(text, filePaths: filePaths);
+      return _searchViaApi(text, filePaths: filePaths, messageType: messageType);
     }
 
     switch (intent) {
@@ -251,8 +556,12 @@ class ChatService {
         return _handleSearchPlatform(text);
       case ChatIntent.addCustomer:
         return _handleAddCustomer(text);
+      case ChatIntent.drugInquiry:
+        return _handleDrugInquiry(text);
+      case ChatIntent.generalQuestion:
+        return _handleSmartChat(text, messageType: messageType);
       case ChatIntent.smartChat:
-        return _handleSmartChat(text); // ▌ جديد: محادثة ذكية
+        return _handleSmartChat(text, messageType: messageType);
       default:
         return _handleSearchDrug(text);
     }
@@ -262,13 +571,13 @@ class ChatService {
   // ▌ الميزة الجديدة: محادثة ذكية مع AI محسّن
   // ════════════════════════════════════════════════════════════════════════════
 
-  Future<ChatResponse> _handleSmartChat(String text) async {
+  Future<ChatResponse> _handleSmartChat(String text, {MessageType? messageType}) async {
     // ▌ أولاً: حاول البحث في قاعدة البيانات المحلية
     final localResponse = await _searchLocalKnowledge(text);
     if (localResponse != null) return localResponse;
 
-    // ▌ ثانياً: استخدم API
-    return _searchViaApi(text);
+    // ▌ ثانياً: استخدم API مع System Prompt المحسن
+    return _searchViaApi(text, messageType: messageType);
   }
 
   /// ▌ البحث في قاعدة المعرفة المحلية (سريع ومجاني)
@@ -284,6 +593,43 @@ class ChatService {
     }
 
     return null;
+  }
+
+  // ▌ جديد: استفسار عن دواء محدد
+  Future<ChatResponse> _handleDrugInquiry(String text) async {
+    final n = _normalize(text);
+    final stopWords = {
+      'ما', 'هو', 'عن', 'دواء', 'عقار', 'باراسيتامول', 'بروفين', 'ادول', 'معلومات'
+    };
+    final words = n.split(' ').where((w) => !stopWords.contains(w) && w.length > 2).toList();
+    final drugName = words.isNotEmpty ? words.join(' ') : text;
+
+    // البحث في القاموس المحلي
+    final dictionary = await _loadDictionary();
+    if (dictionary.isNotEmpty) {
+      final matches = dictionary.where((drug) {
+        final en = drug['enName']?.toString().toLowerCase() ?? '';
+        final ar = drug['arName']?.toString().toLowerCase() ?? '';
+        return en.contains(drugName.toLowerCase()) || ar.contains(drugName.toLowerCase());
+      }).take(5).toList();
+
+      if (matches.isNotEmpty) {
+        final drug = matches.first;
+        final enName = drug['enName'] ?? '';
+        final arName = drug['arName'] ?? '';
+        final active = drug['activeIngredient'] ?? '';
+
+        return ChatResponse(
+          text: '💊 $enName${arName.isNotEmpty ? ' ($arName)' : ''}:\n\n'
+              '🧪 المادة الفعالة: $active\n\n'
+              '💡 اكتب "بديل $enName" للبحث عن بدائل.',
+          intent: ChatIntent.drugInquiry,
+        );
+      }
+    }
+
+    // إذا لم نجده محلياً، استخدم API
+    return _searchViaApi(text);
   }
 
   // ── إضافة ناقص ──────────────────────────────────────────────────
@@ -316,7 +662,8 @@ class ChatService {
           '📋 يمكنك الآن:\n'
           '• إرساله للمندوبين من شاشة النواقص\n'
           '• تعليمه كمتوفر عند توفره\n'
-          '• البحث عن بديل له',
+          '• البحث عن بديل له\n\n'
+          '💡 اكتب "الروشتة" أو أرفق صورة لإضافة عدة أدوية دفعة واحدة.',
       intent: ChatIntent.addShortage,
       success: true,
       actionData: {'drug': drugName, 'action': 'add_shortage'},
@@ -365,17 +712,12 @@ class ChatService {
   Future<ChatResponse> _handleAddCustomer(String text) async {
     // ▌ أنماط متعددة لاستخراج اسم العميل
     final patterns = [
-      // باسم/اسم/اسمه + [اسم]
       RegExp(r'(?:باسم|اسم|اسمه)\s+([^\s\d]+(?:\s+[^\s\d]+)*)'),
-      // عميل اسمه/مسمى + [اسم]
       RegExp(r'(?:عميل\s+(?:اسمه|مسمى)?)\s*([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
-      // اعمل حساب/أنشئ حساب لـ + [اسم]
       RegExp(r'(?:اعمل\s+(?:حساب|عميل)|أنشئ\s+(?:حساب|عميل))\s*(?:باسم\s+)?([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
-      // أضف/ضيف + عميل + [اسم] مباشرة
       RegExp(r'(?:أضف|ضيف)\s+(?:عميل\s+)?([^\s\d]+(?:\s+[^\s\d]+)*)', caseSensitive: false),
     ];
 
-    // ▌ استخرج الاسم من أي نمط
     String? extractedName;
     for (final pattern in patterns) {
       final match = pattern.firstMatch(text);
@@ -385,16 +727,12 @@ class ChatService {
       }
     }
 
-    // ▌ لو مفيش اسم استخرج، جرب نستخرج أي كلمة كبيرة (اسم شخص)
     if (extractedName == null || extractedName.isEmpty) {
-      // استخرج كلمة من 2-4 أحرف عربية أو إنجليزية
       final words = text.split(RegExp(r'[\s\،\,\.]+'));
       for (final word in words) {
         final clean = word.trim();
-        // تجاهل الكلمات القصيرة والمkeywords
         if (clean.length >= 2 && clean.length <= 15 &&
             !RegExp(r'^(عميل|باسم|اسم|اعمل|أنشئ|أضف|ضيف|حساب|رقم|تليفون|موبايل)$', caseSensitive: false).hasMatch(clean)) {
-          // تجاهل الأرقام
           if (!RegExp(r'^[\d\-]+$').hasMatch(clean)) {
             extractedName = clean;
             break;
@@ -403,12 +741,10 @@ class ChatService {
       }
     }
 
-    // ▌ استخرج رقم التليفون
     final phoneRegex = RegExp(r'[\d\-\+]{8,15}');
     final phoneMatch = phoneRegex.firstMatch(text);
     final phone = phoneMatch?.group(0)?.trim() ?? '';
 
-    // ▌ لو مش قادر تستخرج اسم
     if (extractedName == null || extractedName.isEmpty) {
       return ChatResponse(
         text: '❓ أحتاج اسم العميل!\n\n'
@@ -419,7 +755,6 @@ class ChatService {
       );
     }
 
-    // ▌ أضف العميل في قاعدة البيانات
     try {
       await DatabaseHelper.instance.insertCustomer({
         'name': extractedName,
@@ -451,7 +786,11 @@ class ChatService {
     if (filePaths == null || filePaths.isEmpty) {
       return ChatResponse(
         text: '📷 أحتاج صورة لاستخراج الأدوية!\n\n'
-            '💡 أرفق صورة الروشتة أو قائمة الأدوية مع رسالتك.',
+            '💡 أرفق صورة الروشتة أو قائمة الأدوية مع رسالتك.\n\n'
+            '📌 نصائح لصورة أفضل:\n'
+            '• تأكد من وضوح النص\n'
+            '• استخدم إضاءة جيدة\n'
+            '• صور بشكل مستقيم (ليس مائل)',
         intent: ChatIntent.addShortagesFromImage,
         success: false,
       );
@@ -468,7 +807,7 @@ class ChatService {
 ⚠️ قواعد مهمة:
 • أرجع فقط مصفوفة JSON بدون أي نص آخر
 • كل اسم دواء في سطر منفصل
-• تجاهل الأرقام والتotas والأسطر القصيرة''';
+• تجاهل الأرقام والتعليقات والأسطر القصيرة''';
 
         final parts = <Part>[TextPart(prompt)];
         for (final path in filePaths) {
@@ -944,7 +1283,7 @@ class ChatService {
         }).join('\n\n');
         return ChatResponse(
           text: '📖 نتائج البحث (${matches.length}):\n\n$lines\n\n'
-              '💡 جرب: "أضف دواء ${matches.first['enName']}"',
+              '💡 جرب: "أضف دواء ${matches.first['enName']}" أو "بديل ${matches.first['enName']}"',
           intent: ChatIntent.searchDrug,
         );
       }
@@ -980,12 +1319,13 @@ class ChatService {
   // ▌ البحث عبر API - محسّن مع System Prompt قوي
   // ════════════════════════════════════════════════════════════════════════════
 
-  Future<ChatResponse> _searchViaApi(String query, {List<String>? filePaths}) async {
+  Future<ChatResponse> _searchViaApi(String query, {List<String>? filePaths, MessageType? messageType}) async {
     final prefs = await SharedPreferences.getInstance();
     final customUrl = prefs.getString('custom_api_url') ?? '';
     final customKey = prefs.getString('custom_api_key') ?? '';
     final customType = prefs.getString('custom_api_type') ?? 'openai';
     final savedFiles = prefs.getStringList('custom_api_files') ?? [];
+    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name');
 
     final allFiles = <String>[];
     if (filePaths != null) allFiles.addAll(filePaths);
@@ -1002,12 +1342,12 @@ class ChatService {
     try {
       // ▌ Gemini API - مع System Prompt محسّن
       if (customKey.isNotEmpty && customType == 'gemini') {
-        return await _callGeminiApi(customKey, query, allFiles);
+        return await _callGeminiApi(customKey, query, allFiles, pharmacyName, messageType);
       }
 
       // ▌ OpenAI API - مع System Prompt محسّن
       if (customUrl.isNotEmpty && customKey.isNotEmpty && customType == 'openai') {
-        return await _callOpenAIApi(customUrl, customKey, query);
+        return await _callOpenAIApi(customUrl, customKey, query, pharmacyName, messageType);
       }
 
       // ▌ API مخصص (JSON)
@@ -1024,7 +1364,7 @@ class ChatService {
           final d = jsonDecode(res.body);
           final answer = d['answer'] ?? d['response'] ?? d['text'] ?? d['AbstractText'] ?? res.body;
           return ChatResponse(
-            text: '🌐 $answer',
+            text: '🤖 حكيم:\n\n$answer',
             intent: ChatIntent.smartChat,
           );
         }
@@ -1049,12 +1389,15 @@ class ChatService {
   // ▌ استدعاء Gemini API مع System Prompt محسّن
   // ════════════════════════════════════════════════════════════════════════════
 
-  Future<ChatResponse> _callGeminiApi(String apiKey, String query, List<String> files) async {
+  Future<ChatResponse> _callGeminiApi(String apiKey, String query, List<String> files, String? pharmacyName, MessageType? messageType) async {
     try {
       final model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: apiKey);
 
       // ▌ بناء الـ System Prompt
-      final systemPrompt = getPharmacistSystemPrompt();
+      final systemPrompt = getPharmacistSystemPrompt(
+        pharmacyName: pharmacyName,
+        messageType: messageType,
+      );
 
       // ▌ إضافة سياق المستخدم والسؤال
       final userPrompt = query.isEmpty && files.isNotEmpty
@@ -1072,9 +1415,10 @@ $userPrompt
 ═══════════════════════════════════════════════════════════════════════════
 ▌ قواعد الإجابة:
 • أجب بالعربية فقط
-• استخدم الإيموجي المناسب
+• استخدم الإيموجي المناسب (💊🔍📋💰👥💡✅⚠️🔄)
 • اختم بنصيحة مفيدة (💡)
-• قسّم المعلومات الكبيرة
+• قسّم المعلومات الكبيرة لنقاط واضحة باستخدام •
+• اذكر إذا لم تكن متأكداً من معلومة معينة
 ═══════════════════════════════════════════════════════════════════════════
 ''';
 
@@ -1251,11 +1595,14 @@ $userPrompt
   // ▌ OpenAI API - مع System Prompt محسّن
   // ════════════════════════════════════════════════════════════════════════════
 
-  Future<ChatResponse> _callOpenAIApi(String url, String apiKey, String query) async {
+  Future<ChatResponse> _callOpenAIApi(String url, String apiKey, String query, String? pharmacyName, MessageType? messageType) async {
     final endpoint = url.endsWith('/') ? '${url}chat/completions' : '$url/chat/completions';
 
     // ▌ استخدام System Prompt المحسّن
-    final systemPrompt = getPharmacistSystemPrompt();
+    final systemPrompt = getPharmacistSystemPrompt(
+      pharmacyName: pharmacyName,
+      messageType: messageType,
+    );
 
     final res = await http.post(
       Uri.parse(endpoint),
@@ -1334,13 +1681,15 @@ $userPrompt
 📱 منصات الأدوية:
 • "ابحث عن [اسم]" ← بحث في كل المنصات
 
+🖼️ استخراج من صور:
+• أرفق صورة روشتة وأنا استخرج الأدوية منها
+
 ═══════════════════════════════════════════════════════════════════
-▌ مثال:
+▌ نصائح للاستخدام:
 ═══════════════════════════════════════════════════════════════════
-"أضف دواء باراسيتامول"
-"أضف دواء بروفين 400"
-"أبديل بروفين"
-"ملخص اليوم"
+💡 اختر نوع رسالتك من الأزرار أعلى الشات
+💡 أرفق صور روشتات لاستخراج الأدوية تلقائياً
+💡 اكتب "مساعدة" في أي وقت لعرض الأوامر
 ''';
 
   String _apiHelpText() => '''
@@ -1352,7 +1701,7 @@ $userPrompt
 • 🔧 أي API متوافق مع OpenAI
 
 💡 للحصول على مفتاح:
-• Gemini: console.cloud.google.com
+• Gemini: aistudio.google.com
 • OpenAI: platform.openai.com
 
 📁 قاعدة المعرفة:
@@ -1361,7 +1710,6 @@ $userPrompt
 ''';
 
   // ── اقتراح أسماء أدوية عبر API (للـ autocomplete) ──────────────────────────
-  // ▌ محسّن: يرجع قائمة أسماء أدوية فقط - مش محادثة
   Future<List<Map<String, dynamic>>> suggestDrugNames(String query) async {
     if (query.trim().length < 3) return [];
     final prefs = await SharedPreferences.getInstance();
@@ -1564,6 +1912,10 @@ $userPrompt
       'Dexamethasone', 'Prednisolone', 'Cortisone',
       'Lasix', 'Furosemide', 'Aldactone', 'Spironolactone',
       'Glimepiride', 'Amaryl', 'Diabeta', 'Glibenclamide',
+      // أدوية مصرية شائعة
+      'ميوفين', 'أدول', 'نوفالدول', 'سيتال', 'ريفو',
+      'كبسولات كونترافلوكس', 'أزيماك', 'فلوميديكس',
+      'إميك Aid', 'لازال', 'زورتك', 'كونجستال',
     ];
 
     final normalized = query.toLowerCase();
