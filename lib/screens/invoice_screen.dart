@@ -62,7 +62,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   @override
   void dispose() {
-    _aiDebounce?.cancel();
     super.dispose();
   }
 
