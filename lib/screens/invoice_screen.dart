@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -7,7 +6,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
-import '../services/chat_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'scanner_screen.dart';
