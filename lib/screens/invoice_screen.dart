@@ -25,9 +25,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   
   // ▌ اقتراحات الأصناف
   List<Map<String, dynamic>> _suggestions = [];
-  List<Map<String, dynamic>> _aiSuggestions = [];
-  bool _aiSearching = false;
-  Timer? _aiDebounce;
 
   @override
   void initState() {
@@ -48,38 +45,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     }
   }
 
-  void _searchSuggestions(String query) {
-    _aiDebounce?.cancel();
-    if (query.length < 2) {
-      _aiSuggestions = [];
-      _aiSearching = false;
-      return;
-    }
 
-    // ▌ البحث المحلي في القائمة
-    final local = _suggestions.where((s) {
-      final name = s['name']?.toString().toLowerCase() ?? '';
-      return name.contains(query.toLowerCase());
-    }).take(5).toList();
-
-    if (local.isNotEmpty) {
-      _aiSuggestions = local;
-      _aiSearching = false;
-      return;
-    }
-
-    // ▌ البحث بالذكاء الاصطناعي
-    _aiSearching = true;
-    _aiDebounce = Timer(const Duration(milliseconds: 600), () async {
-      final results = await ChatService.instance.suggestDrugNames(query);
-      if (mounted) {
-        setState(() {
-          _aiSuggestions = results;
-          _aiSearching = false;
-        });
-      }
-    });
-  }
 
   Future<void> _loadSuggestions() async {
     // ▌ تحميل قائمة منتجات من قاعدة البيانات
