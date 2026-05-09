@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
-import '../models/models.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // ▌ مزود المحادثة الذكي - المحسّن مع دعم أنواع الرسائل
