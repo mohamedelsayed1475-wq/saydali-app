@@ -71,10 +71,12 @@ dev_dependencies:
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
+  android: true
+  ios: false
   image_path: "assets/images/app_icon.png"
-  min_sdk_android: 21 # android min sdk must be 21 or higher
+  adaptive_icon_background: "#0A6847"
+  adaptive_icon_foreground: "assets/images/app_icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true

@@ -78,6 +78,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  bool _sheetOpen = false;
+
   void _searchAiForDrug(String query, VoidCallback onUpdate) {
     _aiDebounce?.cancel();
     if (query.length < 3) {
@@ -103,7 +105,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       final results = await ChatService.instance.suggestDrugNames(query);
       _aiDrugSuggestions = results;
       _aiSearching = false;
-      if (mounted) onUpdate();
+      if (mounted && _sheetOpen) onUpdate();
     });
   }
 
@@ -330,6 +332,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     bool isUrgent = existing?.isUrgent ?? false;
     String status = existing?.status ?? 'pending';
 
+    _sheetOpen = true;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -681,6 +684,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         ),
       ),
     );
+    _sheetOpen = false;
+    _aiDebounce?.cancel();
   }
 
   Future<void> _shareShortages() async {

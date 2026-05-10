@@ -454,10 +454,18 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> getDueDebts() async {
     final db = await database;
     final tomorrow = DateTime.now().add(const Duration(days: 1)).toIso8601String().substring(0, 10);
-    return await db.query('customers',
-        where: "due_date IS NOT NULL AND due_date <= ? AND total_debt > 0",
-        whereArgs: [tomorrow],
-        orderBy: 'due_date ASC');
+    return await db.rawQuery('''
+      SELECT c.*, 
+        (
+          SELECT COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE 0 END), 0) -
+                 COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0)
+          FROM debt_transactions dt WHERE dt.customer_id = c.id
+        ) as total_debt
+      FROM customers c
+      WHERE c.due_date IS NOT NULL AND c.due_date <= ?
+      HAVING total_debt > 0
+      ORDER BY c.due_date ASC
+    ''', [tomorrow]);
   }
 
   // ── الفواتير ──────────────────────────────────────────────────

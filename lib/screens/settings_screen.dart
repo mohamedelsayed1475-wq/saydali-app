@@ -533,6 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'arName': getCol('arName'),
           'activeIngredient': getCol('activeIngredient'),
           'barcode': getCol('barcode'),
+          'price': getCol('price'),
         });
       }
 
@@ -676,6 +677,7 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
     'arName': -1,
     'activeIngredient': -1,
     'barcode': -1,
+    'price': -1,
   };
 
   @override
@@ -691,6 +693,7 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
             _buildDropdown('الاسم العربي', 'arName'),
             _buildDropdown('المادة الفعالة', 'activeIngredient'),
             _buildDropdown('الباركود', 'barcode'),
+            _buildDropdown('السعر', 'price'),
           ],
         ),
       ),

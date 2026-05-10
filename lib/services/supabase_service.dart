@@ -13,7 +13,18 @@ class SupabaseService {
   static const _url = EnvConfig.supabaseUrl;
   static const _key = EnvConfig.supabaseKey;
 
-  bool get isConfigured => _key.isNotEmpty && !_key.contains('REPLACE');
+  bool get isConfigured =>
+      _url.isNotEmpty &&
+      _key.isNotEmpty &&
+      !_url.contains('REPLACE') &&
+      !_key.contains('REPLACE');
+
+  /// تشخيص سريع لسبب عدم الإعداد
+  String get configDiagnostic {
+    if (_url.isEmpty) return 'SUPABASE_URL فارغ - أضف --dart-define=SUPABASE_URL=...';
+    if (_key.isEmpty) return 'SUPABASE_KEY فارغ - أضف --dart-define=SUPABASE_KEY=...';
+    return 'الإعدادات تبدو سليمة';
+  }
 
   Map<String, String> get _headers => {
         'apikey': _key,
@@ -31,7 +42,7 @@ class SupabaseService {
     String currency = 'ج.م',
   }) async {
     if (!isConfigured) {
-      debugPrint('❌ Supabase key غير مضبوط');
+      debugPrint('❌ Supabase مش مضبوط: ${configDiagnostic}');
       return null;
     }
     try {

@@ -55,6 +55,12 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       return;
     }
 
+    // ▌ فحص إعدادات Supabase أولاً قبل أي طلب
+    if (!SupabaseService.instance.isConfigured) {
+      _showSupabaseNotConfiguredDialog();
+      return;
+    }
+
     setState(() => _sending = true);
 
     final selectedItems =
@@ -73,27 +79,139 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
             })
         .toList();
 
-    final code = await SupabaseService.instance.createSession(
-      repName: widget.rep.name,
-      repPhone: widget.rep.phone ?? '',
-      pharmacyName: pharmacyName,
-      items: items,
-      currency: currency,
-    );
+    try {
+      final code = await SupabaseService.instance.createSession(
+        repName: widget.rep.name,
+        repPhone: widget.rep.phone ?? '',
+        pharmacyName: pharmacyName,
+        items: items,
+        currency: currency,
+      );
 
-    if (mounted) {
-      setState(() => _sending = false);
-      if (code != null) {
-        setState(() {
-          _sessionCode = code;
-          _generatedLink = SupabaseService.instance.buildRepLink(code);
-        });
-        _showLinkSheet();
-      } else {
-        showSnack(context, 'فشل الإرسال - تحقق من الاتصال', isError: true);
+      if (mounted) {
+        setState(() => _sending = false);
+        if (code != null) {
+          setState(() {
+            _sessionCode = code;
+            _generatedLink = SupabaseService.instance.buildRepLink(code);
+          });
+          _showLinkSheet();
+        } else {
+          _showSendFailedDialog();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        _showSendFailedDialog(error: e.toString());
       }
     }
   }
+
+  /// ▌ حوار: Supabase مش مضبوط
+  void _showSupabaseNotConfiguredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('⚙️', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text('إعداد الخدمة مطلوب',
+                style: TextStyle(color: AppColors.warning, fontSize: 16, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: const Text(
+          'خدمة الإرسال للمندوبين تحتاج إعداد Supabase أولاً.\n\n'
+          'تواصل مع المطور لإعداد الخدمة السحابية.',
+          style: TextStyle(color: AppColors.textLight, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('حسناً', style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ▌ حوار: فشل الإرسال مع تفاصيل
+  void _showSendFailedDialog({String? error}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('❌', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text('فشل الإرسال',
+                style: TextStyle(color: AppColors.danger, fontSize: 16, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('تعذّر إرسال النواقص للمندوب.',
+                style: TextStyle(color: AppColors.textLight)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.dark,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('جرب الآتي:', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  const SizedBox(height: 6),
+                  _tipRow('📶', 'تأكد من اتصالك بالإنترنت'),
+                  _tipRow('🔄', 'أغلق التطبيق وافتحه مجدداً'),
+                  _tipRow('⏰', 'انتظر دقيقة وحاول مجدداً'),
+                ],
+              ),
+            ),
+            if (error != null) ...[
+              const SizedBox(height: 8),
+              Text('تفاصيل: $error',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _sendToRep();
+            },
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tipRow(String emoji, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 14)),
+        const SizedBox(width: 6),
+        Text(text, style: const TextStyle(color: AppColors.textColor, fontSize: 12)),
+      ],
+    ),
+  );
 
   void _showLinkSheet() {
     showModalBottomSheet(

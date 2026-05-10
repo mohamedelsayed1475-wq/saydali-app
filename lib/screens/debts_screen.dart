@@ -39,15 +39,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final currency = await DatabaseHelper.instance.getCurrency();
     final countryCode = await DatabaseHelper.instance.getCountryCode();
     
-    if (mounted) {
-      await context.read<CustomersProvider>().load();
-      setState(() {
-        _customers = context.read<CustomersProvider>().customers;
-        _currency = currency;
-        _countryCode = countryCode;
-        _loading = false;
-      });
-    }
+    if (!mounted) return;
+    await context.read<CustomersProvider>().load();
+    if (!mounted) return;
+    setState(() {
+      _customers = context.read<CustomersProvider>().customers;
+      _currency = currency;
+      _countryCode = countryCode;
+      _loading = false;
+    });
   }
 
   List<Customer> get _filtered => _customers
@@ -646,7 +646,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                       _formatDate(tx.transactionDate),
                       tx.description ?? (isDebt ? 'دين' : 'سداد'),
                       isDebt ? 'إضافة دين' : 'سداد دين',
-                      '${tx.amount.toStringAsFixed(2)} ج.م',
+                      '${tx.amount.toStringAsFixed(2)} $_currency',
                     ]
                         .map((t) => pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
@@ -759,7 +759,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   children: [
                     pw.Text('آخر سداد:',
                         style: const pw.TextStyle(fontSize: 11)),
-                    pw.Text('${lastPayment.amount} ج.م',
+                    pw.Text('${lastPayment.amount} $_currency',
                         style: pw.TextStyle(
                             fontSize: 11, fontWeight: pw.FontWeight.bold)),
                   ],
@@ -780,7 +780,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     pw.Text('الرصيد المتبقي:',
                         style: pw.TextStyle(
                             fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('${customer.totalDebt} ج.م',
+                    pw.Text('${customer.totalDebt} $_currency',
                         style: pw.TextStyle(
                             fontSize: 12, fontWeight: pw.FontWeight.bold)),
                   ],
