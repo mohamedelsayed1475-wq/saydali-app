@@ -22,6 +22,7 @@ android/build/
 android/key.properties
 android/local.properties
 *.jks
+keystore_base64.txt
 android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 
 # iOS
