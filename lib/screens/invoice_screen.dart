@@ -46,16 +46,33 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
 
   Future<void> _loadSuggestions() async {
-    // ▌ تحميل قائمة منتجات من قاعدة البيانات
-    final products = await DatabaseHelper.instance.getSetting('products_list');
-    if (products != null) {
+    final dictStr = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    if (dictStr != null) {
       try {
-        final List<dynamic> decoded = jsonDecode(products);
-        setState(() {
-          _suggestions = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        });
+        final List<dynamic> decoded = jsonDecode(dictStr);
+        if (mounted) setState(() => _suggestions = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       } catch (_) {}
+    } else {
+      final oldDictStr = await DatabaseHelper.instance.getSetting('drug_dictionary');
+      if (oldDictStr != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(oldDictStr);
+          if (mounted) setState(() => _suggestions = decoded.map((s) => {'enName': s.toString()}).toList());
+        } catch (_) {}
+      }
     }
+  }
+
+  bool _fuzzyMatch(String query, String text) {
+    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (q.isEmpty) return true;
+    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (t.contains(q)) return true;
+    int i = 0;
+    for (int j = 0; j < t.length && i < q.length; j++) {
+      if (t[j] == q[i]) i++;
+    }
+    return i == q.length;
   }
 
   @override
@@ -76,7 +93,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) {
-          double subtotal = items.fold(0, (s, i) => s + (i['price'] * i['qty']));
+          double subtotal = items.fold(0, (s, i) => s + (i['line_total'] ?? (i['price'] * i['qty'])));
           double total = subtotal - (subtotal * discount / 100);
 
           return DraggableScrollableSheet(
@@ -160,7 +177,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                                   color: AppColors.textColor,
                                                   fontWeight: FontWeight.w600)),
                                           Text(
-                                            '${item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
+                                            '${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
                                             style: const TextStyle(
                                                 color: AppColors.textMuted,
                                                 fontSize: 12),
@@ -169,7 +186,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                       ),
                                     ),
                                     Text(
-                                      '${(item['qty'] * item['price']).toStringAsFixed(2)}',
+                                      '${(item['line_total'] ?? (item['qty'] * item['price'])).toStringAsFixed(2)}',
                                       style: const TextStyle(
                                           color: AppColors.primary,
                                           fontWeight: FontWeight.w700),
@@ -287,12 +304,25 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
   }
 
-  void _addItem(
-      BuildContext ctx, List<Map<String, dynamic>> items, StateSetter setBS) {
+  void _addItem(BuildContext ctx, List<Map<String, dynamic>> items, StateSetter setBS) {
+    _showAddItemDialog(ctx, (newItem) {
+      setBS(() => items.add(newItem));
+    });
+  }
+
+  void _addItemToExisting(BuildContext ctx, List<Map<String, dynamic>> items, StateSetter setBS) {
+    _showAddItemDialog(ctx, (newItem) {
+      setBS(() => items.add(newItem));
+    });
+  }
+
+  void _showAddItemDialog(BuildContext ctx, Function(Map<String, dynamic>) onAdd) {
     final itemNameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController(text: '1');
-    List<Map<String, dynamic>> localSuggestions = [];
+    TextEditingController? autoCtrl;
+    final priceCtrl = TextEditingController(); // Box Price
+    final stripPriceCtrl = TextEditingController(); // Strip Price
+    final boxesCtrl = TextEditingController(text: '1');
+    final stripsCtrl = TextEditingController(text: '0');
 
     showDialog(
       context: ctx,
@@ -301,8 +331,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           backgroundColor: AppColors.darkCard,
           title: Row(
             children: [
-              const Text('إضافة صنف',
-                  style: TextStyle(color: AppColors.primary, fontSize: 16)),
+              const Text('إضافة صنف', style: TextStyle(color: AppColors.primary, fontSize: 16)),
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
@@ -314,186 +343,161 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   );
                   if (code != null) {
                     itemNameCtrl.text = code;
+                    if (autoCtrl != null) autoCtrl!.text = code;
                     setDBS(() {});
                   }
                 },
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ▌ اسم الصنف مع اقتراحات
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: itemNameCtrl,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'اسم الصنف',
-                            hintStyle: const TextStyle(color: AppColors.textMuted),
-                            filled: true,
-                            fillColor: AppColors.dark,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Autocomplete for items
+                Row(
+                  children: [
+                    Expanded(
+                      child: Autocomplete<Map<String, dynamic>>(
+                        optionsBuilder: (v) {
+                          if (v.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
+                          final terms = v.text.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+                          return _suggestions.where((s) {
+                            final en = s['enName']?.toString() ?? '';
+                            final ar = s['arName']?.toString() ?? '';
+                            final act = s['activeIngredient']?.toString() ?? '';
+                            final bar = s['barcode']?.toString() ?? '';
+                            return terms.every((term) =>
+                                _fuzzyMatch(term, en) ||
+                                _fuzzyMatch(term, ar) ||
+                                _fuzzyMatch(term, act) ||
+                                _fuzzyMatch(term, bar));
+                          });
+                        },
+                        displayStringForOption: (option) => option['enName']?.toString() ?? '',
+                        onSelected: (s) {
+                          itemNameCtrl.text = s['enName']?.toString() ?? '';
+                          if (s['price'] != null && s['price'].toString().isNotEmpty && s['price'].toString() != '0') {
+                            priceCtrl.text = s['price'].toString();
+                          }
+                        },
+                        fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                          autoCtrl = ctrl;
+                          return AppTextField(
+                            hint: 'اسم الصنف',
+                            controller: ctrl,
+                            focusNode: fn,
+                            onSubmitted: (_) => onSubmit(),
+                            onChanged: (val) => itemNameCtrl.text = val,
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              color: AppColors.darkCard,
+                              elevation: 4.0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(color: AppColors.darkBorder),
+                              ),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 250, maxWidth: 280),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (BuildContext context, int index) {
+                                    final option = options.elementAt(index);
+                                    final en = option['enName']?.toString() ?? '';
+                                    final ar = option['arName']?.toString() ?? '';
+                                    final price = option['price']?.toString() ?? '';
+                                    return InkWell(
+                                      onTap: () => onSelected(option),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(en, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                            if (ar.isNotEmpty) Text(ar, style: const TextStyle(color: AppColors.primary, fontSize: 11)),
+                                            if (price.isNotEmpty && price != '0') Text('$price $_currency', style: const TextStyle(color: AppColors.warning, fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          onChanged: (val) {
-                            // ▌ البحث المحلي
-                            final local = _suggestions.where((s) {
-                              final name = s['name']?.toString().toLowerCase() ?? '';
-                              return name.contains(val.toLowerCase());
-                            }).take(5).toList();
-                            setDBS(() {
-                              localSuggestions = local;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.dark,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.darkBorder),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 20),
-                          onPressed: () async {
-                            final code = await Navigator.push<String>(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ScannerScreen()),
-                            );
-                            if (code != null) {
-                              itemNameCtrl.text = code;
-                              setDBS(() {});
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  // ▌ عرض الاقتراحات المحلية
-                  if (localSuggestions.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 100),
-                      decoration: BoxDecoration(
-                        color: AppColors.dark,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.darkBorder),
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: localSuggestions.length,
-                        itemBuilder: (ctx, i) {
-                          final s = localSuggestions[i];
-                          return ListTile(
-                            dense: true,
-                            title: Text(s['name'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 13)),
-                            subtitle: s['price'] != null 
-                                ? Text('${s['price']} $_currency', style: const TextStyle(color: AppColors.primary, fontSize: 11))
-                                : null,
-                            onTap: () {
-                              itemNameCtrl.text = s['name']?.toString() ?? '';
-                              if (s['price'] != null) {
-                                priceCtrl.text = s['price'].toString();
-                              }
-                              setDBS(() {
-                                localSuggestions = [];
-                              });
-                            },
                           );
                         },
                       ),
                     ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                      child: TextField(
-                          controller: priceCtrl,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'السعر',
-                            hintStyle: const TextStyle(color: AppColors.textMuted),
-                            filled: true,
-                            fillColor: AppColors.dark,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ))),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: TextField(
-                          controller: qtyCtrl,
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            hintText: 'الكمية',
-                            hintStyle: const TextStyle(color: AppColors.textMuted),
-                            filled: true,
-                            fillColor: AppColors.dark,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppColors.darkBorder),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ))),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: AppTextField(hint: 'سعر العلبة', controller: priceCtrl, keyboardType: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: AppTextField(hint: 'عدد العلب', controller: boxesCtrl, keyboardType: TextInputType.number)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: AppTextField(hint: 'سعر الشريط', controller: stripPriceCtrl, keyboardType: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: AppTextField(hint: 'عدد الشرايط', controller: stripsCtrl, keyboardType: TextInputType.number)),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dCtx),
-              child: const Text('إلغاء',
-                  style: TextStyle(color: AppColors.textMuted)),
+              child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
               onPressed: () {
                 final name = itemNameCtrl.text.trim();
-                final price = double.tryParse(priceCtrl.text) ?? 0;
-                final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
-                final qty = rawQty.clamp(1, 9999);
+                final boxPrice = double.tryParse(priceCtrl.text) ?? 0;
+                final stripPrice = double.tryParse(stripPriceCtrl.text) ?? 0;
+                final boxes = int.tryParse(boxesCtrl.text) ?? 0;
+                final strips = int.tryParse(stripsCtrl.text) ?? 0;
+
                 if (name.isEmpty) {
                   showSnack(dCtx, 'أدخل اسم الصنف', isError: true);
                   return;
                 }
-                if (price <= 0) {
+                if (boxPrice <= 0 && stripPrice <= 0) {
                   showSnack(dCtx, 'أدخل السعر', isError: true);
                   return;
                 }
-                setBS(() => items.add({
-                      'name': name,
-                      'price': price,
-                      'qty': qty,
-                    }));
+                if (boxes == 0 && strips == 0) {
+                  showSnack(dCtx, 'أدخل الكمية', isError: true);
+                  return;
+                }
+
+                final lineTotal = (boxes * boxPrice) + (strips * stripPrice);
+                final mainPrice = boxPrice > 0 ? boxPrice : stripPrice;
+
+                String qtyText = '';
+                if (boxes > 0) qtyText += '$boxes علبة';
+                if (strips > 0) qtyText += (qtyText.isEmpty ? '' : ' و ') + '$strips شريط';
+
+                onAdd({
+                  'name': name,
+                  'price': mainPrice,
+                  'qty': 1,
+                  'qty_text': qtyText,
+                  'line_total': lineTotal,
+                  'boxes': boxes,
+                  'strips': strips,
+                });
                 Navigator.pop(dCtx);
               },
               child: const Text('إضافة'),
@@ -581,12 +585,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   ...items.asMap().entries.map((e) {
                     final i = e.key;
                     final item = e.value;
-                    final lineTotal = item['price'] * item['qty'];
+                    final lineTotal = item['line_total'] ?? (item['price'] * item['qty']);
                     return pw.TableRow(
                       children: [
                         '${i + 1}',
                         item['name'],
-                        '${item['qty']}',
+                        '${item['qty_text'] ?? item['qty']}',
                         '${item['price'].toStringAsFixed(2)}',
                         '${lineTotal.toStringAsFixed(2)}',
                       ]
@@ -676,7 +680,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) {
-          double subtotal = items.fold(0, (s, i) => s + (i['price'] * i['qty']));
+          double subtotal = items.fold(0, (s, i) => s + (i['line_total'] ?? (i['price'] * i['qty'])));
           double total = subtotal - (subtotal * discount / 100);
 
           return DraggableScrollableSheet(
@@ -745,12 +749,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(item['name'], style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w600)),
-                                          Text('${item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
+                                          Text('${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
                                               style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                                         ],
                                       ),
                                     ),
-                                    Text('${(item['qty'] * item['price']).toStringAsFixed(2)}',
+                                    Text('${(item['line_total'] ?? (item['qty'] * item['price'])).toStringAsFixed(2)}',
                                         style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
                                     const SizedBox(width: 8),
                                     GestureDetector(
@@ -841,50 +845,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
   }
 
-  // ▌ إضافة صنف للفاتورة المعدلة
-  void _addItemToExisting(BuildContext ctx, List<Map<String, dynamic>> items, StateSetter setBS) {
-    final itemNameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController(text: '1');
 
-    showDialog(
-      context: ctx,
-      builder: (dCtx) => AlertDialog(
-        backgroundColor: AppColors.darkCard,
-        title: const Text('إضافة صنف', style: TextStyle(color: AppColors.primary, fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(hint: 'اسم الصنف', controller: itemNameCtrl),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: AppTextField(hint: 'السعر', controller: priceCtrl, keyboardType: TextInputType.number)),
-                const SizedBox(width: 8),
-                Expanded(child: AppTextField(hint: 'الكمية', controller: qtyCtrl, keyboardType: TextInputType.number)),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () {
-              final name = itemNameCtrl.text.trim();
-              final price = double.tryParse(priceCtrl.text) ?? 0;
-              final rawQty = int.tryParse(qtyCtrl.text) ?? 1;
-              final qty = rawQty.clamp(1, 9999);
-              if (name.isEmpty || price <= 0) return;
-              setBS(() => items.add({'name': name, 'price': price, 'qty': qty}));
-              Navigator.pop(dCtx);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ▌ عرض تفاصيل فاتورة
   void _viewInvoiceDetails(Map<String, dynamic> invoice) {
@@ -915,8 +876,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('${item['name']} × ${item['qty']}', style: const TextStyle(color: AppColors.textColor)),
-                  Text('${(item['price'] * item['qty']).toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                  Text('${item['name']} × ${item['qty_text'] ?? item['qty']}', style: const TextStyle(color: AppColors.textColor)),
+                  Text('${(item['line_total'] ?? (item['price'] * item['qty'])).toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
                 ],
               ),
             )),
