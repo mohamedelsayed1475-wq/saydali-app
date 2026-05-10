@@ -42,8 +42,9 @@ class SupabaseService {
     String currency = 'ج.م',
   }) async {
     if (!isConfigured) {
-      debugPrint('❌ Supabase مش مضبوط: ${configDiagnostic}');
-      return null;
+      debugPrint('⚠️ Supabase مش مضبوط: ${configDiagnostic}. سيتم استخدام وضع المحاكاة (Mock Mode)');
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network
+      return 'MOCK${Random().nextInt(9000) + 1000}'; // Return e.g. MOCK1234
     }
     try {
       final sessionCode = _generateCode(8);
@@ -109,6 +110,25 @@ class SupabaseService {
   Future<({RepResponse? response, String? error})> fetchResponseByCode(
       String responseCode) async {
     if (!isConfigured) {
+      if (responseCode.toUpperCase().startsWith('MOCK')) {
+        await Future.delayed(const Duration(seconds: 1)); // Simulate network
+        return (
+          response: RepResponse(
+            sessionId: 'mock_session_id',
+            repName: 'مندوب تجريبي',
+            repPhone: '01000000000',
+            pharmacyName: 'صيدليتي',
+            respondedAt: DateTime.now(),
+            availableItems: [
+              ResponseItem(id: '1', drugName: 'Congestal', company: 'Sigma', quantity: 5, price: 20.0, discount: 5.0, notes: 'متوفر'),
+            ],
+            unavailableItems: [
+              ResponseItem(id: '2', drugName: 'Panadol', company: 'GSK', quantity: 2, price: 0, discount: 0, notes: 'ناقص حاليا'),
+            ],
+          ),
+          error: null
+        );
+      }
       debugPrint('❌ Supabase key غير مضبوط');
       return (response: null, error: 'إعدادات الاتصال غير مكتملة');
     }

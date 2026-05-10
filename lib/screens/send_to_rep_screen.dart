@@ -55,11 +55,11 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
       return;
     }
 
-    // ▌ فحص إعدادات Supabase أولاً قبل أي طلب
-    if (!SupabaseService.instance.isConfigured) {
-      _showSupabaseNotConfiguredDialog();
-      return;
-    }
+    // تم إلغاء الفحص الإجباري لدعم الـ Mock Mode
+    // if (!SupabaseService.instance.isConfigured) {
+    //   _showSupabaseNotConfiguredDialog();
+    //   return;
+    // }
 
     setState(() => _sending = true);
 

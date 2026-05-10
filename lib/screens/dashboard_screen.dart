@@ -50,102 +50,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    // Load all queries in parallel for better performance
-    final results = await Future.wait([
-      DatabaseHelper.instance.getShortageStats(),
-      DatabaseHelper.instance.getTotalDebt(),
-      DatabaseHelper.instance.getCurrency(),
-    ]);
+    try {
+      // Load all queries in parallel for better performance
+      final results = await Future.wait([
+        DatabaseHelper.instance.getShortageStats(),
+        DatabaseHelper.instance.getTotalDebt(),
+        DatabaseHelper.instance.getCurrency(),
+      ]);
 
-    final stats = results[0] as Map<String, int>;
-    final debt = results[1] as double;
-    final currency = results[2] as String;
+      final stats = results[0] as Map<String, int>;
+      final debt = results[1] as double;
+      final currency = results[2] as String;
 
-    // بناء التنبيهات الذكية
-    final alerts = <Map<String, dynamic>>[];
+      // بناء التنبيهات الذكية
+      final alerts = <Map<String, dynamic>>[];
 
-    // 1. نواقص معلقة > 12 ساعة
-    final db = await DatabaseHelper.instance.database;
-    final twelveHoursAgo =
-        DateTime.now().subtract(const Duration(hours: 12)).toIso8601String();
-    final oldPending = await db.query('shortages',
-        where: "status = 'pending' AND created_at <= ?",
-        whereArgs: [twelveHoursAgo]);
-    if (oldPending.isNotEmpty) {
-      alerts.add({
-        'icon': '⏰',
-        'title': '${oldPending.length} صنف قرب يبقى مستعصي!',
-        'subtitle': 'معلق أكتر من 12 ساعة - تواصل مع المندوب',
-        'color': AppColors.warning,
-      });
-    }
+      // 1. نواقص معلقة > 12 ساعة
+      final db = await DatabaseHelper.instance.database;
+      final twelveHoursAgo =
+          DateTime.now().subtract(const Duration(hours: 12)).toIso8601String();
+      final oldPending = await db.query('shortages',
+          where: "status = 'pending' AND created_at <= ?",
+          whereArgs: [twelveHoursAgo]);
+      if (oldPending.isNotEmpty) {
+        alerts.add({
+          'icon': '⏰',
+          'title': '${oldPending.length} صنف قرب يبقى مستعصي!',
+          'subtitle': 'معلق أكتر من 12 ساعة - تواصل مع المندوب',
+          'color': AppColors.warning,
+        });
+      }
 
-    // 2. ديون كبيرة
-    final customers = await DatabaseHelper.instance.getCustomers();
-    final highDebt = customers
-        .where((c) => (c['total_debt'] as num) > 500)
-        .toList();
-    if (highDebt.isNotEmpty) {
-      alerts.add({
-        'icon': '💸',
-        'title': '${highDebt.length} عميل عليه دين كبير',
-        'subtitle': 'إجمالي: ${debt.toStringAsFixed(0)} $currency',
-        'color': AppColors.danger,
-      });
-    }
+      // 2. ديون كبيرة
+      final customers = await DatabaseHelper.instance.getCustomers();
+      final highDebt = customers
+          .where((c) => (c['total_debt'] as num) > 500)
+          .toList();
+      if (highDebt.isNotEmpty) {
+        alerts.add({
+          'icon': '💸',
+          'title': '${highDebt.length} عميل عليه دين كبير',
+          'subtitle': 'إجمالي: ${debt.toStringAsFixed(0)} $currency',
+          'color': AppColors.danger,
+        });
+      }
 
-    // 2.5 ديون مستحقة اليوم/غداً
-    final dueDebts = await DatabaseHelper.instance.getDueDebts();
-    if (dueDebts.isNotEmpty) {
-      alerts.add({
-        'icon': '📅',
-        'title': '${dueDebts.length} عميل ميعاد سداده قرب!',
-        'subtitle': 'تواصل معاهم لتحصيل الديون',
-        'color': AppColors.warning,
-      });
-    }
+      // 2.5 ديون مستحقة اليوم/غداً
+      final dueDebts = await DatabaseHelper.instance.getDueDebts();
+      if (dueDebts.isNotEmpty) {
+        alerts.add({
+          'icon': '📅',
+          'title': '${dueDebts.length} عميل ميعاد سداده قرب!',
+          'subtitle': 'تواصل معاهم لتحصيل الديون',
+          'color': AppColors.warning,
+        });
+      }
 
-    // 3. نواقص مستعصية
-    final stubbornCount = stats['stubborn'] ?? 0;
-    if (stubbornCount > 3) {
-      alerts.add({
-        'icon': '🔴',
-        'title': '$stubbornCount صنف مستعصي',
-        'subtitle': 'جرب مندوب تاني أو ابحث عن بدائل',
-        'color': AppColors.danger,
-      });
-    }
+      // 3. نواقص مستعصية
+      final stubbornCount = stats['stubborn'] ?? 0;
+      if (stubbornCount > 3) {
+        alerts.add({
+          'icon': '🔴',
+          'title': '$stubbornCount صنف مستعصي',
+          'subtitle': 'جرب مندوب تاني أو ابحث عن بدائل',
+          'color': AppColors.danger,
+        });
+      }
 
-    // 4. نسبة تغطية ضعيفة
-    final total = stats['total'] ?? 0;
-    final covered = stats['covered'] ?? 0;
-    if (total > 5 && covered / total < 0.3) {
-      alerts.add({
-        'icon': '📉',
-        'title': 'نسبة التغطية ضعيفة (${((covered / total) * 100).toStringAsFixed(0)}%)',
-        'subtitle': 'حاول تتواصل مع المندوبين',
-        'color': AppColors.warning,
-      });
-    }
+      // 4. نسبة تغطية ضعيفة
+      final total = stats['total'] ?? 0;
+      final covered = stats['covered'] ?? 0;
+      if (total > 5 && covered / total < 0.3) {
+        alerts.add({
+          'icon': '📉',
+          'title': 'نسبة التغطية ضعيفة (${((covered / total) * 100).toStringAsFixed(0)}%)',
+          'subtitle': 'حاول تتواصل مع المندوبين',
+          'color': AppColors.warning,
+        });
+      }
 
-    // 5. أخبار إيجابية
-    if (alerts.isEmpty && total > 0) {
-      alerts.add({
-        'icon': '🎉',
-        'title': 'كل حاجة تمام!',
-        'subtitle': 'مفيش تنبيهات عاجلة - استمر!',
-        'color': AppColors.primary,
-      });
-    }
+      // 5. أخبار إيجابية
+      if (alerts.isEmpty && total > 0) {
+        alerts.add({
+          'icon': '🎉',
+          'title': 'كل حاجة تمام!',
+          'subtitle': 'مفيش تنبيهات عاجلة - استمر!',
+          'color': AppColors.primary,
+        });
+      }
 
-    if (mounted) {
-      setState(() {
-        _stats = stats;
-        _totalDebt = debt;
-        _currency = currency;
-        _alerts = alerts;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _stats = stats;
+          _totalDebt = debt;
+          _currency = currency;
+          _alerts = alerts;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading dashboard data: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
