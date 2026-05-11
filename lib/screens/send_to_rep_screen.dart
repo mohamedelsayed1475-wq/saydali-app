@@ -109,6 +109,36 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
   }
 
 
+  /// ▌ حوار: Supabase مش مضبوط
+  void _showSupabaseNotConfiguredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('⚙️', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text('إعداد الخدمة مطلوب',
+                style: TextStyle(color: AppColors.warning, fontSize: 16, fontWeight: FontWeight.w700)),
+          ],
+        ),
+        content: const Text(
+          'خدمة الإرسال للمندوبين تحتاج إعداد Supabase أولاً.\n\n'
+          'تواصل مع المطور لإعداد الخدمة السحابية.',
+          style: TextStyle(color: AppColors.textLight, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('حسناً', style: TextStyle(color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// ▌ حوار: فشل الإرسال مع تفاصيل
   void _showSendFailedDialog({String? error}) {
     showDialog(
