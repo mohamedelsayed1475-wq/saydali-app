@@ -332,6 +332,60 @@ class SupabaseService {
     }
   }
 
+  // ── إضافة كود اشتراك ──────────────────────────────────────────────────
+  Future<bool> insertSubscriptionCode(Map<String, dynamic> data) async {
+    if (!isConfigured) return false;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_url/subscription_codes'),
+            headers: _headers,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 10));
+      return res.statusCode == 201 || res.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ insertSubscriptionCode error: $e');
+      return false;
+    }
+  }
+
+  // ── تحديث الاستخدام ──────────────────────────────────────────────────
+  Future<bool> updateSubscriptionCodeUsage(String code, int usedCount) async {
+    if (!isConfigured) return false;
+    try {
+      final res = await http
+          .patch(
+            Uri.parse('$_url/subscription_codes?code=eq.${code.toUpperCase()}'),
+            headers: _headers,
+            body: jsonEncode({'used_count': usedCount}),
+          )
+          .timeout(const Duration(seconds: 10));
+      return res.statusCode == 200 || res.statusCode == 204;
+    } catch (e) {
+      debugPrint('❌ updateSubscriptionCodeUsage error: $e');
+      return false;
+    }
+  }
+
+  // ── إضافة إعلان ──────────────────────────────────────────────────
+  Future<bool> insertAd(Map<String, dynamic> data) async {
+    if (!isConfigured) return false;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_url/ads'),
+            headers: _headers,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 10));
+      return res.statusCode == 201 || res.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ insertAd error: $e');
+      return false;
+    }
+  }
+
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
   String buildRepLink(String sessionCode) {
     final baseUrl = EnvConfig.webPortalBaseUrl;

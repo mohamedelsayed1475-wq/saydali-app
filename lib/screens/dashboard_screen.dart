@@ -270,7 +270,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+
+          // Stats Row 3 - Pending & Offered
+          Row(
+            children: [
+              StatCard(
+                  icon: '⏳',
+                  value: '$pending',
+                  label: 'بانتظار الرد',
+                  valueColor: AppColors.warning),
+              const SizedBox(width: 10),
+              StatCard(
+                  icon: '🎁',
+                  value: '$offered',
+                  label: 'عروض متاحة',
+                  valueColor: const Color(0xFF2563EB)),
+            ],
+          ),
 
           // Coverage Bar
           Container(

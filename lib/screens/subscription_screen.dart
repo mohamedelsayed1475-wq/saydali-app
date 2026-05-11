@@ -129,6 +129,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               'subscription_codes', {'used_count': usedCount + 1},
               where: 'code = ?', whereArgs: [code]);
         }
+        await SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+        
         setState(() {
           _discountPercent = discount;
           _currentPrice = 200 - (200 * discount / 100);
@@ -140,6 +142,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               'subscription_codes', {'used_count': usedCount + 1},
               where: 'code = ?', whereArgs: [code]);
         }
+        await SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();

@@ -8,6 +8,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf;
 import 'package:archive/archive.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../database/database_helper.dart';
+import '../utils/fuzzy_search.dart';
 import 'platform_service.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1377,18 +1378,7 @@ ${info['interactions']}
         text: buf.toString().trim(), intent: ChatIntent.searchPlatform);
   }
 
-  // ── مطابقة ضبابية ──────────────────────────────────────────────────
-  bool _fuzzyMatch(String query, String text) {
-    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (q.isEmpty) return true;
-    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (t.contains(q)) return true;
-    int i = 0;
-    for (int j = 0; j < t.length && i < q.length; j++) {
-      if (t[j] == q[i]) i++;
-    }
-    return i == q.length;
-  }
+
 
   // ── تحميل القاموس ──────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> _loadDictionary() async {
@@ -1438,10 +1428,10 @@ ${info['interactions']}
             final act = drug['activeIngredient']?.toString() ?? '';
             final bar = drug['barcode']?.toString() ?? '';
             return terms.every((term) =>
-                _fuzzyMatch(term, en) ||
-                _fuzzyMatch(term, ar) ||
-                _fuzzyMatch(term, act) ||
-                _fuzzyMatch(term, bar));
+                FuzzySearch.match(term, en) ||
+                FuzzySearch.match(term, ar) ||
+                FuzzySearch.match(term, act) ||
+                FuzzySearch.match(term, bar));
           })
           .take(8)
           .toList();
@@ -1585,61 +1575,7 @@ ${info['interactions']}
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // ▌ البحث في القاموس المحلي المفصّل (v2)
-  // ════════════════════════════════════════════════════════════════════════════
-  Future<ChatResponse?> _searchInDictionary(
-      String query, List<Map<String, dynamic>> dictionary) async {
-    final normalizedQuery = query.toLowerCase().trim();
-    if (normalizedQuery.length < 2) return null;
 
-    final matches = dictionary
-        .where((drug) {
-          final en = drug['enName']?.toString().toLowerCase() ?? '';
-          final ar = drug['arName']?.toString().toLowerCase() ?? '';
-          final active =
-              drug['activeIngredient']?.toString().toLowerCase() ?? '';
-          return en.contains(normalizedQuery) ||
-              ar.contains(normalizedQuery) ||
-              active.contains(normalizedQuery) ||
-              _fuzzyMatch(normalizedQuery, en);
-        })
-        .take(5)
-        .toList();
-
-    if (matches.isEmpty) return null;
-
-    if (matches.length == 1) {
-      final drug = matches.first;
-      final enName = drug['enName'] ?? '';
-      final arName = drug['arName'] ?? '';
-      final active = drug['activeIngredient'] ?? '';
-      final company = drug['company'] ?? '';
-      final form = drug['form'] ?? '';
-
-      String details = '💊 $enName';
-      if (arName.toString().isNotEmpty) details += ' ($arName)';
-      details += '\n\n';
-      if (active.toString().isNotEmpty)
-        details += '🧪 المادة الفعالة: $active\n';
-      if (company.toString().isNotEmpty) details += '🏭 الشركة: $company\n';
-      if (form.toString().isNotEmpty) details += '💊 الشكل: $form\n';
-      details += '\n💡 اكتب "بديل $enName" للبحث عن بدائل.';
-
-      return ChatResponse(text: details, intent: ChatIntent.drugInquiry);
-    } else {
-      final buffer =
-          StringBuffer('🔍 نتائج البحث عن "$query" (${matches.length}):\n\n');
-      for (final drug in matches) {
-        final en = drug['enName'] ?? '';
-        final ar = drug['arName'] ?? '';
-        buffer.writeln('💊 $en${ar.toString().isNotEmpty ? ' ($ar)' : ''}');
-      }
-      buffer.writeln('\n💡 اختر دواء معيناً للحصول على تفاصيل.');
-      return ChatResponse(
-          text: buffer.toString(), intent: ChatIntent.searchDrug);
-    }
-  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // ▌ البحث في الكتب المرفوعة مع الترجمة التلقائية (v2)
@@ -1715,7 +1651,7 @@ ${info['interactions']}
       for (final line in lines) {
         bool matches = false;
         if (terms.length == 1) {
-          matches = _fuzzyMatch(terms.first, line);
+          matches = FuzzySearch.match(terms.first, line);
         } else {
           matches = terms.every((term) => line.toLowerCase().contains(term));
         }
@@ -1973,7 +1909,7 @@ $systemPrompt
           final ar = drug['arName']?.toString() ?? '';
           if (en.toLowerCase().contains(normalized) ||
               ar.toLowerCase().contains(normalized) ||
-              _fuzzyMatch(normalized, en)) {
+              FuzzySearch.match(normalized, en)) {
             results.add({'enName': en, 'arName': ar, 'source': 'dictionary'});
             if (results.length >= 8) break;
           }
@@ -2001,7 +1937,7 @@ $systemPrompt
                 final val = cell?.value?.toString() ?? '';
                 if (val.length > 3 &&
                     (val.toLowerCase().contains(normalized) ||
-                        _fuzzyMatch(normalized, val))) results.add(val.trim());
+                        FuzzySearch.match(normalized, val))) results.add(val.trim());
               }
             }
           }
@@ -2012,7 +1948,7 @@ $systemPrompt
               final val = part.trim();
               if (val.length > 3 &&
                   (val.toLowerCase().contains(normalized) ||
-                      _fuzzyMatch(normalized, val))) results.add(val);
+                      FuzzySearch.match(normalized, val))) results.add(val);
             }
           }
         }
@@ -2110,7 +2046,7 @@ $systemPrompt
             final name = text.split(' - ').first.split(':').first.trim();
             if (name.length > 2 &&
                 name.length < 40 &&
-                _fuzzyMatch(query.toLowerCase(), name)) results.add(name);
+                FuzzySearch.match(query.toLowerCase(), name)) results.add(name);
           }
         }
         if (results.isNotEmpty)
@@ -2147,7 +2083,7 @@ $systemPrompt
     final normalized = query.toLowerCase();
     return commonDrugs
         .where((d) =>
-            d.toLowerCase().contains(normalized) || _fuzzyMatch(normalized, d))
+            d.toLowerCase().contains(normalized) || FuzzySearch.match(normalized, d))
         .take(8)
         .map((d) => {'enName': d, 'arName': '', 'source': 'common'})
         .toList();

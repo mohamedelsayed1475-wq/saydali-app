@@ -6,6 +6,7 @@ import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
+import '../services/supabase_service.dart';
 
 class DevPanelScreen extends StatefulWidget {
   const DevPanelScreen({super.key});
@@ -155,7 +156,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     final code = codeCtrl.text.trim().toUpperCase();
                     if (code.isEmpty) return;
                     final db = await DatabaseHelper.instance.database;
-                    await db.insert('subscription_codes', {
+                    final data = {
                       'code': code,
                       'plan': plan,
                       'duration_days': int.tryParse(daysCtrl.text) ?? 30,
@@ -164,7 +165,9 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'used_count': 0,
                       'is_active': 1,
                       'created_at': DateTime.now().toIso8601String(),
-                    });
+                    };
+                    await db.insert('subscription_codes', data);
+                    await SupabaseService.instance.insertSubscriptionCode(data);
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadCodes();
                     if (mounted) showSnack(context, 'تم إضافة الكود ✅');
@@ -319,7 +322,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     }
 
                     final db = await DatabaseHelper.instance.database;
-                    await db.insert('ads', {
+                    final data = {
                       'title': titleCtrl.text.trim(),
                       'body': bodyCtrl.text.trim(),
                       'image_url': pickedImagePath,
@@ -331,7 +334,9 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'screen': screen,
                       'skip_duration': int.tryParse(durationCtrl.text) ?? 0,
                       'created_at': DateTime.now().toIso8601String(),
-                    });
+                    };
+                    await db.insert('ads', data);
+                    await SupabaseService.instance.insertAd(data);
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadAds();
                     if (mounted) showSnack(context, 'تم نشر الإعلان ✅');

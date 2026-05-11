@@ -8,6 +8,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import '../utils/fuzzy_search.dart';
 import 'scanner_screen.dart';
 
 class InvoiceScreen extends StatefulWidget {
@@ -61,18 +62,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         } catch (_) {}
       }
     }
-  }
-
-  bool _fuzzyMatch(String query, String text) {
-    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (q.isEmpty) return true;
-    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (t.contains(q)) return true;
-    int i = 0;
-    for (int j = 0; j < t.length && i < q.length; j++) {
-      if (t[j] == q[i]) i++;
-    }
-    return i == q.length;
   }
 
   @override
@@ -368,10 +357,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             final act = s['activeIngredient']?.toString() ?? '';
                             final bar = s['barcode']?.toString() ?? '';
                             return terms.every((term) =>
-                                _fuzzyMatch(term, en) ||
-                                _fuzzyMatch(term, ar) ||
-                                _fuzzyMatch(term, act) ||
-                                _fuzzyMatch(term, bar));
+                                FuzzySearch.match(term, en) ||
+                                FuzzySearch.match(term, ar) ||
+                                FuzzySearch.match(term, act) ||
+                                FuzzySearch.match(term, bar));
                           });
                         },
                         displayStringForOption: (option) => option['enName']?.toString() ?? '',

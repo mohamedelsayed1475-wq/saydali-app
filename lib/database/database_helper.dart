@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -618,5 +620,29 @@ class DatabaseHelper {
         whereArgs: [assistantId],
         orderBy: 'created_at DESC',
         limit: limit);
+  }
+
+  // ── صيانة قاعدة البيانات ────────────────────────────────────────────
+  /// تنظيف وضغط قاعدة البيانات لاستعادة المساحة
+  Future<void> vacuumDatabase() async {
+    final db = await database;
+    await db.execute('VACUUM');
+    debugPrint('✅ تم ضغط قاعدة البيانات بنجاح');
+  }
+
+  /// حجم قاعدة البيانات بالكيلوبايت
+  Future<double> getDatabaseSizeKB() async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final path = '$dbPath/saydali_pro.db';
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.length();
+        return bytes / 1024;
+      }
+    } catch (e) {
+      debugPrint('❌ Error getting DB size: $e');
+    }
+    return 0;
   }
 }

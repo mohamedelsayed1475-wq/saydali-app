@@ -15,6 +15,8 @@ import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import '../utils/fuzzy_search.dart';
+
 
 import 'package:flutter/services.dart';
 import 'scanner_screen.dart';
@@ -29,10 +31,16 @@ class ShortagesScreen extends StatefulWidget {
 class _ShortagesScreenState extends State<ShortagesScreen> {
   String _filter = 'all';
   String _search = '';
+
+  /// ▌ مطابقة ضبابية سريعة (wrapper لـ FuzzySearch)
+  bool _fuzzyMatch(String query, String text) {
+    return FuzzySearch.match(query, text);
+  }
   List<Map<String, dynamic>> _suggestions = [];
   List<Map<String, dynamic>> _aiDrugSuggestions = [];
   bool _aiSearching = false;
   Timer? _aiDebounce;
+  final _searchController = TextEditingController();
 
   final _filters = [
     ('all', 'الكل'),
@@ -45,6 +53,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   @override
   void dispose() {
     _aiDebounce?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -125,7 +134,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       if (en.toLowerCase().contains(normalized) ||
           ar.toLowerCase().contains(normalized) ||
           act.toLowerCase().contains(normalized) ||
-          _fuzzyMatch(normalized, en)) {
+          FuzzySearch.match(normalized, en)) {
         results.add(s);
         if (results.length >= 10) break;
       }
@@ -136,57 +145,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   Future<void> _loadShortages() async {
     await context.read<ShortagesProvider>().load();
-  }
-
-  bool _fuzzyMatch(String query, String text) {
-    String q = query.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (q.isEmpty) return true;
-    String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-    if (t.contains(q)) return true;
-
-    // ▌ Subsequence matching
-    int i = 0;
-    for (int j = 0; j < t.length && i < q.length; j++) {
-      if (t[j] == q[i]) i++;
-    }
-    if (i == q.length) return true;
-
-    // ▌ Levenshtein distance — لو الكلمة قريبة (أخطاء إملائية)
-    if (q.length >= 3 && t.length >= 3) {
-      final maxDist = (q.length / 3).ceil(); // سماح 1 خطأ لكل 3 حروف
-      if (_levenshtein(q, t.length > q.length + 3 ? t.substring(0, q.length + 3) : t) <= maxDist) {
-        return true;
-      }
-      // ▌ فحص كل جزء من النص بطول الاستعلام
-      for (int k = 0; k <= t.length - q.length; k++) {
-        if (_levenshtein(q, t.substring(k, k + q.length)) <= maxDist) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /// ▌ حساب المسافة بين كلمتين (Levenshtein Distance)
-  int _levenshtein(String s, String t) {
-    if (s == t) return 0;
-    if (s.isEmpty) return t.length;
-    if (t.isEmpty) return s.length;
-
-    List<int> prev = List.generate(t.length + 1, (i) => i);
-    List<int> curr = List.filled(t.length + 1, 0);
-
-    for (int i = 1; i <= s.length; i++) {
-      curr[0] = i;
-      for (int j = 1; j <= t.length; j++) {
-        final cost = s[i - 1] == t[j - 1] ? 0 : 1;
-        curr[j] = [curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost].reduce((a, b) => a < b ? a : b);
-      }
-      final temp = prev;
-      prev = curr;
-      curr = temp;
-    }
-    return prev[t.length];
   }
 
   /// ▌ حساب درجة التطابق (كلما زادت كلما كان أفضل)
@@ -217,7 +175,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
       // كل كلمة لازم تتطابق (الاسم أو الشركة)
       return terms.every((term) =>
-          _fuzzyMatch(term, s.name) || _fuzzyMatch(term, s.company));
+          FuzzySearch.match(term, s.name) || FuzzySearch.match(term, s.company));
     }).toList();
 
     // ▌ ترتيب النتائج بالأهمية لو فيه بحث
@@ -825,6 +783,51 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  /// ▌ حذف جماعي للأصناف المعروضة حالياً
+  Future<void> _bulkDeleteFiltered() async {
+    final provider = context.read<ShortagesProvider>();
+    final filtered = _getFiltered(provider.shortages);
+    if (filtered.isEmpty) {
+      showSnack(context, 'لا توجد أصناف للحذف', isError: true);
+      return;
+    }
+
+    final statusLabel = _filter == 'all' ? 'جميع الأصناف' : _filters.firstWhere((f) => f.$1 == _filter).$2;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('⚠️ حذف جماعي',
+            style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
+        content: Text(
+          'هل تريد حذف ${filtered.length} صنف ($statusLabel)؟\n\n⚠️ لا يمكن التراجع عن هذا الإجراء.',
+          style: const TextStyle(color: AppColors.textLight, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: Text('حذف ${filtered.length} صنف'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      for (final item in filtered) {
+        if (item.id != null) {
+          await provider.delete(item.id!);
+        }
+      }
+      if (mounted) showSnack(context, 'تم حذف ${filtered.length} صنف ✅');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ShortagesProvider>();
@@ -843,16 +846,32 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 // Search
                 TextField(
                   onChanged: (v) => setState(() => _search = v),
+                  controller: _searchController,
                   style: const TextStyle(color: AppColors.textColor),
                   decoration: InputDecoration(
                     hintText: 'ابحث عن دواء...',
                     prefixIcon:
                         const Icon(Icons.search, color: AppColors.textMuted),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.upload_file,
-                          color: AppColors.primary),
-                      tooltip: 'استيراد Excel',
-                      onPressed: _importExcel,
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_search.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear,
+                                color: AppColors.textMuted, size: 20),
+                            tooltip: 'مسح البحث',
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _search = '');
+                            },
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.upload_file,
+                              color: AppColors.primary),
+                          tooltip: 'استيراد Excel',
+                          onPressed: _importExcel,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -902,12 +921,30 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           onPressed: _importFromClipboard,
                         ),
                       ),
+                      // Bulk Delete - only show when a specific filter is active
+                      if (_filter != 'all' && _filtered.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: ActionChip(
+                            avatar: const Icon(Icons.delete_sweep,
+                                size: 16, color: Colors.white),
+                            label: Text('حذف ${_filtered.length}',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600)),
+                            backgroundColor: AppColors.danger,
+                            onPressed: _bulkDeleteFiltered,
+                          ),
+                        ),
                       ..._filters.map((f) {
                         final isActive = _filter == f.$1;
+                        final count = f.$1 == 'all'
+                            ? _shortages.length
+                            : _shortages.where((s) => s.status == f.$1).length;
                         return Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: FilterChip(
-                            label: Text(f.$2),
+                            label: Text('${f.$2} ($count)'),
                             selected: isActive,
                             onSelected: (_) => setState(() => _filter = f.$1),
                             selectedColor: AppColors.primary,

@@ -373,6 +373,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        _settingsTile(
+          emoji: '🧹',
+          title: 'تحسين قاعدة البيانات',
+          subtitle: 'ضغط وتنظيف البيانات لتقليل الحجم',
+          onTap: _optimizeDB,
+          trailing: const Icon(Icons.speed, color: AppColors.warning),
+        ),
         const SizedBox(height: 16),
 
         // App Info
@@ -577,7 +585,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         TextCellValue('English Name'),
         TextCellValue('Arabic Name'),
         TextCellValue('Active Ingredient'),
-        TextCellValue('Barcode')
+        TextCellValue('Barcode'),
+        TextCellValue('Price')
       ]);
       
       for (var item in decoded) {
@@ -585,7 +594,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextCellValue(item['enName']?.toString() ?? ''),
           TextCellValue(item['arName']?.toString() ?? ''),
           TextCellValue(item['activeIngredient']?.toString() ?? ''),
-          TextCellValue(item['barcode']?.toString() ?? '')
+          TextCellValue(item['barcode']?.toString() ?? ''),
+          TextCellValue(item['price']?.toString() ?? '')
         ]);
       }
       
@@ -624,6 +634,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirm == true) {
       await DatabaseHelper.instance.setSetting('drug_dictionary_v2', '[]');
       if (mounted) showSnack(context, 'تم مسح القاموس بنجاح ✅');
+    }
+  }
+
+  Future<void> _optimizeDB() async {
+    try {
+      final sizeBefore = await DatabaseHelper.instance.getDatabaseSizeKB();
+      if (mounted) showSnack(context, 'جاري تحسين قاعدة البيانات...');
+      await DatabaseHelper.instance.vacuumDatabase();
+      final sizeAfter = await DatabaseHelper.instance.getDatabaseSizeKB();
+      if (mounted) {
+        final saved = sizeBefore - sizeAfter;
+        showSnack(context,
+            '✅ تم التحسين! الحجم: ${sizeAfter.toStringAsFixed(0)} KB${saved > 0 ? ' (وفّرت ${saved.toStringAsFixed(0)} KB)' : ''}');
+      }
+    } catch (e) {
+      if (mounted) showSnack(context, 'خطأ في التحسين: $e', isError: true);
     }
   }
 
