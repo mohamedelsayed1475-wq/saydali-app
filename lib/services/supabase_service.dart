@@ -46,6 +46,10 @@ class SupabaseService {
       await Future.delayed(const Duration(seconds: 1)); // Simulate network
       return 'MOCK${Random().nextInt(9000) + 1000}'; // Return e.g. MOCK1234
     }
+
+    // ── تنظيف تلقائي للجلسات المنتهية قبل الإنشاء ──
+    await autoCleanupBeforeCreate();
+
     try {
       final sessionCode = _generateCode(8);
 
@@ -61,7 +65,7 @@ class SupabaseService {
               'currency': currency,
               'status': 'pending',
               'expires_at': DateTime.now()
-                  .add(const Duration(hours: 4))
+                  .add(const Duration(hours: 2))  // ⬅️ تم التغيير من 4 إلى 2
                   .toIso8601String(),
             }),
           )
@@ -104,14 +108,11 @@ class SupabaseService {
   }
 
   // ── استقبال رد المندوب بالكود ──────────────────────────────────────────────────
-  /// يرجع ({RepResponse? response, String? error}).
-  /// error == null يعني نجاح أو كود خاطئ (response == null).
-  /// error != null يعني فشل في الاتصال.
   Future<({RepResponse? response, String? error})> fetchResponseByCode(
       String responseCode) async {
     if (!isConfigured) {
       if (responseCode.toUpperCase().startsWith('MOCK')) {
-        await Future.delayed(const Duration(seconds: 1)); // Simulate network
+        await Future.delayed(const Duration(seconds: 1));
         return (
           response: RepResponse(
             sessionId: 'mock_session_id',
@@ -123,7 +124,7 @@ class SupabaseService {
               ResponseItem(id: '1', drugName: 'Congestal', company: 'Sigma', quantity: 5, price: 20.0, discount: 5.0, notes: 'متوفر'),
             ],
             unavailableItems: [
-              ResponseItem(id: '2', drugName: 'Panadol', company: 'GSK', quantity: 2, price: 0, discount: 0, notes: 'ناقص حاليا'),
+              ResponseItem(id: '2', drugName: 'Panadol', company: 'GSK', quantity: 2, price: 0, discount: 0, notes: 'ناقص'),
             ],
           ),
           error: null
@@ -149,7 +150,7 @@ class SupabaseService {
         );
       }
       final codes = jsonDecode(codeRes.body) as List;
-      if (codes.isEmpty) return (response: null, error: null); // كود غير موجود
+      if (codes.isEmpty) return (response: null, error: null);
 
       final sessionId = codes[0]['session_id'];
 
@@ -209,11 +210,71 @@ class SupabaseService {
     }
   }
 
-  // ── حذف الجلسة وبياناتها من السحابة (توفير التكلفة) ──────────────────
+  // ── تجديد جلسة منتهية ──────────────────────────────────────────────────
+  /// يمدد صلاحية جلسة موجودة أو ينشئ جلسة جديدة إذا لم توجد
+  Future<String?> renewSession(String oldSessionCode, {
+    required String repName,
+    required String repPhone,
+    required String pharmacyName,
+    required List<Map<String, dynamic>> items,
+    String currency = 'ج.م',
+  }) async {
+    if (!isConfigured) {
+      await Future.delayed(const Duration(seconds: 1));
+      return 'MOCK${Random().nextInt(9000) + 1000}';
+    }
+    try {
+      final sessionRes = await http
+          .get(
+            Uri.parse('$_url/rep_sessions?session_code=eq.${oldSessionCode.toUpperCase()}&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (sessionRes.statusCode == 200) {
+        final sessions = jsonDecode(sessionRes.body) as List;
+        if (sessions.isNotEmpty) {
+          final sessionId = sessions[0]['id'];
+          await http
+              .patch(
+                Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
+                headers: _headers,
+                body: jsonEncode({
+                  'expires_at': DateTime.now()
+                      .add(const Duration(hours: 2))
+                      .toIso8601String(),
+                  'status': 'pending',
+                }),
+              )
+              .timeout(const Duration(seconds: 10));
+          debugPrint('✅ تم تجديد الجلسة: $oldSessionCode');
+          return oldSessionCode;
+        }
+      }
+
+      return createSession(
+        repName: repName,
+        repPhone: repPhone,
+        pharmacyName: pharmacyName,
+        items: items,
+        currency: currency,
+      );
+    } catch (e) {
+      debugPrint('❌ renewSession error: $e');
+      return createSession(
+        repName: repName,
+        repPhone: repPhone,
+        pharmacyName: pharmacyName,
+        items: items,
+        currency: currency,
+      );
+    }
+  }
+
+  // ── حذف الجلسة وبياناتها من السحابة ──────────────────
   Future<void> deleteSession(String sessionId) async {
     if (!isConfigured) return;
     try {
-      // 1. حذف الأصناف المرتبطة بالجلسة
       await http
           .delete(
             Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
@@ -221,7 +282,6 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      // 2. حذف كود الرد
       await http
           .delete(
             Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
@@ -229,7 +289,6 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      // 3. حذف الجلسة نفسها
       await http
           .delete(
             Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
@@ -275,7 +334,79 @@ class SupabaseService {
 
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
   String buildRepLink(String sessionCode) {
-    return '${EnvConfig.webPortalBaseUrl}/?code=$sessionCode';
+    final baseUrl = EnvConfig.webPortalBaseUrl;
+    final separator = baseUrl.endsWith('/') ? '' : '/';
+    return '$baseUrl$separator?code=$sessionCode';
+  }
+
+  // ── حذف الجلسات المنتهية تلقائياً (تنظيف) ──────────────────────────────
+  /// يحذف الجلسات اللي انتهت من أكثر من 24 ساعة لتنظيف السحابة
+  Future<int> cleanupExpiredSessions() async {
+    if (!isConfigured) return 0;
+    try {
+      final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+      
+      // 1. نجيب كل الجلسات المنتهية
+      final sessionsRes = await http
+          .get(
+            Uri.parse(
+                '$_url/rep_sessions?expires_at=lt.${cutoff.toIso8601String()}&select=id'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (sessionsRes.statusCode != 200) return 0;
+      final sessions = jsonDecode(sessionsRes.body) as List;
+      
+      if (sessions.isEmpty) {
+        debugPrint('✅ لا توجد جلسات منتهية للحذف');
+        return 0;
+      }
+
+      int deletedCount = 0;
+      for (final session in sessions) {
+        final sessionId = session['id'];
+        // حذف الأصناف المرتبطة
+        await http
+            .delete(
+              Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 10));
+        // حذف أكواد الردود
+        await http
+            .delete(
+              Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 10));
+        // حذف الجلسة
+        await http
+            .delete(
+              Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 10));
+        deletedCount++;
+      }
+
+      debugPrint('✅ تم حذف $deletedCount جلسة منتهية');
+      return deletedCount;
+    } catch (e) {
+      debugPrint('❌ cleanupExpiredSessions error: $e');
+      return 0;
+    }
+  }
+
+  // ── حذف الجلسات المنتهية قبل إنشاء جديدة ──────────────────────────────
+  /// يستدعى قبل إنشاء جلسة جديدة لتنظيف المساحة
+  Future<void> autoCleanupBeforeCreate() async {
+    if (!isConfigured) return;
+    try {
+      await cleanupExpiredSessions();
+    } catch (e) {
+      debugPrint('⚠️ خطأ في التنظيف التلقائي: $e');
+    }
   }
 }
 

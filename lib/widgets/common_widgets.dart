@@ -163,6 +163,7 @@ class AppTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final TextInputType? keyboardType;
   final int maxLines;
+  final int? maxLength;
   final Widget? prefix;
   final Widget? suffix;
   final void Function(String)? onChanged;
@@ -175,6 +176,7 @@ class AppTextField extends StatelessWidget {
     this.focusNode,
     this.keyboardType,
     this.maxLines = 1,
+    this.maxLength,
     this.prefix,
     this.suffix,
     this.onChanged,
@@ -188,6 +190,7 @@ class AppTextField extends StatelessWidget {
       focusNode: focusNode,
       keyboardType: keyboardType,
       maxLines: maxLines,
+      maxLength: maxLength,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       style: const TextStyle(color: AppColors.textColor),

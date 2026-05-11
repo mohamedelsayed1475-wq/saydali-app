@@ -104,21 +104,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         return;
       }
 
-      final isActive = data['is_active'] == true || data['is_active'] == 1;
+      // ── التحقق من حالة الكود ──
+      final rawActive = data['is_active'];
+      final bool isActive = rawActive == true || rawActive == 1 ||
+          rawActive == '1' || rawActive == 'true';
       if (!isActive) {
         setState(() => _codeError = '❌ الكود غير فعال أو منتهي');
         return;
       }
 
-      final maxUses = data['max_uses'] ?? 1;
-      final usedCount = data['used_count'] ?? 0;
+      final maxUses = (data['max_uses'] is int) ? data['max_uses'] : int.tryParse(data['max_uses']?.toString() ?? '1') ?? 1;
+      final usedCount = (data['used_count'] is int) ? data['used_count'] : int.tryParse(data['used_count']?.toString() ?? '0') ?? 0;
       if (usedCount >= maxUses) {
         setState(() => _codeError = '❌ الكود تم استخدامه بالكامل');
         return;
       }
 
-      final discount = (data['discount_percent'] ?? 0) as int;
-      final duration = (data['duration_days'] ?? 30) as int;
+      final discount = (data['discount_percent'] is int) ? data['discount_percent'] : int.tryParse(data['discount_percent']?.toString() ?? '0') ?? 0;
+      final duration = (data['duration_days'] is int) ? data['duration_days'] : int.tryParse(data['duration_days']?.toString() ?? '30') ?? 30;
 
       if (discount > 0 && discount < 100) {
         if (isLocal) {

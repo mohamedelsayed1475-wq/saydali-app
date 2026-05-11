@@ -215,3 +215,115 @@ class DebtTransaction {
         'description': description,
       };
 }
+
+// ── نموذج المساعد ──────────────────────────────────────────────────
+class Assistant {
+  final int? id;
+  final String name;
+  final String? phone;
+  final String pin;
+  final String role; // owner, assistant
+  final bool canAddDebt;
+  final bool canEditDebt;
+  final bool canDelete;
+  final bool canViewReports;
+  final bool canManageInvoices;
+  final bool isActive;
+  final DateTime createdAt;
+
+  Assistant({
+    this.id,
+    required this.name,
+    this.phone,
+    required this.pin,
+    this.role = 'assistant',
+    this.canAddDebt = true,
+    this.canEditDebt = false,
+    this.canDelete = false,
+    this.canViewReports = false,
+    this.canManageInvoices = true,
+    this.isActive = true,
+    required this.createdAt,
+  });
+
+  factory Assistant.fromMap(Map<String, dynamic> map) => Assistant(
+        id: map['id'],
+        name: map['name'],
+        phone: map['phone'],
+        pin: map['pin'],
+        role: map['role'] ?? 'assistant',
+        canAddDebt: (map['can_add_debt'] ?? 1) == 1,
+        canEditDebt: (map['can_edit_debt'] ?? 0) == 1,
+        canDelete: (map['can_delete'] ?? 0) == 1,
+        canViewReports: (map['can_view_reports'] ?? 0) == 1,
+        canManageInvoices: (map['can_manage_invoices'] ?? 1) == 1,
+        isActive: (map['is_active'] ?? 1) == 1,
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'phone': phone,
+        'pin': pin,
+        'role': role,
+        'can_add_debt': canAddDebt ? 1 : 0,
+        'can_edit_debt': canEditDebt ? 1 : 0,
+        'can_delete': canDelete ? 1 : 0,
+        'can_view_reports': canViewReports ? 1 : 0,
+        'can_manage_invoices': canManageInvoices ? 1 : 0,
+        'is_active': isActive ? 1 : 0,
+      };
+
+  String get roleLabel => role == 'owner' ? 'المالك 👑' : 'مساعد 👤';
+
+  String get permissionsSummary {
+    final perms = <String>[];
+    if (canAddDebt) perms.add('إضافة ديون');
+    if (canEditDebt) perms.add('تعديل ديون');
+    if (canDelete) perms.add('حذف');
+    if (canViewReports) perms.add('تقارير');
+    if (canManageInvoices) perms.add('فواتير');
+    return perms.isEmpty ? 'بدون صلاحيات' : perms.join(' · ');
+  }
+}
+
+// ── نموذج سجل النشاط ──────────────────────────────────────────────────
+class ActivityLogEntry {
+  final int? id;
+  final int? assistantId;
+  final String assistantName;
+  final String action;
+  final String? details;
+  final String? screen;
+  final DateTime createdAt;
+
+  ActivityLogEntry({
+    this.id,
+    this.assistantId,
+    required this.assistantName,
+    required this.action,
+    this.details,
+    this.screen,
+    required this.createdAt,
+  });
+
+  factory ActivityLogEntry.fromMap(Map<String, dynamic> map) => ActivityLogEntry(
+        id: map['id'],
+        assistantId: map['assistant_id'],
+        assistantName: map['assistant_name'] ?? '',
+        action: map['action'] ?? '',
+        details: map['details'],
+        screen: map['screen'],
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
+
+  String get timeAgo {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inMinutes < 1) return 'الآن';
+    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
+    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+    if (diff.inDays == 1) return 'أمس';
+    return 'منذ ${diff.inDays} يوم';
+  }
+}

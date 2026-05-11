@@ -17,7 +17,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -73,6 +73,38 @@ class DatabaseHelper {
           total REAL NOT NULL,
           notes TEXT,
           created_at TEXT NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      // ── جدول المساعدين ──
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS assistants (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          phone TEXT,
+          pin TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'assistant',
+          can_add_debt INTEGER DEFAULT 1,
+          can_edit_debt INTEGER DEFAULT 0,
+          can_delete INTEGER DEFAULT 0,
+          can_view_reports INTEGER DEFAULT 0,
+          can_manage_invoices INTEGER DEFAULT 1,
+          is_active INTEGER DEFAULT 1,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      // ── جدول سجل الأنشطة ──
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS activity_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          assistant_id INTEGER,
+          assistant_name TEXT NOT NULL,
+          action TEXT NOT NULL,
+          details TEXT,
+          screen TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (assistant_id) REFERENCES assistants(id)
         )
       ''');
     }
@@ -203,6 +235,38 @@ class DatabaseHelper {
         screen TEXT DEFAULT 'home',
         skip_duration INTEGER DEFAULT 0,
         created_at TEXT NOT NULL
+      )
+    ''');
+
+    // جدول المساعدين
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS assistants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT,
+        pin TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'assistant',
+        can_add_debt INTEGER DEFAULT 1,
+        can_edit_debt INTEGER DEFAULT 0,
+        can_delete INTEGER DEFAULT 0,
+        can_view_reports INTEGER DEFAULT 0,
+        can_manage_invoices INTEGER DEFAULT 1,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // جدول سجل الأنشطة
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        assistant_id INTEGER,
+        assistant_name TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        screen TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (assistant_id) REFERENCES assistants(id)
       )
     ''');
 
@@ -490,5 +554,69 @@ class DatabaseHelper {
   Future<void> deleteInvoice(int id) async {
     final db = await database;
     await db.delete('invoices', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ── المساعدين ────────────────────────────────────────────────────────────────
+  Future<int> insertAssistant(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = DateTime.now().toIso8601String();
+    return await db.insert('assistants', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getAssistants() async {
+    final db = await database;
+    return await db.query('assistants', orderBy: 'created_at DESC');
+  }
+
+  Future<Map<String, dynamic>?> getAssistantByPin(String pin) async {
+    final db = await database;
+    final result = await db.query('assistants',
+        where: 'pin = ? AND is_active = 1', whereArgs: [pin]);
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<int> updateAssistant(int id, Map<String, dynamic> data) async {
+    final db = await database;
+    return await db.update('assistants', data, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> deleteAssistant(int id) async {
+    final db = await database;
+    return await db.delete('assistants', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ── سجل الأنشطة (Activity Log) ────────────────────────────────────────────
+  Future<int> logActivity({
+    int? assistantId,
+    required String assistantName,
+    required String action,
+    String? details,
+    String? screen,
+  }) async {
+    final db = await database;
+    return await db.insert('activity_log', {
+      'assistant_id': assistantId,
+      'assistant_name': assistantName,
+      'action': action,
+      'details': details,
+      'screen': screen,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getActivityLog({int limit = 50}) async {
+    final db = await database;
+    return await db.query('activity_log',
+        orderBy: 'created_at DESC', limit: limit);
+  }
+
+  Future<List<Map<String, dynamic>>> getAssistantActivityLog(
+      int assistantId, {int limit = 50}) async {
+    final db = await database;
+    return await db.query('activity_log',
+        where: 'assistant_id = ?',
+        whereArgs: [assistantId],
+        orderBy: 'created_at DESC',
+        limit: limit);
   }
 }

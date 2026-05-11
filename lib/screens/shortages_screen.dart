@@ -144,25 +144,89 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     String t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
     if (t.contains(q)) return true;
 
+    // ▌ Subsequence matching
     int i = 0;
     for (int j = 0; j < t.length && i < q.length; j++) {
       if (t[j] == q[i]) i++;
     }
-    return i == q.length;
+    if (i == q.length) return true;
+
+    // ▌ Levenshtein distance — لو الكلمة قريبة (أخطاء إملائية)
+    if (q.length >= 3 && t.length >= 3) {
+      final maxDist = (q.length / 3).ceil(); // سماح 1 خطأ لكل 3 حروف
+      if (_levenshtein(q, t.length > q.length + 3 ? t.substring(0, q.length + 3) : t) <= maxDist) {
+        return true;
+      }
+      // ▌ فحص كل جزء من النص بطول الاستعلام
+      for (int k = 0; k <= t.length - q.length; k++) {
+        if (_levenshtein(q, t.substring(k, k + q.length)) <= maxDist) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
-  List<Shortage> _getFiltered(List<Shortage> items) => items.where((s) {
-        final matchFilter = _filter == 'all' || s.status == _filter;
-        if (!matchFilter) return false;
-        if (_search.isEmpty) return true;
+  /// ▌ حساب المسافة بين كلمتين (Levenshtein Distance)
+  int _levenshtein(String s, String t) {
+    if (s == t) return 0;
+    if (s.isEmpty) return t.length;
+    if (t.isEmpty) return s.length;
 
-        final terms =
-            _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+    List<int> prev = List.generate(t.length + 1, (i) => i);
+    List<int> curr = List.filled(t.length + 1, 0);
 
-        // Every term must match (either name or company)
-        return terms.every((term) =>
-            _fuzzyMatch(term, s.name) || _fuzzyMatch(term, s.company));
-      }).toList();
+    for (int i = 1; i <= s.length; i++) {
+      curr[0] = i;
+      for (int j = 1; j <= t.length; j++) {
+        final cost = s[i - 1] == t[j - 1] ? 0 : 1;
+        curr[j] = [curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost].reduce((a, b) => a < b ? a : b);
+      }
+      final temp = prev;
+      prev = curr;
+      curr = temp;
+    }
+    return prev[t.length];
+  }
+
+  /// ▌ حساب درجة التطابق (كلما زادت كلما كان أفضل)
+  double _matchScore(String query, Shortage s) {
+    final q = query.toLowerCase().trim();
+    final name = s.name.toLowerCase();
+    final company = s.company.toLowerCase();
+
+    // تطابق تام = 100
+    if (name == q) return 100;
+    // يبدأ بالاستعلام = 80
+    if (name.startsWith(q)) return 80;
+    // يحتوي = 60
+    if (name.contains(q)) return 60;
+    // الشركة تطابق = 40
+    if (company.contains(q)) return 40;
+    // Fuzzy = 20
+    return 20;
+  }
+
+  List<Shortage> _getFiltered(List<Shortage> items) {
+    var result = items.where((s) {
+      final matchFilter = _filter == 'all' || s.status == _filter;
+      if (!matchFilter) return false;
+      if (_search.isEmpty) return true;
+
+      final terms = _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+
+      // كل كلمة لازم تتطابق (الاسم أو الشركة)
+      return terms.every((term) =>
+          _fuzzyMatch(term, s.name) || _fuzzyMatch(term, s.company));
+    }).toList();
+
+    // ▌ ترتيب النتائج بالأهمية لو فيه بحث
+    if (_search.isNotEmpty) {
+      result.sort((a, b) => _matchScore(_search, b).compareTo(_matchScore(_search, a)));
+    }
+
+    return result;
+  }
 
   Future<void> _showSelectRepDialog() async {
     final reps = await DatabaseHelper.instance.getReps();

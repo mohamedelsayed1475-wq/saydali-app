@@ -8,6 +8,7 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
 import 'pin_lock_screen.dart';
+import 'assistants_screen.dart';
 import 'platform_settings_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -241,7 +242,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
-
+        // Assistants Management
+        _sectionTitle('👥 المساعدون'),
+        _settingsTile(
+          emoji: '👥',
+          title: 'إدارة المساعدين',
+          subtitle: 'أضف مساعدين وتحكم في صلاحياتهم',
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const AssistantsScreen())),
+          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 16),
 
         // Auto Close Settings
         _sectionTitle('⚙️ إغلاق النواقص'),
