@@ -167,10 +167,20 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'created_at': DateTime.now().toIso8601String(),
                     };
                     await db.insert('subscription_codes', data);
-                    await SupabaseService.instance.insertSubscriptionCode(data);
+                    // أغلق الشيت فوراً وحدّث القائمة بدون انتظار السحابة
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadCodes();
-                    if (mounted) showSnack(context, 'تم إضافة الكود ✅');
+                    if (mounted) showSnack(context, 'تم حفظ الكود ✅ جاري الرفع للسحابة...');
+                    // رفع للسحابة في الخلفية
+                    SupabaseService.instance.insertSubscriptionCode(data).then((ok) {
+                      if (mounted) {
+                        if (ok) {
+                          showSnack(context, 'تم رفع الكود للسحابة بنجاح ☁️✅');
+                        } else {
+                          showSnack(context, 'فشل الرفع للسحابة - الكود محفوظ محلياً فقط ⚠️', isError: true, durationMs: 3000);
+                        }
+                      }
+                    });
                   },
                 ),
                 const SizedBox(height: 20),
@@ -336,10 +346,16 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'created_at': DateTime.now().toIso8601String(),
                     };
                     await db.insert('ads', data);
-                    await SupabaseService.instance.insertAd(data);
+                    // أغلق الشيت فوراً بدون انتظار السحابة
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadAds();
                     if (mounted) showSnack(context, 'تم نشر الإعلان ✅');
+                    // رفع للسحابة في الخلفية
+                    SupabaseService.instance.insertAd(data).then((ok) {
+                      if (mounted && !ok) {
+                        showSnack(context, 'فشل رفع الإعلان للسحابة ⚠️', isError: true, durationMs: 3000);
+                      }
+                    });
                   },
                 ),
                 const SizedBox(height: 20),

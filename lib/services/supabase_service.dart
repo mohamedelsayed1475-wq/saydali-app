@@ -475,14 +475,18 @@ class SupabaseService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/subscription_codes?is_active=eq.1&select=*'),
+            Uri.parse('$_url/subscription_codes?select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body) as List;
-      return data.cast<Map<String, dynamic>>();
+      final activeCodes = data.where((c) {
+        final val = c['is_active'];
+        return val == 1 || val == '1' || val == true || val == 'true';
+      }).toList();
+      return activeCodes.cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('❌ fetchSubscriptionCodes error: $e');
       return [];
@@ -496,14 +500,18 @@ class SupabaseService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/ads?is_active=eq.1&select=*'),
+            Uri.parse('$_url/ads?select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body) as List;
-      return data.cast<Map<String, dynamic>>();
+      final activeAds = data.where((a) {
+        final val = a['is_active'];
+        return val == 1 || val == '1' || val == true || val == 'true';
+      }).toList();
+      return activeAds.cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('❌ fetchAds error: $e');
       return [];

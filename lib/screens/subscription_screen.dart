@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/app_theme.dart';
@@ -80,9 +81,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final db = DatabaseHelper.instance;
     final localDb = await db.database;
 
-    // ── مزامنة الأكواد من السحابة أولاً ──
+    // ── مزامنة الأكواد من السحابة أولاً (مع حد زمني قصير) ──
     try {
-      final cloudCodes = await SupabaseService.instance.fetchSubscriptionCodes();
+      final cloudCodes = await SupabaseService.instance.fetchSubscriptionCodes()
+          .timeout(const Duration(seconds: 4), onTimeout: () => []);
       if (cloudCodes.isNotEmpty) {
         await db.syncCodesFromCloud(cloudCodes);
       }
@@ -102,7 +104,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       isLocal = true;
     } else {
       // محاولة أخيرة مباشرة من Supabase
-      data = await SupabaseService.instance.checkSubscriptionCode(code);
+      try {
+        data = await SupabaseService.instance.checkSubscriptionCode(code)
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      } catch (_) {}
     }
 
     if (mounted) {
@@ -138,7 +143,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               'subscription_codes', {'used_count': usedCount + 1},
               where: 'code = ?', whereArgs: [code]);
         }
-        await SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+        // تحديث السحابة في الخلفية بدون انتظار
+        SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
         
         setState(() {
           _discountPercent = discount;
@@ -151,7 +157,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               'subscription_codes', {'used_count': usedCount + 1},
               where: 'code = ?', whereArgs: [code]);
         }
-        await SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+        // تحديث السحابة في الخلفية بدون انتظار
+        SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();
