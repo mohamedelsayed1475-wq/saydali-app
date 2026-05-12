@@ -82,7 +82,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     }
   }
 
-  Future<void> _finishDay() async {
+  Future<void> _processResponse(bool endDay) async {
     if (_response == null) return;
 
     final confirm = await showDialog<bool>(
@@ -90,11 +90,13 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('تأكيد إنهاء اليوم',
-            style: TextStyle(
+        title: Text(endDay ? 'تأكيد إنهاء اليوم' : 'تأكيد الرد',
+            style: const TextStyle(
                 color: AppColors.textColor, fontWeight: FontWeight.w700)),
         content: Text(
-          'سيتم:\n✅ تغطية ${_response!.availableItems.length} صنف متاح\n⚠️ تحويل ${_response!.unavailableItems.length} صنف لمستعصي',
+          endDay
+              ? 'سيتم:\n✅ تغطية ${_response!.availableItems.length} صنف متاح\n⚠️ تحويل ${_response!.unavailableItems.length} صنف لمستعصي'
+              : 'سيتم:\n✅ تغطية ${_response!.availableItems.length} صنف متاح\n⏳ بقاء ${_response!.unavailableItems.length} صنف في قائمة الانتظار',
           style: const TextStyle(color: AppColors.textLight),
         ),
         actions: [
@@ -166,13 +168,13 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       final key = item.drugName.trim().toLowerCase();
       if (shortageMap.containsKey(key)) {
         for (final id in shortageMap[key]!) {
-          await db.updateShortage(id, {'status': 'stubborn'});
+          await db.updateShortage(id, {'status': endDay ? 'stubborn' : 'pending'});
         }
       }
     }
 
     if (mounted) {
-      showSnack(context, 'تم إنهاء اليوم ✅');
+      showSnack(context, endDay ? 'تم إنهاء اليوم ✅' : 'تم قبول الرد بنجاح ✅');
       Navigator.pop(context);
     }
   }
@@ -401,51 +403,84 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                 border: Border(top: BorderSide(color: AppColors.darkBorder)),
               ),
               child: SafeArea(
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _exportPDF,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.danger,
-                          side: const BorderSide(color: AppColors.danger),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _exportPDF,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.picture_as_pdf, size: 18),
+                            label: const Text('PDF',
+                                style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.w700)),
+                          ),
                         ),
-                        icon: const Icon(Icons.picture_as_pdf, size: 18),
-                        label: const Text('PDF',
-                            style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _shareAsText,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.accent,
-                          side: const BorderSide(color: AppColors.accent),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _shareAsText,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.accent,
+                              side: const BorderSide(color: AppColors.accent),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.share, size: 18),
+                            label: const Text('نص',
+                                style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.w700)),
+                          ),
                         ),
-                        icon: const Icon(Icons.share, size: 18),
-                        label: const Text('نص',
-                            style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.w700)),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: _finishDay,
-                        icon: const Icon(Icons.check_circle_rounded, size: 18),
-                        label: const Text('تم إنهاء اليوم'),
-                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _processResponse(false),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.check, size: 18),
+                            label: const Text('تم (مع إبقاء النواقص)',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _processResponse(true),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.done_all, size: 18),
+                            label: const Text('إنهاء اليوم',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
