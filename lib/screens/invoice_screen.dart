@@ -153,6 +153,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             itemCount: items.length,
                             itemBuilder: (ctx, i) {
                               final item = items[i];
+                              final hasDiscount = item['item_discount'] != null && item['item_discount'] > 0;
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(12),
@@ -174,7 +175,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                                   color: AppColors.textColor,
                                                   fontWeight: FontWeight.w600)),
                                           Text(
-                                            '${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
+                                            '${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency' +
+                                                (hasDiscount ? ' (خصم ${item['item_discount']}%)' : ''),
                                             style: const TextStyle(
                                                 color: AppColors.textMuted,
                                                 fontSize: 12),
@@ -320,6 +322,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final stripPriceCtrl = TextEditingController(); // Strip Price
     final boxesCtrl = TextEditingController(text: '1');
     final stripsCtrl = TextEditingController(text: '0');
+    final discountCtrl = TextEditingController(text: '0'); // Item discount
 
     showDialog(
       context: ctx,
@@ -449,6 +452,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     Expanded(child: AppTextField(hint: 'عدد الشرايط', controller: stripsCtrl, keyboardType: TextInputType.number)),
                   ],
                 ),
+                const SizedBox(height: 10),
+                AppTextField(hint: 'خصم الصنف % (اختياري)', controller: discountCtrl, keyboardType: TextInputType.number),
               ],
             ),
           ),
@@ -465,6 +470,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 final stripPrice = double.tryParse(stripPriceCtrl.text) ?? 0;
                 final boxes = int.tryParse(boxesCtrl.text) ?? 0;
                 final strips = int.tryParse(stripsCtrl.text) ?? 0;
+                final itemDiscount = double.tryParse(discountCtrl.text) ?? 0;
 
                 if (name.isEmpty) {
                   showSnack(dCtx, 'أدخل اسم الصنف', isError: true);
@@ -479,7 +485,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   return;
                 }
 
-                final lineTotal = (boxes * boxPrice) + (strips * stripPrice);
+                final baseLineTotal = (boxes * boxPrice) + (strips * stripPrice);
+                final lineTotal = baseLineTotal - (baseLineTotal * itemDiscount / 100);
                 final mainPrice = boxPrice > 0 ? boxPrice : stripPrice;
 
                 String qtyText = '';
@@ -491,6 +498,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   'price': mainPrice,
                   'qty': 1,
                   'qty_text': qtyText,
+                  'item_discount': itemDiscount,
                   'line_total': lineTotal,
                   'boxes': boxes,
                   'strips': strips,
@@ -560,16 +568,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 columnWidths: {
                   0: const pw.FlexColumnWidth(0.5),
-                  1: const pw.FlexColumnWidth(3),
+                  1: const pw.FlexColumnWidth(2.5),
                   2: const pw.FlexColumnWidth(1),
-                  3: const pw.FlexColumnWidth(1.5),
-                  4: const pw.FlexColumnWidth(1.5),
+                  3: const pw.FlexColumnWidth(1),
+                  4: const pw.FlexColumnWidth(1),
+                  5: const pw.FlexColumnWidth(1.5),
                 },
                 children: [
                   pw.TableRow(
                     decoration:
                         const pw.BoxDecoration(color: PdfColors.grey200),
-                    children: ['#', 'الصنف', 'الكمية', 'السعر', 'الإجمالي']
+                    children: ['#', 'الصنف', 'الكمية', 'السعر', 'خصم%', 'الإجمالي']
                         .map((h) => pw.Padding(
                               padding: const pw.EdgeInsets.all(6),
                               child: pw.Text(h,
@@ -583,12 +592,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     final i = e.key;
                     final item = e.value;
                     final lineTotal = item['line_total'] ?? (item['price'] * item['qty']);
+                    final itemDiscount = item['item_discount'] ?? 0;
                     return pw.TableRow(
                       children: [
                         '${i + 1}',
                         item['name'],
                         '${item['qty_text'] ?? item['qty']}',
                         '${item['price'].toStringAsFixed(2)}',
+                        itemDiscount > 0 ? '$itemDiscount%' : '-',
                         '${lineTotal.toStringAsFixed(2)}',
                       ]
                           .map((t) => pw.Padding(
@@ -746,7 +757,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(item['name'], style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w600)),
-                                          Text('${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency',
+                                          Text('${item['qty_text'] ?? item['qty']} × ${item['price'].toStringAsFixed(2)} $_currency' +
+                                                ((item['item_discount'] != null && item['item_discount'] > 0) ? ' (خصم ${item['item_discount']}%)' : ''),
                                               style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                                         ],
                                       ),
