@@ -80,6 +80,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final db = DatabaseHelper.instance;
     final localDb = await db.database;
 
+    // ── مزامنة الأكواد من السحابة أولاً ──
+    try {
+      final cloudCodes = await SupabaseService.instance.fetchSubscriptionCodes();
+      if (cloudCodes.isNotEmpty) {
+        await db.syncCodesFromCloud(cloudCodes);
+      }
+    } catch (_) {}
+
     List<Map<String, dynamic>> localCodes = [];
     try {
       localCodes = await localDb
@@ -93,6 +101,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       data = localCodes.first;
       isLocal = true;
     } else {
+      // محاولة أخيرة مباشرة من Supabase
       data = await SupabaseService.instance.checkSubscriptionCode(code);
     }
 

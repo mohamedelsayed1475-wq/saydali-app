@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
+import '../utils/env_config.dart';
 import 'invoice_screen.dart';
 import '../utils/country_config.dart';
 import '../database/database_helper.dart';
+import '../services/supabase_service.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
@@ -18,6 +20,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import '../providers/current_user_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -82,6 +87,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // فقط المالك يمكنه الوصول للإعدادات
+    final userProvider = context.watch<CurrentUserProvider>();
+    if (!userProvider.isOwner) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('🔒', style: TextStyle(fontSize: 50)),
+            SizedBox(height: 12),
+            Text('غير مصرح لك',
+                style: TextStyle(
+                    color: AppColors.textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700)),
+            SizedBox(height: 6),
+            Text('الإعدادات متاحة للمالك فقط',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          ],
+        ),
+      );
+    }
     if (_loading)
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
@@ -248,8 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           emoji: '👥',
           title: 'إدارة المساعدين',
           subtitle: 'أضف مساعدين وتحكم في صلاحياتهم',
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const AssistantsScreen())),
+          onTap: () => _openAssistants(),
           trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
         ),
         const SizedBox(height: 16),
@@ -500,6 +525,220 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       );
+
+  Future<void> _openAssistants() async {
+    final activated = await DatabaseHelper.instance.getSetting('assistants_activated');
+    if (activated == '1') {
+      if (mounted) {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const AssistantsScreen()));
+      }
+      return;
+    }
+
+    // عرض شاشة التفعيل
+    if (!mounted) return;
+    final codeCtrl = TextEditingController();
+    bool isValidating = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.darkCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Text('👥', style: TextStyle(fontSize: 24)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('إدارة المساعدين',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Premium Badge
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A0A2E), Color(0xFF16213E)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: const Color(0xFFFFD700).withValues(alpha: 0.4)),
+                ),
+                child: const Column(
+                  children: [
+                    Text('⭐', style: TextStyle(fontSize: 36)),
+                    SizedBox(height: 8),
+                    Text('ميزة مدفوعة',
+                        style: TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16)),
+                    SizedBox(height: 4),
+                    Text(
+                        'أضف مساعدين للصيدلية وتحكم في صلاحياتهم مع سجل نشاط كامل',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        textAlign: TextAlign.center),
+                    SizedBox(height: 8),
+                    Text('💰 100 ج.م فقط - تفعيل دائم',
+                        style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Code Entry
+              TextField(
+                controller: codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                style: const TextStyle(
+                    color: AppColors.textColor,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w700),
+                decoration: const InputDecoration(
+                  hintText: 'أدخل كود التفعيل',
+                  hintStyle: TextStyle(color: AppColors.textMuted, letterSpacing: 1),
+                  prefixIcon: Icon(Icons.vpn_key_rounded, color: AppColors.primary),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Activate Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isValidating
+                      ? null
+                      : () async {
+                          final code = codeCtrl.text.trim().toUpperCase();
+                          if (code.isEmpty) {
+                            showSnack(ctx, 'أدخل كود التفعيل', isError: true);
+                            return;
+                          }
+                          setDlg(() => isValidating = true);
+
+                          // تحقق من الكود
+                          bool valid = false;
+
+                          // 1. Admin bypass
+                          if (code == 'ASSIST2026' ||
+                              code == EnvConfig.adminCode1 ||
+                              code == EnvConfig.adminCode2) {
+                            valid = true;
+                          }
+
+                          // 2. Check local DB
+                          if (!valid) {
+                            try {
+                              final db = await DatabaseHelper.instance.database;
+                              final local = await db.query('subscription_codes',
+                                  where: "code = ? AND is_active = 1 AND plan = 'assistant'",
+                                  whereArgs: [code]);
+                              if (local.isNotEmpty) {
+                                final maxUses = local.first['max_uses'] as int? ?? 1;
+                                final usedCount = local.first['used_count'] as int? ?? 0;
+                                if (usedCount < maxUses) {
+                                  valid = true;
+                                  await db.update('subscription_codes',
+                                      {'used_count': usedCount + 1},
+                                      where: 'code = ?', whereArgs: [code]);
+                                  await SupabaseService.instance
+                                      .updateSubscriptionCodeUsage(code, usedCount + 1);
+                                }
+                              }
+                            } catch (_) {}
+                          }
+
+                          // 3. Check Supabase
+                          if (!valid) {
+                            try {
+                              final cloudData = await SupabaseService.instance
+                                  .checkSubscriptionCode(code);
+                              if (cloudData != null &&
+                                  (cloudData['plan'] == 'assistant' ||
+                                      cloudData['plan'] == 'premium') &&
+                                  (cloudData['is_active'] == true ||
+                                      cloudData['is_active'] == 1)) {
+                                final maxUses = cloudData['max_uses'] ?? 1;
+                                final usedCount = cloudData['used_count'] ?? 0;
+                                if (usedCount < maxUses) {
+                                  valid = true;
+                                  await SupabaseService.instance
+                                      .updateSubscriptionCodeUsage(
+                                          code, usedCount + 1);
+                                }
+                              }
+                            } catch (_) {}
+                          }
+
+                          setDlg(() => isValidating = false);
+
+                          if (valid) {
+                            await DatabaseHelper.instance
+                                .setSetting('assistants_activated', '1');
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              showSnack(context, '✅ تم تفعيل إدارة المساعدين بنجاح!');
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const AssistantsScreen()));
+                            }
+                          } else {
+                            if (ctx.mounted) {
+                              showSnack(ctx, '❌ كود غير صحيح أو منتهي', isError: true);
+                            }
+                          }
+                        },
+                  icon: isValidating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check_circle, size: 18),
+                  label: Text(isValidating ? 'جاري التحقق...' : 'تفعيل'),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            // Contact Developer
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openLink('https://t.me/Mohamed07Elsayed');
+              },
+              icon: const Text('✈️', style: TextStyle(fontSize: 16)),
+              label: const Text('تواصل مع المطور للحصول على كود',
+                  style: TextStyle(color: Color(0xFF229ED9), fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openLink(String urlStr) async {
+    final url = Uri.parse(urlStr);
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not launch');
+      }
+    } catch (_) {}
+  }
 
   Future<void> _uploadDictionary() async {
     final result = await FilePicker.platform

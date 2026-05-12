@@ -133,9 +133,9 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 8, children: [
-                  for (final p in ['basic', 'pro', 'premium'])
+                  for (final p in ['basic', 'pro', 'premium', 'assistant'])
                     ChoiceChip(
-                      label: Text(p),
+                      label: Text(p == 'assistant' ? '👥 مساعدين' : p),
                       selected: plan == p,
                       onSelected: (_) => setBS(() => plan = p),
                       selectedColor: AppColors.primary,

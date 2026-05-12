@@ -5,7 +5,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
+import '../providers/current_user_provider.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../utils/fuzzy_search.dart';
@@ -70,6 +72,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   Future<void> _createInvoice() async {
+    // فحص صلاحية إدارة الفواتير
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canManageInvoices) {
+      showSnack(context, '⛔ ليس لديك صلاحية إدارة الفواتير', isError: true);
+      return;
+    }
     final nameCtrl = TextEditingController();
     final items = <Map<String, dynamic>>[];
     double discount = 0;

@@ -6,7 +6,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
+import '../providers/current_user_provider.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -48,6 +50,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // فحص صلاحية عرض التقارير
+    final userProvider = context.watch<CurrentUserProvider>();
+    if (!userProvider.canViewReports) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('🔒', style: TextStyle(fontSize: 50)),
+            SizedBox(height: 12),
+            Text('غير مصرح لك',
+                style: TextStyle(
+                    color: AppColors.textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700)),
+            SizedBox(height: 6),
+            Text('ليس لديك صلاحية عرض التقارير',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          ],
+        ),
+      );
+    }
     if (_loading)
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));

@@ -14,6 +14,7 @@ import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_providers.dart';
+import '../providers/current_user_provider.dart';
 
 class DebtsScreen extends StatefulWidget {
   const DebtsScreen({super.key});
@@ -60,6 +61,16 @@ class _DebtsScreenState extends State<DebtsScreen> {
   double get _totalDebt => _customers.fold(0, (sum, c) => sum + c.totalDebt);
 
   Future<void> _showAddCustomer({Customer? existing}) async {
+    // فحص صلاحية إضافة/تعديل الديون
+    final userProvider = context.read<CurrentUserProvider>();
+    if (existing == null && !userProvider.canAddDebt) {
+      showSnack(context, '⛔ ليس لديك صلاحية إضافة عملاء', isError: true);
+      return;
+    }
+    if (existing != null && !userProvider.canEditDebt) {
+      showSnack(context, '⛔ ليس لديك صلاحية تعديل العملاء', isError: true);
+      return;
+    }
     final nameCtrl = TextEditingController(text: existing?.name);
     final phoneCtrl = TextEditingController(text: existing?.phone);
     final addressCtrl = TextEditingController(text: existing?.address);
@@ -179,6 +190,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   } else {
                     await context.read<CustomersProvider>().update(existing.id!, data);
                   }
+                  // تسجيل النشاط
+                  await DatabaseHelper.instance.logActivity(
+                    assistantId: userProvider.currentAssistantId,
+                    assistantName: userProvider.currentName,
+                    action: existing == null ? 'إضافة عميل' : 'تعديل عميل',
+                    details: '${existing == null ? "تم إضافة" : "تم تعديل"} العميل: $name',
+                    screen: 'debts',
+                  );
                   if (ctx.mounted) Navigator.pop(ctx);
                   await _loadCustomers();
                   if (mounted)
@@ -337,10 +356,16 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () async {
+                            final userProvider = context.read<CurrentUserProvider>();
                             final amount = double.tryParse(amountCtrl.text);
                             if (amount == null || amount <= 0) {
                               showSnack(ctx, 'أدخل مبلغاً صحيحاً',
                                   isError: true);
+                              return;
+                            }
+                            // فحص صلاحية إضافة دين
+                            if (txType == 'debt' && !userProvider.canAddDebt) {
+                              showSnack(ctx, '⛔ ليس لديك صلاحية إضافة ديون', isError: true);
                               return;
                             }
                             await context.read<CustomersProvider>().addTransaction({
@@ -349,6 +374,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
                               'type': txType,
                               'description': descCtrl.text.trim(),
                             });
+                            // تسجيل النشاط
+                            await DatabaseHelper.instance.logActivity(
+                              assistantId: userProvider.currentAssistantId,
+                              assistantName: userProvider.currentName,
+                              action: txType == 'debt' ? 'إضافة دين' : 'تسجيل سداد',
+                              details: '${txType == 'debt' ? 'دين' : 'سداد'}: $amount - العميل: ${customer.name}',
+                              screen: 'debts',
+                            );
                             amountCtrl.clear();
                             descCtrl.clear();
                             await _loadCustomers();
@@ -1050,7 +1083,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
           motion: const DrawerMotion(),
           children: [
             SlidableAction(
-              onPressed: (_) => _showAddCustomer(existing: customer),
+              onPressed: (_) {
+                final userProvider = context.read<CurrentUserProvider>();
+                if (!userProvider.canEditDebt) {
+                  showSnack(context, '⛔ ليس لديك صلاحية التعديل', isError: true);
+                  return;
+                }
+                _showAddCustomer(existing: customer);
+              },
               backgroundColor: const Color(0xFF2563EB),
               foregroundColor: Colors.white,
               icon: Icons.edit_rounded,
@@ -1060,9 +1100,22 @@ class _DebtsScreenState extends State<DebtsScreen> {
             ),
             SlidableAction(
               onPressed: (_) async {
+                final userProvider = context.read<CurrentUserProvider>();
+                if (!userProvider.canDelete) {
+                  showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+                  return;
+                }
                 final confirm = await showDeleteDialog(context, customer.name);
                 if (confirm == true) {
                   await context.read<CustomersProvider>().delete(customer.id!);
+                  // تسجيل نشاط الحذف
+                  await DatabaseHelper.instance.logActivity(
+                    assistantId: userProvider.currentAssistantId,
+                    assistantName: userProvider.currentName,
+                    action: 'حذف عميل',
+                    details: 'تم حذف العميل: ${customer.name}',
+                    screen: 'debts',
+                  );
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },

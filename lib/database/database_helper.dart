@@ -645,4 +645,78 @@ class DatabaseHelper {
     }
     return 0;
   }
+
+  // ── مزامنة أكواد الاشتراك من السحابة ────────────────────────────────
+  /// يسحب الأكواد من Supabase ويحفظها محلياً (merge بدون تكرار)
+  Future<int> syncCodesFromCloud(List<Map<String, dynamic>> cloudCodes) async {
+    if (cloudCodes.isEmpty) return 0;
+    final db = await database;
+    int synced = 0;
+    for (final code in cloudCodes) {
+      try {
+        final existing = await db.query('subscription_codes',
+            where: 'code = ?', whereArgs: [code['code']]);
+        if (existing.isEmpty) {
+          await db.insert('subscription_codes', {
+            'code': code['code'],
+            'plan': code['plan'] ?? 'pro',
+            'duration_days': code['duration_days'] ?? 30,
+            'discount_percent': code['discount_percent'] ?? 0,
+            'max_uses': code['max_uses'] ?? 1,
+            'used_count': code['used_count'] ?? 0,
+            'is_active': code['is_active'] == true || code['is_active'] == 1 ? 1 : 0,
+            'created_at': code['created_at'] ?? DateTime.now().toIso8601String(),
+          });
+          synced++;
+        } else {
+          // تحديث عدد الاستخدام من السحابة (الأحدث يكسب)
+          final cloudUsed = code['used_count'] ?? 0;
+          final localUsed = existing.first['used_count'] ?? 0;
+          if (cloudUsed is int && cloudUsed > (localUsed as int)) {
+            await db.update('subscription_codes', 
+                {'used_count': cloudUsed},
+                where: 'code = ?', whereArgs: [code['code']]);
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ خطأ في مزامنة كود ${code['code']}: $e');
+      }
+    }
+    if (synced > 0) debugPrint('✅ تم مزامنة $synced كود من السحابة');
+    return synced;
+  }
+
+  // ── مزامنة الإعلانات من السحابة ────────────────────────────────────
+  /// يسحب الإعلانات من Supabase ويحفظها محلياً
+  Future<int> syncAdsFromCloud(List<Map<String, dynamic>> cloudAds) async {
+    if (cloudAds.isEmpty) return 0;
+    final db = await database;
+    int synced = 0;
+    for (final ad in cloudAds) {
+      try {
+        // تحقق لو الإعلان موجود بنفس العنوان وتاريخ الإنشاء
+        final existing = await db.query('ads',
+            where: 'title = ? AND created_at = ?',
+            whereArgs: [ad['title'], ad['created_at']]);
+        if (existing.isEmpty) {
+          await db.insert('ads', {
+            'title': ad['title'] ?? '',
+            'body': ad['body'] ?? '',
+            'image_url': ad['image_url'],
+            'link': ad['link'],
+            'button_text': ad['button_text'] ?? 'التفاصيل',
+            'is_active': ad['is_active'] == true || ad['is_active'] == 1 ? 1 : 0,
+            'screen': ad['screen'] ?? 'home',
+            'skip_duration': ad['skip_duration'] ?? 0,
+            'created_at': ad['created_at'] ?? DateTime.now().toIso8601String(),
+          });
+          synced++;
+        }
+      } catch (e) {
+        debugPrint('⚠️ خطأ في مزامنة إعلان: $e');
+      }
+    }
+    if (synced > 0) debugPrint('✅ تم مزامنة $synced إعلان من السحابة');
+    return synced;
+  }
 }

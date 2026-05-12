@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../database/database_helper.dart';
+import '../services/supabase_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'shortages_screen.dart';
@@ -38,6 +39,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _checkAndShowAd() async {
+    // ── مزامنة الإعلانات من السحابة أولاً ──
+    try {
+      final cloudAds = await SupabaseService.instance.fetchAds();
+      if (cloudAds.isNotEmpty) {
+        await DatabaseHelper.instance.syncAdsFromCloud(cloudAds);
+      }
+    } catch (_) {}
+
     final ad = await DatabaseHelper.instance.getActiveAd('home');
     if (ad == null) return;
     if (!mounted) return;

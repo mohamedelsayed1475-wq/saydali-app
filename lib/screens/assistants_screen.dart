@@ -1,4 +1,6 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
@@ -18,6 +20,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   List<Assistant> _assistants = [];
   List<ActivityLogEntry> _logs = [];
   bool _loading = true;
+  String _pharmacyCode = '';
 
   @override
   void initState() {
@@ -35,10 +38,17 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   Future<void> _load() async {
     final assistantsData = await DatabaseHelper.instance.getAssistants();
     final logsData = await DatabaseHelper.instance.getActivityLog(limit: 100);
+    // تحميل أو إنشاء كود الصيدلية
+    var code = await DatabaseHelper.instance.getSetting('pharmacy_code');
+    if (code == null || code.isEmpty) {
+      code = _generatePharmacyCode();
+      await DatabaseHelper.instance.setSetting('pharmacy_code', code);
+    }
     if (mounted) {
       setState(() {
         _assistants = assistantsData.map(Assistant.fromMap).toList();
         _logs = logsData.map(ActivityLogEntry.fromMap).toList();
+        _pharmacyCode = code!;
         _loading = false;
       });
     }
@@ -293,30 +303,222 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     );
   }
 
+  /// توليد كود صيدلية فريد (6 أحرف وأرقام)
+  String _generatePharmacyCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rnd = Random.secure();
+    return List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
+  }
+
   Widget _buildAssistantsTab() {
     if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (_assistants.isEmpty) {
-      return EmptyState(
-        emoji: '👥',
-        title: 'لا يوجد مساعدون',
-        subtitle: 'أضف مساعدين لإدارة الصيدلية معك\nوتحكم في صلاحياتهم',
-        buttonText: 'إضافة مساعد',
-        onButton: () => _showAddAssistant(),
+      return Column(
+        children: [
+          if (_pharmacyCode.isNotEmpty) _buildPharmacyCodeBanner(),
+          Expanded(
+            child: EmptyState(
+              emoji: '👥',
+              title: 'لا يوجد مساعدون',
+              subtitle: 'أضف مساعدين لإدارة الصيدلية معك\nوتحكم في صلاحياتهم',
+              buttonText: 'إضافة مساعد',
+              onButton: () => _showAddAssistant(),
+            ),
+          ),
+        ],
       );
     }
     return RefreshIndicator(
       color: AppColors.primary,
       backgroundColor: AppColors.darkCard,
       onRefresh: _load,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-        itemCount: _assistants.length,
-        itemBuilder: (ctx, i) => _buildAssistantCard(_assistants[i]),
+        children: [
+          // بانر كود الصيدلية
+          if (_pharmacyCode.isNotEmpty) _buildPharmacyCodeBanner(),
+          const SizedBox(height: 12),
+          // قائمة المساعدين
+          ..._assistants.map(_buildAssistantCard),
+        ],
       ),
     );
+  }
+
+  Widget _buildPharmacyCodeBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF1A0A2E).withValues(alpha: 0.9),
+            const Color(0xFF16213E),
+          ],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: const Color(0xFFFFD700).withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFD700).withValues(alpha: 0.08),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Center(
+                    child: Text('🔑', style: TextStyle(fontSize: 18))),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('كود الصيدلية',
+                        style: TextStyle(
+                            color: Color(0xFFFFD700),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13)),
+                    Text('شاركه مع مساعديك للدخول',
+                        style:
+                            TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                  ],
+                ),
+              ),
+              // زر إعادة التوليد
+              GestureDetector(
+                onTap: _regenerateCode,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkCard.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded,
+                          color: AppColors.textMuted, size: 14),
+                      SizedBox(width: 4),
+                      Text('تجديد',
+                          style: TextStyle(
+                              color: AppColors.textMuted, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // الكود نفسه
+          GestureDetector(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: _pharmacyCode));
+              showSnack(context, 'تم نسخ كود الصيدلية 📋');
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFFFFD700).withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _pharmacyCode,
+                    style: const TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 8,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.copy_rounded,
+                      color: Color(0xFFFFD700), size: 18),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '⚠️ المساعد يحتاج هذا الكود + رمز PIN الخاص به للدخول',
+            style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _regenerateCode() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('⚠️ تجديد كود الصيدلية',
+            style: TextStyle(
+                color: AppColors.textColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 16)),
+        content: const Text(
+          'سيتم إنشاء كود جديد وسيحتاج جميع المساعدين للكود الجديد للدخول.\n\nهل أنت متأكد؟',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child:
+                const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+            child:
+                const Text('تجديد', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      final newCode = _generatePharmacyCode();
+      await DatabaseHelper.instance.setSetting('pharmacy_code', newCode);
+      await DatabaseHelper.instance.logActivity(
+        assistantName: 'المالك',
+        action: 'تجديد كود الصيدلية',
+        details: 'تم تغيير كود الصيدلية',
+        screen: 'assistants',
+      );
+      setState(() => _pharmacyCode = newCode);
+      if (mounted) showSnack(context, 'تم تجديد الكود بنجاح ✅');
+    }
   }
 
   Widget _buildAssistantCard(Assistant assistant) {
@@ -406,23 +608,26 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: assistant.isActive
-                          ? AppColors.primary.withValues(alpha: 0.1)
-                          : AppColors.danger.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      assistant.isActive ? 'نشط ✅' : 'معطل ❌',
-                      style: TextStyle(
-                          color: assistant.isActive
-                              ? AppColors.primary
-                              : AppColors.danger,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700),
+                  GestureDetector(
+                    onTap: () => _toggleActive(assistant),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: assistant.isActive
+                            ? AppColors.primary.withValues(alpha: 0.1)
+                            : AppColors.danger.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        assistant.isActive ? 'نشط ✅' : 'معطل ❌',
+                        style: TextStyle(
+                            color: assistant.isActive
+                                ? AppColors.primary
+                                : AppColors.danger,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700),
+                      ),
                     ),
                   ),
                 ],
@@ -443,6 +648,27 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     );
   }
 
+  Future<void> _toggleActive(Assistant assistant) async {
+    if (assistant.id == null) return;
+    final newState = assistant.isActive ? 0 : 1;
+    await DatabaseHelper.instance
+        .updateAssistant(assistant.id!, {'is_active': newState});
+    await DatabaseHelper.instance.logActivity(
+      assistantName: 'المالك',
+      action: newState == 1 ? 'تفعيل مساعد' : 'تعطيل مساعد',
+      details:
+          '${newState == 1 ? "تم تفعيل" : "تم تعطيل"} المساعد: ${assistant.name}',
+      screen: 'assistants',
+    );
+    await _load();
+    if (mounted) {
+      showSnack(context,
+          newState == 1 ? 'تم تفعيل ${assistant.name} ✅' : 'تم تعطيل ${assistant.name} ❌');
+    }
+  }
+
+  String _logFilter = 'all'; // فلتر سجل النشاط
+
   Widget _buildActivityLogTab() {
     if (_loading) {
       return const Center(
@@ -455,62 +681,148 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         subtitle: 'سيظهر هنا سجل بكل حركات المساعدين',
       );
     }
-    return RefreshIndicator(
-      color: AppColors.primary,
-      backgroundColor: AppColors.darkCard,
-      onRefresh: _load,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _logs.length,
-        itemBuilder: (ctx, i) {
-          final log = _logs[i];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.darkCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.darkBorder),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+
+    // فلترة الأنشطة
+    final filteredLogs = _logFilter == 'all'
+        ? _logs
+        : _logs.where((l) => l.assistantName == _logFilter).toList();
+
+    // الأسماء الفريدة للفلتر
+    final names = _logs.map((l) => l.assistantName).toSet().toList();
+
+    return Column(
+      children: [
+        // شريط الفلتر
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              _filterChip('الكل', 'all'),
+              const SizedBox(width: 6),
+              ...names.map((n) => Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: _filterChip(n, n),
+                  )),
+            ],
+          ),
+        ),
+        // القائمة
+        Expanded(
+          child: RefreshIndicator(
+            color: AppColors.primary,
+            backgroundColor: AppColors.darkCard,
+            onRefresh: _load,
+            child: filteredLogs.isEmpty
+                ? const Center(
+                    child: Text('لا توجد أنشطة لهذا الفلتر',
+                        style: TextStyle(color: AppColors.textMuted)))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredLogs.length,
+                    itemBuilder: (ctx, i) {
+                      final log = filteredLogs[i];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkCard,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.darkBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: _getActionColor(log.action)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                  child: Icon(_getActionIcon(log.action),
+                                      color: _getActionColor(log.action),
+                                      size: 18)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(log.action,
+                                      style: const TextStyle(
+                                          color: AppColors.textColor,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13)),
+                                  if (log.details != null)
+                                    Text(log.details!,
+                                        style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 11)),
+                                  Text(
+                                      '${log.assistantName} · ${log.timeAgo}',
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  child: const Center(
-                      child: Icon(Icons.history,
-                          color: AppColors.primary, size: 18)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(log.action,
-                          style: const TextStyle(
-                              color: AppColors.textColor,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                      if (log.details != null)
-                        Text(log.details!,
-                            style: const TextStyle(
-                                color: AppColors.textMuted, fontSize: 11)),
-                      Text(
-                          '${log.assistantName} · ${log.timeAgo}',
-                          style: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 10)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _filterChip(String label, String value) {
+    final isActive = _logFilter == value;
+    return GestureDetector(
+      onTap: () => setState(() => _logFilter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primary.withValues(alpha: 0.15)
+              : AppColors.darkCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: isActive ? AppColors.primary : AppColors.darkBorder),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: isActive ? AppColors.primary : AppColors.textMuted,
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400)),
       ),
     );
+  }
+
+  IconData _getActionIcon(String action) {
+    if (action.contains('دخول')) return Icons.login_rounded;
+    if (action.contains('إضافة')) return Icons.add_circle_outline;
+    if (action.contains('تعديل')) return Icons.edit_rounded;
+    if (action.contains('حذف')) return Icons.delete_outline;
+    if (action.contains('سداد')) return Icons.payments_rounded;
+    if (action.contains('تفعيل')) return Icons.check_circle_outline;
+    if (action.contains('تعطيل')) return Icons.block_rounded;
+    if (action.contains('فاتورة')) return Icons.receipt_long_rounded;
+    return Icons.history;
+  }
+
+  Color _getActionColor(String action) {
+    if (action.contains('دخول')) return AppColors.accent;
+    if (action.contains('إضافة')) return AppColors.primary;
+    if (action.contains('تعديل')) return const Color(0xFF2563EB);
+    if (action.contains('حذف')) return AppColors.danger;
+    if (action.contains('سداد')) return AppColors.primary;
+    if (action.contains('تفعيل')) return AppColors.primary;
+    if (action.contains('تعطيل')) return AppColors.danger;
+    if (action.contains('فاتورة')) return AppColors.warning;
+    return AppColors.textMuted;
   }
 }

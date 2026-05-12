@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'utils/app_theme.dart';
 import 'providers/app_providers.dart';
 import 'providers/chat_provider.dart';
+import 'providers/current_user_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/shortages_screen.dart';
 import 'screens/reps_screen.dart';
@@ -13,6 +14,7 @@ import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/pin_lock_screen.dart';
+import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
 
 void main() async {
@@ -48,6 +50,7 @@ class SaydaliApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CustomersProvider()..load()),
         ChangeNotifierProvider(create: (_) => RepsProvider()..load()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => CurrentUserProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (ctx, themeProvider, _) => MaterialApp(
@@ -116,20 +119,53 @@ class _SplashScreenState extends State<SplashScreen>
           context,
           MaterialPageRoute(
             builder: (ctx) => PinLockScreen(
-              onSuccess: () => Navigator.pushReplacement(
-                ctx,
-                MaterialPageRoute(builder: (_) => const MainScreen()),
-              ),
+              onSuccess: () => _goToUserSelectionOrMain(ctx),
             ),
           ),
         );
       } else if (mounted) {
-        Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (_) => const MainScreen()));
+        await _goToUserSelectionOrMain(context);
       }
     } else {
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+    }
+  }
+
+  /// التحقق إذا كانت ميزة المساعدين مفعلة ثم التوجيه
+  Future<void> _goToUserSelectionOrMain(BuildContext ctx) async {
+    final activated = await DatabaseHelper.instance.getSetting('assistants_activated');
+    final assistants = await DatabaseHelper.instance.getAssistants();
+    final hasActiveAssistants = assistants.any((a) => (a['is_active'] ?? 1) == 1);
+
+    if (!ctx.mounted) return;
+
+    if (activated == '1' && hasActiveAssistants) {
+      // عرض شاشة اختيار المستخدم
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(
+          builder: (_) => UserSelectionScreen(
+            onOwnerSelected: () => Navigator.pushReplacement(
+              ctx,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+            ),
+            onAssistantSelected: () => Navigator.pushReplacement(
+              ctx,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+            ),
+          ),
+        ),
+      );
+    } else {
+      // دخول مباشر كمالك
+      if (ctx.mounted) {
+        ctx.read<CurrentUserProvider>().loginAsOwner();
+        Navigator.pushReplacement(
+          ctx,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+        );
+      }
     }
   }
 
@@ -304,23 +340,42 @@ class _MainScreenState extends State<MainScreen> {
                       fontWeight: FontWeight.w700)),
             ),
           ),
-          // Avatar
-          Container(
-            margin:
-                const EdgeInsets.only(left: 12, right: 4, top: 8, bottom: 8),
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark]),
-              borderRadius: BorderRadius.circular(99),
-            ),
-            child: const Center(
-                child: Text('ص',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14))),
+          // معلومات المستخدم الحالي + تبديل
+          Consumer<CurrentUserProvider>(
+            builder: (ctx, userProvider, _) {
+              final name = userProvider.currentName;
+              final isOwner = userProvider.isOwner;
+              return GestureDetector(
+                onTap: () => _showUserMenu(userProvider),
+                child: Container(
+                  margin: const EdgeInsets.only(
+                      left: 12, right: 4, top: 8, bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isOwner
+                          ? [const Color(0xFFFFD700), const Color(0xFFFFA500)]
+                          : [AppColors.accent, AppColors.primary],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(isOwner ? '👑' : '👤',
+                          style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 4),
+                      Text(name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -376,6 +431,117 @@ class _MainScreenState extends State<MainScreen> {
               }),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// قائمة خيارات المستخدم
+  void _showUserMenu(CurrentUserProvider userProvider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.darkBorder,
+                    borderRadius: BorderRadius.circular(99))),
+            const SizedBox(height: 16),
+            // معلومات المستخدم الحالي
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.dark,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: userProvider.isOwner
+                        ? const Color(0xFFFFD700).withValues(alpha: 0.3)
+                        : AppColors.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: userProvider.isOwner
+                          ? const Color(0xFFFFD700).withValues(alpha: 0.15)
+                          : AppColors.accent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                        child: Text(
+                            userProvider.isOwner ? '👑' : '👤',
+                            style: const TextStyle(fontSize: 24))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(userProvider.currentName,
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16)),
+                        Text(
+                            userProvider.isOwner
+                                ? 'صلاحيات كاملة'
+                                : userProvider.currentUser?.permissionsSummary ?? '',
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // تبديل المستخدم
+            ListTile(
+              leading: const Icon(Icons.swap_horiz_rounded,
+                  color: AppColors.primary),
+              title: const Text('تبديل المستخدم',
+                  style: TextStyle(color: AppColors.textColor)),
+              subtitle: const Text('الدخول بحساب آخر',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              tileColor: AppColors.dark,
+              onTap: () {
+                Navigator.pop(ctx);
+                userProvider.logout();
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => UserSelectionScreen(
+                      onOwnerSelected: () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const MainScreen()),
+                      ),
+                      onAssistantSelected: () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const MainScreen()),
+                      ),
+                    ),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
         ),
       ),
     );

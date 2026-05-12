@@ -388,9 +388,14 @@ class SupabaseService {
 
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
   String buildRepLink(String sessionCode) {
-    final baseUrl = EnvConfig.webPortalBaseUrl;
+    const fallback = 'https://mohamedelsayed1475-wq.github.io/saydali-app1';
+    final baseUrl = EnvConfig.webPortalBaseUrl.isNotEmpty
+        ? EnvConfig.webPortalBaseUrl
+        : fallback;
     final separator = baseUrl.endsWith('/') ? '' : '/';
-    return '$baseUrl$separator?code=$sessionCode';
+    final link = '$baseUrl$separator?code=$sessionCode';
+    debugPrint('🔗 رابط المندوب: $link');
+    return link;
   }
 
   // ── حذف الجلسات المنتهية تلقائياً (تنظيف) ──────────────────────────────
@@ -460,6 +465,48 @@ class SupabaseService {
       await cleanupExpiredSessions();
     } catch (e) {
       debugPrint('⚠️ خطأ في التنظيف التلقائي: $e');
+    }
+  }
+
+  // ── سحب أكواد الاشتراك من السحابة ──────────────────────────────────────
+  /// يجلب كل أكواد الاشتراك الفعالة من Supabase
+  Future<List<Map<String, dynamic>>> fetchSubscriptionCodes() async {
+    if (!isConfigured) return [];
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$_url/subscription_codes?is_active=eq.1&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode != 200) return [];
+      final data = jsonDecode(res.body) as List;
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('❌ fetchSubscriptionCodes error: $e');
+      return [];
+    }
+  }
+
+  // ── سحب الإعلانات من السحابة ──────────────────────────────────────
+  /// يجلب كل الإعلانات النشطة من Supabase
+  Future<List<Map<String, dynamic>>> fetchAds() async {
+    if (!isConfigured) return [];
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$_url/ads?is_active=eq.1&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode != 200) return [];
+      final data = jsonDecode(res.body) as List;
+      return data.cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('❌ fetchAds error: $e');
+      return [];
     }
   }
 }
