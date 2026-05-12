@@ -134,31 +134,35 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         return;
       }
 
+      final plan = data['plan']?.toString() ?? '';
       final discount = (data['discount_percent'] is int) ? data['discount_percent'] : int.tryParse(data['discount_percent']?.toString() ?? '0') ?? 0;
       final duration = (data['duration_days'] is int) ? data['duration_days'] : int.tryParse(data['duration_days']?.toString() ?? '30') ?? 30;
 
+      // ── تحديث عدد الاستخدام (مشترك لكل الأنواع) ──
+      if (isLocal) {
+        await localDb.update(
+            'subscription_codes', {'used_count': usedCount + 1},
+            where: 'code = ?', whereArgs: [code]);
+      }
+      SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+
+      // ── كود مساعدين: يضيف 3 أماكن مساعدين ──
+      if (plan == 'assistant') {
+        await db.addAssistantSlots(3);
+        final totalSlots = await db.getAssistantSlots();
+        showSnack(context, '✅ تم تفعيل 3 أماكن مساعدين! (الإجمالي: $totalSlots)');
+        return;
+      }
+
+      // ── كود خصم ──
       if (discount > 0 && discount < 100) {
-        if (isLocal) {
-          await localDb.update(
-              'subscription_codes', {'used_count': usedCount + 1},
-              where: 'code = ?', whereArgs: [code]);
-        }
-        // تحديث السحابة في الخلفية بدون انتظار
-        SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
-        
         setState(() {
           _discountPercent = discount;
           _currentPrice = 200 - (200 * discount / 100);
         });
         showSnack(context, '✅ تم تطبيق خصم $discount% بنجاح!');
       } else {
-        if (isLocal) {
-          await localDb.update(
-              'subscription_codes', {'used_count': usedCount + 1},
-              where: 'code = ?', whereArgs: [code]);
-        }
-        // تحديث السحابة في الخلفية بدون انتظار
-        SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+        // ── كود اشتراك كامل ──
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();

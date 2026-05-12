@@ -511,6 +511,25 @@ class DatabaseHelper {
     return await getSetting('currency_symbol') ?? 'ج.م';
   }
 
+  /// عدد الأماكن المتاحة للمساعدين (كل كود assistant = 3 أماكن)
+  Future<int> getAssistantSlots() async {
+    final val = await getSetting('assistant_slots');
+    return int.tryParse(val ?? '0') ?? 0;
+  }
+
+  /// إضافة أماكن مساعدين جديدة (عند تفعيل كود assistant)
+  Future<void> addAssistantSlots(int count) async {
+    final current = await getAssistantSlots();
+    await setSetting('assistant_slots', '${current + count}');
+  }
+
+  /// عدد المساعدين النشطين حالياً
+  Future<int> getActiveAssistantCount() async {
+    final db = await database;
+    return Sqflite.firstIntValue(
+        await db.rawQuery("SELECT COUNT(*) FROM assistants")) ?? 0;
+  }
+
   /// جلب كود الدولة (EG، SA، إلخ)
   Future<String> getCountryCode() async {
     return await getSetting('country_code') ?? 'EG';

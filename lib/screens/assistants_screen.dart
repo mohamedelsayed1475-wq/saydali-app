@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'subscription_screen.dart';
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});
@@ -21,6 +22,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   List<ActivityLogEntry> _logs = [];
   bool _loading = true;
   String _pharmacyCode = '';
+  int _maxSlots = 0;
+  int _currentCount = 0;
 
   @override
   void initState() {
@@ -38,6 +41,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   Future<void> _load() async {
     final assistantsData = await DatabaseHelper.instance.getAssistants();
     final logsData = await DatabaseHelper.instance.getActivityLog(limit: 100);
+    final slots = await DatabaseHelper.instance.getAssistantSlots();
+    final count = await DatabaseHelper.instance.getActiveAssistantCount();
     // تحميل أو إنشاء كود الصيدلية
     var code = await DatabaseHelper.instance.getSetting('pharmacy_code');
     if (code == null || code.isEmpty) {
@@ -49,6 +54,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         _assistants = assistantsData.map(Assistant.fromMap).toList();
         _logs = logsData.map(ActivityLogEntry.fromMap).toList();
         _pharmacyCode = code!;
+        _maxSlots = slots;
+        _currentCount = count;
         _loading = false;
       });
     }
@@ -291,7 +298,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddAssistant(),
+        onPressed: () => _tryAddAssistant(),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.person_add, color: Colors.white),
         label: const Text('مساعد جديد',
@@ -310,6 +317,156 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     return List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
   }
 
+  /// التحقق من الحد الأقصى قبل إضافة مساعد
+  Future<void> _tryAddAssistant() async {
+    if (_maxSlots <= 0) {
+      // لم يشترك في باقة المساعدين أصلاً
+      _showSubscriptionRequired();
+      return;
+    }
+    if (_currentCount >= _maxSlots) {
+      // وصل للحد الأقصى
+      _showSlotLimitReached();
+      return;
+    }
+    _showAddAssistant();
+  }
+
+  void _showSubscriptionRequired() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('👥 باقة المساعدين',
+            style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('🔐', style: TextStyle(fontSize: 50)),
+            SizedBox(height: 12),
+            Text('لإضافة مساعدين تحتاج تفعيل باقة المساعدين',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textLight, fontSize: 14)),
+            SizedBox(height: 8),
+            Text('💰 100 ج.م = 3 مساعدين',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('لاحقاً', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+            },
+            child: const Text('اشترك الآن'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSlotLimitReached() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('⚠️ وصلت للحد الأقصى',
+            style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('📊', style: TextStyle(fontSize: 50)),
+            const SizedBox(height: 12),
+            Text('لديك $_currentCount/$_maxSlots مساعد',
+                style: const TextStyle(color: AppColors.textLight, fontSize: 14)),
+            const SizedBox(height: 8),
+            const Text('اشترك بكود مساعدين جديد لإضافة 3 أماكن إضافية',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 8),
+            const Text('💰 100 ج.م = 3 مساعدين إضافيين',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 15)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+            },
+            child: const Text('اشترك الآن'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// بانر يعرض عدد الأماكن المستخدمة والمتاحة
+  Widget _buildSlotsBanner() {
+    if (_maxSlots <= 0) return const SizedBox.shrink();
+    final remaining = _maxSlots - _currentCount;
+    final isNearLimit = remaining <= 1;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isNearLimit
+            ? AppColors.warning.withValues(alpha: 0.08)
+            : AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: isNearLimit
+                ? AppColors.warning.withValues(alpha: 0.3)
+                : AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Text(isNearLimit ? '⚠️' : '👥', style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('$_currentCount / $_maxSlots مساعد',
+                    style: TextStyle(
+                        color: isNearLimit ? AppColors.warning : AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                Text(
+                    remaining > 0 ? 'متبقي $remaining أماكن' : 'لا توجد أماكن متاحة',
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+              ],
+            ),
+          ),
+          if (remaining <= 0)
+            GestureDetector(
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('+ أماكن',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAssistantsTab() {
     if (_loading) {
       return const Center(
@@ -319,13 +476,18 @@ class _AssistantsScreenState extends State<AssistantsScreen>
       return Column(
         children: [
           if (_pharmacyCode.isNotEmpty) _buildPharmacyCodeBanner(),
+          _buildSlotsBanner(),
           Expanded(
             child: EmptyState(
               emoji: '👥',
               title: 'لا يوجد مساعدون',
-              subtitle: 'أضف مساعدين لإدارة الصيدلية معك\nوتحكم في صلاحياتهم',
-              buttonText: 'إضافة مساعد',
-              onButton: () => _showAddAssistant(),
+              subtitle: _maxSlots > 0
+                  ? 'أضف مساعدين لإدارة الصيدلية معك\nلديك $_maxSlots أماكن متاحة'
+                  : 'اشترك في باقة المساعدين لإضافتهم\n💰 100 ج.م = 3 مساعدين',
+              buttonText: _maxSlots > 0 ? 'إضافة مساعد' : 'اشترك الآن',
+              onButton: () => _maxSlots > 0
+                  ? _showAddAssistant()
+                  : Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
             ),
           ),
         ],
@@ -341,6 +503,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
           // بانر كود الصيدلية
           if (_pharmacyCode.isNotEmpty) _buildPharmacyCodeBanner(),
           const SizedBox(height: 12),
+          _buildSlotsBanner(),
           // قائمة المساعدين
           ..._assistants.map(_buildAssistantCard),
         ],
