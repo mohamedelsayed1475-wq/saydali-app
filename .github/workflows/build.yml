@@ -39,7 +39,27 @@ jobs:
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
       - name: Build AppBundle for Play Store
-        run: flutter build appbundle --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}" --dart-define=DEV_PASS="${{ secrets.DEV_PASS }}" --dart-define=ADMIN_CODE_1="${{ secrets.ADMIN_CODE_1 }}" --dart-define=ADMIN_CODE_2="${{ secrets.ADMIN_CODE_2 }}" --dart-define=WEB_PORTAL_URL="${{ secrets.WEB_PORTAL_URL }}"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DEV_PASS: ${{ secrets.DEV_PASS }}
+          ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
+          ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
+          WEB_PORTAL_URL: ${{ secrets.WEB_PORTAL_URL }}
+        run: |
+          CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
+          CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
+          CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
+          CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
+          CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
+          CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
+          flutter build appbundle --release \
+            --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
+            --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
+            --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
+            --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
+            --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
+            --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
 
       - name: Upload AppBundle
         uses: actions/upload-artifact@v4
@@ -48,7 +68,27 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
 
       - name: Build APK for Local Testing
-        run: flutter build apk --release --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}" --dart-define=DEV_PASS="${{ secrets.DEV_PASS }}" --dart-define=ADMIN_CODE_1="${{ secrets.ADMIN_CODE_1 }}" --dart-define=ADMIN_CODE_2="${{ secrets.ADMIN_CODE_2 }}" --dart-define=WEB_PORTAL_URL="${{ secrets.WEB_PORTAL_URL }}"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DEV_PASS: ${{ secrets.DEV_PASS }}
+          ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
+          ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
+          WEB_PORTAL_URL: ${{ secrets.WEB_PORTAL_URL }}
+        run: |
+          CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
+          CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
+          CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
+          CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
+          CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
+          CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
+          flutter build apk --release \
+            --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
+            --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
+            --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
+            --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
+            --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
+            --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
