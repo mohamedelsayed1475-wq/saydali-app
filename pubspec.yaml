@@ -64,10 +64,6 @@ dependencies:
   archive: ^3.6.1
   google_mlkit_text_recognition: ^0.15.1
 
-  # Google Drive Backup
-  google_sign_in: ^6.2.1
-  googleapis: ^13.2.0
-  extension_google_sign_in_as_googleapis_auth: ^2.0.12
 
 dev_dependencies:
   flutter_test:
