@@ -635,7 +635,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     Expanded(
                       child: GestureDetector(
                         onTap: () => _openLink(
-                            'https://wa.me/201012345678'),
+                            'https://wa.me/201055261422'),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
