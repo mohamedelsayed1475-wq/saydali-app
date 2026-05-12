@@ -318,81 +318,356 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
 
-          // Vodafone Cash
-          _buildPaymentCard(
-            emoji: '📱',
-            title: 'Vodafone Cash',
-            subtitle: 'اضغط لتحويل عبر فودافون كاش',
-            color: const Color(0xFFE60028),
-            onTap: () => _openLink('http://vf.eg/vfcash?id=mt&qrId=kJcnNk'),
-          ),
-          const SizedBox(height: 10),
-
-          // InstaPay
-          _buildPaymentCard(
-            emoji: '💸',
-            title: 'InstaPay',
-            subtitle: 'drmohamedelsayed123@instapay',
-            color: const Color(0xFF6366F1),
+          // ── InstaPay Card ──
+          GestureDetector(
             onTap: () => _openLink(
                 'https://ipn.eg/S/drmohamedelsayed123/instapay/3MXYr5'),
-            trailing: IconButton(
-              icon:
-                  const Icon(Icons.copy, color: AppColors.textMuted, size: 18),
-              onPressed: () {
-                Clipboard.setData(
-                    const ClipboardData(text: 'drmohamedelsayed123@instapay'));
-                showSnack(context, 'تم نسخ عنوان InstaPay ✅');
-              },
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A1040), Color(0xFF2D1B69)],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      // أيقونة InstaPay
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6366F1)
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                            child: Text('💸',
+                                style: TextStyle(fontSize: 26))),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('InstaPay',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 17)),
+                            Text('تحويل فوري عبر انستاباي',
+                                style: TextStyle(
+                                    color: Color(0xFFB4B4FF),
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6366F1)
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.send_rounded,
+                                color: Colors.white, size: 16),
+                            SizedBox(width: 4),
+                            Text('ادفع',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // عنوان انستاباي مع نسخ
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(const ClipboardData(
+                          text: 'drmohamedelsayed123@instapay'));
+                      showSnack(context, 'تم نسخ عنوان InstaPay ✅');
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color:
+                                const Color(0xFF6366F1).withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.copy_rounded,
+                              color: Color(0xFFB4B4FF), size: 16),
+                          SizedBox(width: 8),
+                          Text('drmohamedelsayed123@instapay',
+                              style: TextStyle(
+                                  color: Color(0xFFE0E0FF),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Vodafone Cash Card ──
+          GestureDetector(
+            onTap: () => _openLink('http://vf.eg/vfcash?id=mt&qrId=kJcnNk'),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2D0A0A), Color(0xFF3D1515)],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                    color: const Color(0xFFE60028).withValues(alpha: 0.4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFE60028).withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // أيقونة فودافون
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFE60028), Color(0xFFFF3355)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFFE60028).withValues(alpha: 0.4),
+                          blurRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                        child:
+                            Text('📱', style: TextStyle(fontSize: 26))),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Vodafone Cash',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17)),
+                        Text('تحويل عبر فودافون كاش',
+                            style: TextStyle(
+                                color: Color(0xFFFFB4B4), fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE60028),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFFE60028).withValues(alpha: 0.4),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.send_rounded,
+                            color: Colors.white, size: 16),
+                        SizedBox(width: 4),
+                        Text('ادفع',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
 
-          // Contact Developer
+          // ── Contact Developer ──
+          const Text('📞 تواصل مع المطور',
+              style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF0D1B2A),
-              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0D1B2E), Color(0xFF132A3E)],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                   color: const Color(0xFF229ED9).withValues(alpha: 0.4)),
             ),
-            child: Row(
+            child: Column(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF229ED9).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(
-                      child: Text('✈️', style: TextStyle(fontSize: 24))),
+                const Row(
+                  children: [
+                    Text('👨‍💻', style: TextStyle(fontSize: 30)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('د. محمد السيد',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16)),
+                          Text('للاستفسار والدعم الفني والأكواد',
+                              style: TextStyle(
+                                  color: AppColors.textMuted, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('تواصل مع المطور',
-                          style: TextStyle(
-                              color: AppColors.textColor,
-                              fontWeight: FontWeight.w700)),
-                      const Text('للاستفسار أو المشاكل الفنية',
-                          style: TextStyle(
-                              color: AppColors.textMuted, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () => _openLink('https://t.me/Mohamed07Elsayed'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF229ED9),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    minimumSize: Size.zero,
-                  ),
-                  child: const Text('Telegram', style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    // زر تليجرام
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            _openLink('https://t.me/Mohamed07Elsayed'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF229ED9), Color(0xFF1A8BC7)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF229ED9)
+                                    .withValues(alpha: 0.35),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('✈️',
+                                  style: TextStyle(fontSize: 18)),
+                              SizedBox(width: 8),
+                              Text('Telegram',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // زر واتساب
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _openLink(
+                            'https://wa.me/201012345678'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF25D366), Color(0xFF1EBE5D)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF25D366)
+                                    .withValues(alpha: 0.35),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('💬',
+                                  style: TextStyle(fontSize: 18)),
+                              SizedBox(width: 8),
+                              Text('WhatsApp',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -488,56 +763,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  Widget _buildPaymentCard({
-    required String emoji,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-    Widget? trailing,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.darkCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Center(
-                  child: Text(emoji, style: const TextStyle(fontSize: 24))),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          color: AppColors.textColor,
-                          fontWeight: FontWeight.w700)),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: AppColors.textMuted, fontSize: 12)),
-                ],
-              ),
-            ),
-            trailing ?? Icon(Icons.open_in_new_rounded, color: color, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _openLink(String urlStr) async {
     final url = Uri.parse(urlStr);
