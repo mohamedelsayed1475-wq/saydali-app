@@ -274,13 +274,15 @@ Future<bool?> showDeleteDialog(BuildContext context, String itemName) {
 }
 
 // ── Snackbar ──────────────────────────────────────────────────
-void showSnack(BuildContext context, String message, {bool isError = false}) {
+void showSnack(BuildContext context, String message, {bool isError = false, int durationMs = 1000}) {
+  ScaffoldMessenger.of(context).clearSnackBars();
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(message, style: const TextStyle(fontFamily: 'Cairo')),
     backgroundColor: isError ? AppColors.danger : AppColors.primary,
     behavior: SnackBarBehavior.floating,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     margin: const EdgeInsets.all(16),
+    duration: Duration(milliseconds: durationMs),
   ));
 }
 
