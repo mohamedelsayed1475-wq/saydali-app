@@ -33,6 +33,13 @@ class SupabaseService {
         'Prefer': 'return=representation',
       };
 
+  Map<String, String> get _adminHeaders => {
+        'apikey': EnvConfig.supabaseServiceKey,
+        'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      };
+
   // ── إنشاء جلسة جديدة ──────────────────────────────────────────────────
   Future<String?> createSession({
     required String repName,
@@ -344,7 +351,7 @@ class SupabaseService {
       final res = await http
           .post(
             Uri.parse('$_url/subscription_codes'),
-            headers: _headers,
+            headers: _adminHeaders,
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
@@ -389,7 +396,7 @@ class SupabaseService {
       final res = await http
           .post(
             Uri.parse('$_url/ads'),
-            headers: _headers,
+            headers: _adminHeaders,
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
