@@ -6,7 +6,9 @@ import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
-import '../main.dart'; // import MainScreen
+import '../main.dart';
+import 'user_selection_screen.dart';
+import '../services/sync_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -46,6 +48,120 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   void dispose() {
     _codeCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _joinAsAssistant() async {
+    final codeCtrl = TextEditingController();
+    bool isJoining = false;
+    String error = '';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          backgroundColor: AppColors.darkCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('👨‍⚕️ دخول كمساعد صيدلي', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('أدخل كود الصيدلية المكون من 6 أرقام (يمكن للمالك الحصول عليه من الإعدادات)', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textColor, fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.w800),
+                decoration: InputDecoration(
+                  hintText: '• • • • • •',
+                  counterText: '',
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: error.isNotEmpty ? AppColors.danger : AppColors.darkBorder)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
+                ),
+                onChanged: (v) {
+                  if (error.isNotEmpty) setDlg(() => error = '');
+                },
+              ),
+              if (error.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(error, style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isJoining ? null : () => Navigator.pop(ctx),
+              child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: isJoining ? null : () async {
+                final code = codeCtrl.text.trim().toUpperCase();
+                if (code.length != 6) {
+                  setDlg(() => error = 'كود الصيدلية يجب أن يكون 6 أرقام/حروف');
+                  return;
+                }
+                setDlg(() { isJoining = true; error = ''; });
+                final res = await SyncService.instance.joinPharmacy(code);
+                setDlg(() => isJoining = false);
+                
+                if (res.success) {
+                  // حفظ المساعدين محلياً
+                  final db = DatabaseHelper.instance;
+                  final localDb = await db.database;
+                  await localDb.delete('assistants'); // مسح القديم
+                  for (final a in res.assistants) {
+                    await localDb.insert('assistants', {
+                      'name': a['name'],
+                      'phone': a['phone'],
+                      'pin': a['pin'],
+                      'role': a['role'],
+                      'can_add_debt': a['can_add_debt'] == true ? 1 : 0,
+                      'can_edit_debt': a['can_edit_debt'] == true ? 1 : 0,
+                      'can_delete': a['can_delete'] == true ? 1 : 0,
+                      'can_view_reports': a['can_view_reports'] == true ? 1 : 0,
+                      'can_manage_invoices': a['can_manage_invoices'] == true ? 1 : 0,
+                      'can_manage_shortages': a['can_manage_shortages'] == true ? 1 : 0,
+                      'can_manage_reps': a['can_manage_reps'] == true ? 1 : 0,
+                      'is_active': a['is_active'] == true ? 1 : 0,
+                      'created_at': DateTime.now().toIso8601String(),
+                    });
+                  }
+                  
+                  await db.setSetting('assistants_activated', '1');
+                  final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
+                  await db.setSetting('subscription_expiry', expiry);
+                  
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx); // Close Dialog
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (navCtx) => UserSelectionScreen(
+                          onOwnerSelected: () {
+                            SyncService.instance.startPeriodicSync();
+                            Navigator.pushReplacement(navCtx, MaterialPageRoute(builder: (_) => const MainScreen()));
+                          },
+                          onAssistantSelected: () {
+                            SyncService.instance.startPeriodicSync();
+                            Navigator.pushReplacement(navCtx, MaterialPageRoute(builder: (_) => const MainScreen()));
+                          },
+                        ),
+                      ),
+                      (route) => false,
+                    );
+                  }
+                } else {
+                  setDlg(() => error = res.error ?? 'حدث خطأ غير معروف');
+                }
+              },
+              child: isJoining ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('انضمام'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _validateCode() async {
@@ -682,6 +798,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ),
               ],
             ),
+          ),
+          // ── Assistant Join ──
+          const Divider(color: AppColors.darkBorder),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: _joinAsAssistant,
+            icon: const Text('👨‍⚕️', style: TextStyle(fontSize: 20)),
+            label: const Text('هل أنت مساعد صيدلي؟ انضم لصيدليتك من هنا', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(height: 30),
         ],
