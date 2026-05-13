@@ -336,13 +336,22 @@ class SupabaseService {
   Future<bool> insertSubscriptionCode(Map<String, dynamic> data) async {
     if (!isConfigured) return false;
     try {
+      final payload = Map<String, dynamic>.from(data);
+      if (payload.containsKey('is_active')) {
+        payload['is_active'] = payload['is_active'] == 1 || payload['is_active'] == true;
+      }
+      
       final res = await http
           .post(
             Uri.parse('$_url/subscription_codes'),
             headers: _headers,
-            body: jsonEncode(data),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
+          
+      if (res.statusCode != 201 && res.statusCode != 200) {
+        debugPrint('❌ insertSubscriptionCode failed: ${res.statusCode} - ${res.body}');
+      }
       return res.statusCode == 201 || res.statusCode == 200;
     } catch (e) {
       debugPrint('❌ insertSubscriptionCode error: $e');
@@ -372,13 +381,22 @@ class SupabaseService {
   Future<bool> insertAd(Map<String, dynamic> data) async {
     if (!isConfigured) return false;
     try {
+      final payload = Map<String, dynamic>.from(data);
+      if (payload.containsKey('is_active')) {
+        payload['is_active'] = payload['is_active'] == 1 || payload['is_active'] == true;
+      }
+
       final res = await http
           .post(
             Uri.parse('$_url/ads'),
             headers: _headers,
-            body: jsonEncode(data),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 10));
+          
+      if (res.statusCode != 201 && res.statusCode != 200) {
+        debugPrint('❌ insertAd failed: ${res.statusCode} - ${res.body}');
+      }
       return res.statusCode == 201 || res.statusCode == 200;
     } catch (e) {
       debugPrint('❌ insertAd error: $e');
