@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
+import '../services/sync_service.dart';
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});
@@ -72,6 +73,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     bool canManageInvoices = existing?.canManageInvoices ?? true;
     bool canManageShortages = existing?.canManageShortages ?? true;
     bool canManageReps = existing?.canManageReps ?? false;
+    bool isActive = existing?.isActive ?? true;
 
     await showModalBottomSheet(
       context: context,
@@ -173,6 +175,17 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                   value: canManageReps,
                   onChanged: (v) => setBS(() => canManageReps = v),
                 ),
+                if (existing != null) ...[
+                  const SizedBox(height: 10),
+                  const Divider(color: AppColors.darkBorder),
+                  _permissionTile(
+                    icon: isActive ? Icons.check_circle_rounded : Icons.block_rounded,
+                    title: 'حساب نشط (يمكنه تسجيل الدخول)',
+                    value: isActive,
+                    onChanged: (v) => setBS(() => isActive = v),
+                    isDanger: !isActive,
+                  ),
+                ],
                 const SizedBox(height: 16),
 
                 PrimaryButton(
@@ -213,7 +226,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       'can_manage_invoices': canManageInvoices ? 1 : 0,
                       'can_manage_shortages': canManageShortages ? 1 : 0,
                       'can_manage_reps': canManageReps ? 1 : 0,
-                      'is_active': 1,
+                      'is_active': isActive ? 1 : 0,
                     };
 
                     if (existing == null) {
@@ -306,6 +319,20 @@ class _AssistantsScreenState extends State<AssistantsScreen>
               color: AppColors.textColor),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_sync_rounded, color: AppColors.primary),
+            tooltip: 'مزامنة سحابية',
+            onPressed: () async {
+              showSnack(context, 'جاري المزامنة السحابية...', isError: false);
+              await SyncService.instance.syncAll();
+              if (mounted) {
+                showSnack(context, '✅ تمت المزامنة بنجاح!');
+                _load(); // إعادة تحميل القائمة في حال جاءت تعديلات من السحابة
+              }
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabCtrl,
           indicatorColor: AppColors.primary,
@@ -413,11 +440,11 @@ class _AssistantsScreenState extends State<AssistantsScreen>
             Text('لديك $_currentCount/$_maxSlots مساعد',
                 style: const TextStyle(color: AppColors.textLight, fontSize: 14)),
             const SizedBox(height: 8),
-            const Text('اشترك بكود مساعدين جديد لإضافة 3 أماكن إضافية',
+            const Text('اشترك بكود مساعد إضافي لإضافة مكان آخر',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
             const SizedBox(height: 8),
-            const Text('💰 100 ج.م = 3 مساعدين إضافيين',
+            const Text('💰 100 ج.م = مساعد إضافي واحد',
                 style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 15)),
           ],
         ),
@@ -656,7 +683,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
           ),
           const SizedBox(height: 8),
           const Text(
-            '⚠️ المساعد يحتاج هذا الكود + رمز PIN الخاص به للدخول',
+            '⚠️ يجب على المساعد تحميل التطبيق واختيار "دخول كمساعد صيدلي" واستخدام هذا الكود.',
             style: TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 10,

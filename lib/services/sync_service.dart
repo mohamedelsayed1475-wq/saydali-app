@@ -222,6 +222,7 @@ class SyncService {
       await _pushInvoices();
       await _pullInvoices();
       await _syncAssistants();
+      await _pullAssistants();
 
       // تحديث وقت آخر مزامنة
       await DatabaseHelper.instance.setSetting(
@@ -723,6 +724,42 @@ class SyncService {
       } catch (e) {
         debugPrint('⚠️ sync assistant error: $e');
       }
+    }
+  }
+
+  Future<void> _pullAssistants() async {
+    final isAssistantDevice = await DatabaseHelper.instance.getSetting('is_assistant_device');
+    if (isAssistantDevice != '1') return; // المالك لا يسحب المساعدين لأنهم عنده الأصل
+
+    final db = await DatabaseHelper.instance.database;
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final items = jsonDecode(res.body) as List;
+        for (final item in items) {
+          final cloudName = item['name'];
+          // تحديث الصلاحيات وحالة النشاط
+          await db.update('assistants', {
+            'pin': item['pin'],
+            'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
+            'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
+            'can_delete': item['can_delete'] == true ? 1 : 0,
+            'can_view_reports': item['can_view_reports'] == true ? 1 : 0,
+            'can_manage_invoices': item['can_manage_invoices'] == true ? 1 : 0,
+            'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
+            'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
+            'is_active': item['is_active'] == true ? 1 : 0,
+          }, where: 'name = ?', whereArgs: [cloudName]);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ pull assistants error: $e');
     }
   }
 }
