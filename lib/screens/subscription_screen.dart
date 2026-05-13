@@ -42,6 +42,30 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         'دعم فني متميز 24/7'
       ],
     ),
+    (
+      name: 'باقة المساعدين',
+      medal: '👥',
+      price: 100,
+      duration: 'شهر',
+      color: AppColors.primary,
+      features: [
+        'إضافة 3 مساعدين بـ 100 ج.م',
+        'صلاحيات مخصصة لكل مساعد',
+        'تتبع نشاط المساعدين',
+        'مزامنة بين الأجهزة',
+      ],
+    ),
+    (
+      name: 'مساعد إضافي',
+      medal: '👤',
+      price: 100,
+      duration: 'شهر',
+      color: Colors.teal,
+      features: [
+        'إضافة 1 مساعد بـ 100 ج.م',
+        'للمساعدين فوق العدد الأساسي',
+      ],
+    ),
   ];
 
   @override
@@ -263,10 +287,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
 
       // ── كود مساعدين: يضيف 3 أماكن مساعدين ──
-      if (plan == 'assistant') {
+      if (plan == 'assistant' || plan == 'assistant_3') {
         await db.addAssistantSlots(3);
         final totalSlots = await db.getAssistantSlots();
         showSnack(context, '✅ تم تفعيل 3 أماكن مساعدين! (الإجمالي: $totalSlots)');
+        return;
+      }
+
+      // ── كود مساعد إضافي: يضيف مكان واحد ──
+      if (plan == 'assistant_1') {
+        await db.addAssistantSlots(1);
+        final totalSlots = await db.getAssistantSlots();
+        showSnack(context, '✅ تم تفعيل مكان مساعد إضافي! (الإجمالي: $totalSlots)');
         return;
       }
 
@@ -274,7 +306,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       if (discount > 0 && discount < 100) {
         setState(() {
           _discountPercent = discount;
-          _currentPrice = 200 - (200 * discount / 100);
+          final basePrice = _plans[_selectedPlan].price;
+          _currentPrice = basePrice - (basePrice * discount / 100);
         });
         showSnack(context, '✅ تم تطبيق خصم $discount% بنجاح!');
       } else {
@@ -819,7 +852,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
-        onTap: () => setState(() => _selectedPlan = index),
+        onTap: () => setState(() {
+          _selectedPlan = index;
+          if (_discountPercent > 0) {
+            final basePrice = plan.price;
+            _currentPrice = basePrice - (basePrice * _discountPercent / 100);
+          }
+        }),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
