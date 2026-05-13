@@ -6,7 +6,6 @@ import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import '../services/chat_service.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../providers/app_providers.dart';
@@ -16,6 +15,7 @@ import 'send_to_rep_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../utils/fuzzy_search.dart';
+import '../providers/current_user_provider.dart';
 
 
 import 'package:flutter/services.dart';
@@ -37,9 +37,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     return FuzzySearch.match(query, text);
   }
   List<Map<String, dynamic>> _suggestions = [];
-  List<Map<String, dynamic>> _aiDrugSuggestions = [];
-  bool _aiSearching = false;
-  Timer? _aiDebounce;
   final _searchController = TextEditingController();
 
   final _filters = [
@@ -52,7 +49,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   @override
   void dispose() {
-    _aiDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -85,62 +81,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         } catch (e) {}
       }
     }
-  }
-
-  bool _sheetOpen = false;
-
-  void _searchAiForDrug(String query, VoidCallback onUpdate) {
-    _aiDebounce?.cancel();
-    if (query.length < 3) {
-      _aiDrugSuggestions = [];
-      _aiSearching = false;
-      onUpdate();
-      return;
-    }
-
-    // ▌ 1️⃣ البحث المحلي أولاً (الأساس - القاموس والملفات)
-    final localResults = _getLocalSuggestions(query);
-    if (localResults.isNotEmpty) {
-      _aiDrugSuggestions = localResults;
-      _aiSearching = false;
-      onUpdate();
-      return;
-    }
-
-    // ▌ 2️⃣ لو مفيش نتائج محلية، استخدم الذكاء الاصطناعي
-    _aiSearching = true;
-    onUpdate();
-    _aiDebounce = Timer(const Duration(milliseconds: 800), () async {
-      final results = await ChatService.instance.suggestDrugNames(query);
-      _aiDrugSuggestions = results;
-      _aiSearching = false;
-      if (mounted && _sheetOpen) onUpdate();
-    });
-  }
-
-  /// ▌ البحث المحلي السريع في القاموس والملفات
-  List<Map<String, dynamic>> _getLocalSuggestions(String query) {
-    final normalized = query.toLowerCase().trim();
-    if (normalized.isEmpty) return [];
-
-    final results = <Map<String, dynamic>>[];
-
-    // ▌ البحث في القاموس المحلي
-    for (final s in _suggestions) {
-      final en = s['enName']?.toString() ?? '';
-      final ar = s['arName']?.toString() ?? '';
-      final act = s['activeIngredient']?.toString() ?? '';
-
-      if (en.toLowerCase().contains(normalized) ||
-          ar.toLowerCase().contains(normalized) ||
-          act.toLowerCase().contains(normalized) ||
-          FuzzySearch.match(normalized, en)) {
-        results.add(s);
-        if (results.length >= 10) break;
-      }
-    }
-
-    return results;
   }
 
   Future<void> _loadShortages() async {
@@ -345,6 +285,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _showAddSheet({Shortage? existing}) async {
+    // فحص صلاحية إدارة النواقص
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canManageShortages) {
+      showSnack(context, '⛔ ليس لديك صلاحية إدارة النواقص', isError: true);
+      return;
+    }
     final nameCtrl = TextEditingController(text: existing?.name);
     TextEditingController? autoCtrl; // Reference to Autocomplete's internal controller
     final companyCtrl = TextEditingController(text: existing?.company);
@@ -354,7 +300,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     bool isUrgent = existing?.isUrgent ?? false;
     String status = existing?.status ?? 'pending';
 
-    _sheetOpen = true;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -395,26 +340,31 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         optionsBuilder: (v) {
                           if (v.text.isEmpty)
                             return const Iterable<Map<String, dynamic>>.empty();
-                          final terms = v.text
+                          
+                          final normalizedQuery = v.text.toLowerCase().trim();
+                          final terms = normalizedQuery
                               .split(RegExp(r'[\s/]+'))
                               .where((t) => t.isNotEmpty);
+                              
                           return _suggestions.where((s) {
-                            final en = s['enName']?.toString() ?? '';
-                            final ar = s['arName']?.toString() ?? '';
-                            final act = s['activeIngredient']?.toString() ?? '';
-                            final bar = s['barcode']?.toString() ?? '';
+                            final en = s['enName']?.toString().toLowerCase() ?? '';
+                            final ar = s['arName']?.toString().toLowerCase() ?? '';
+                            final act = s['activeIngredient']?.toString().toLowerCase() ?? '';
+                            final bar = s['barcode']?.toString().toLowerCase() ?? '';
 
                             return terms.every((term) =>
-                                _fuzzyMatch(term, en) ||
-                                _fuzzyMatch(term, ar) ||
-                                _fuzzyMatch(term, act) ||
-                                _fuzzyMatch(term, bar));
-                          });
+                                en.contains(term) ||
+                                ar.contains(term) ||
+                                act.contains(term) ||
+                                bar.contains(term) ||
+                                _fuzzyMatch(term, en));
+                          }).take(10); // الحد الأقصى 10 نتائج
                         },
                         displayStringForOption: (option) =>
                             option['enName']?.toString() ?? '',
-                        onSelected: (s) =>
-                            nameCtrl.text = s['enName']?.toString() ?? '',
+                        onSelected: (s) {
+                          nameCtrl.text = s['enName']?.toString() ?? '';
+                        },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
                           autoCtrl = ctrl; // Save the reference
                           if (existing != null &&
@@ -428,7 +378,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                             onSubmitted: (_) => onSubmit(),
                             onChanged: (val) {
                               nameCtrl.text = val;
-                              _searchAiForDrug(val, () => setBS(() {}));
                             },
                           );
                         },
@@ -464,8 +413,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                     return InkWell(
                                       onTap: () {
                                         onSelected(option);
-                                        nameCtrl.text =
-                                            en; // Ensure it syncs when selected
+                                        nameCtrl.text = en;
                                       },
                                       child: Padding(
                                         padding: const EdgeInsets.all(12.0),
@@ -544,57 +492,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     ),
                   ],
                 ),
-                // AI Suggestions
-                if (_aiSearching)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Row(children: [
-                      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                      SizedBox(width: 8),
-                      Text('🤖 جاري البحث بالذكاء الاصطناعي...', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                    ]),
-                  ),
-                if (_aiDrugSuggestions.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text('🤖 اقتراحات الذكاء الاصطناعي:', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: _aiDrugSuggestions.map((d) {
-                      final name = d['enName']?.toString() ?? '';
-                      final source = d['source']?.toString() ?? '';
-                      return ActionChip(
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(name, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                            const SizedBox(width: 4),
-                            Icon(
-                              source == 'dictionary' ? Icons.storage : Icons.smart_toy,
-                              size: 12,
-                              color: source == 'dictionary' ? Colors.green : Colors.amber,
-                            ),
-                          ],
-                        ),
-                        backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-                        onPressed: () {
-                          nameCtrl.text = name;
-                          if (autoCtrl != null) {
-                            autoCtrl!.text = name;
-                            autoCtrl!.selection = TextSelection.fromPosition(
-                              TextPosition(offset: name.length),
-                            );
-                          }
-                          setBS(() => _aiDrugSuggestions = []);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
+
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة المصنعة', controller: companyCtrl),
                 const SizedBox(height: 10),
@@ -671,6 +569,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       showSnack(ctx, 'أدخل اسم الدواء', isError: true);
                       return;
                     }
+
+
                     final data = {
                       'name': name,
                       'company': companyCtrl.text.trim().isEmpty
@@ -688,8 +588,25 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       // ▌ حفظ الدواء في القاموس المحلي تلقائياً
                       await _saveDrugToDictionary(name, company: companyCtrl.text.trim());
                       
+                      // تسجيل النشاط
+                      await DatabaseHelper.instance.logActivity(
+                        assistantId: userProvider.currentAssistantId,
+                        assistantName: userProvider.currentName,
+                        action: 'إضافة ناقص',
+                        details: 'تم إضافة الناقص: $name',
+                        screen: 'shortages',
+                      );
+                      
                     } else {
                       await context.read<ShortagesProvider>().update(existing.id!, data);
+                      // تسجيل النشاط
+                      await DatabaseHelper.instance.logActivity(
+                        assistantId: userProvider.currentAssistantId,
+                        assistantName: userProvider.currentName,
+                        action: 'تعديل ناقص',
+                        details: 'تم تعديل الناقص: $name',
+                        screen: 'shortages',
+                      );
                     }
 
                     if (ctx.mounted) Navigator.pop(ctx);
@@ -706,8 +623,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         ),
       ),
     );
-    _sheetOpen = false;
-    _aiDebounce?.cancel();
   }
 
   Future<void> _shareShortages() async {
@@ -785,6 +700,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   /// ▌ حذف جماعي للأصناف المعروضة حالياً
   Future<void> _bulkDeleteFiltered() async {
+    // فحص صلاحية الحذف
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canDelete) {
+      showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+      return;
+    }
     final provider = context.read<ShortagesProvider>();
     final filtered = _getFiltered(provider.shortages);
     if (filtered.isEmpty) {
@@ -824,6 +745,14 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
           await provider.delete(item.id!);
         }
       }
+      // تسجيل النشاط
+      await DatabaseHelper.instance.logActivity(
+        assistantId: userProvider.currentAssistantId,
+        assistantName: userProvider.currentName,
+        action: 'حذف جماعي نواقص',
+        details: 'تم حذف ${filtered.length} صنف',
+        screen: 'shortages',
+      );
       if (mounted) showSnack(context, 'تم حذف ${filtered.length} صنف ✅');
     }
   }
@@ -1024,9 +953,22 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
             ),
             SlidableAction(
               onPressed: (_) async {
+                final userProvider = context.read<CurrentUserProvider>();
+                if (!userProvider.canDelete) {
+                  showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+                  return;
+                }
                 final confirm = await showDeleteDialog(context, item.name);
                 if (confirm == true && item.id != null) {
                   await context.read<ShortagesProvider>().delete(item.id!);
+                  // تسجيل النشاط
+                  await DatabaseHelper.instance.logActivity(
+                    assistantId: userProvider.currentAssistantId,
+                    assistantName: userProvider.currentName,
+                    action: 'حذف ناقص',
+                    details: 'تم حذف الناقص: ${item.name}',
+                    screen: 'shortages',
+                  );
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },

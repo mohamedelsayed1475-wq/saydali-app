@@ -285,6 +285,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               await _generatePDF(
                                   nameCtrl.text.trim(), items, subtotal,
                                   discount, total);
+                              // تسجيل النشاط
+                              final userProvider = context.read<CurrentUserProvider>();
+                              await DatabaseHelper.instance.logActivity(
+                                assistantId: userProvider.currentAssistantId,
+                                assistantName: userProvider.currentName,
+                                action: 'إنشاء فاتورة',
+                                details: 'تم إنشاء فاتورة للعميل: ${nameCtrl.text.trim()} - الإجمالي: ${total.toStringAsFixed(2)}',
+                                screen: 'invoices',
+                              );
                               if (ctx.mounted) Navigator.pop(ctx);
                               await _load();
                               if (mounted)
@@ -919,6 +928,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   // ▌ حذف فاتورة
   Future<void> _deleteInvoice(Map<String, dynamic> invoice) async {
+    // فحص صلاحية الحذف
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canDelete) {
+      showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+      return;
+    }
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -939,10 +954,19 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     if (confirm == true) {
       await DatabaseHelper.instance.deleteInvoice(invoice['id'] as int);
+      // تسجيل النشاط
+      await DatabaseHelper.instance.logActivity(
+        assistantId: userProvider.currentAssistantId,
+        assistantName: userProvider.currentName,
+        action: 'حذف فاتورة',
+        details: 'تم حذف فاتورة: ${invoice['customer_name']}',
+        screen: 'invoices',
+      );
       await _load();
       if (mounted) showSnack(context, 'تم حذف الفاتورة ✅');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

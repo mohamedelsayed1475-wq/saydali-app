@@ -19,7 +19,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 4,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -110,6 +110,20 @@ class DatabaseHelper {
         )
       ''');
     }
+    if (oldVersion < 5) {
+      // ── أعمدة المزامنة السحابية ──
+      final syncTables = ['shortages', 'customers', 'invoices', 'debt_transactions'];
+      for (final table in syncTables) {
+        try { await db.execute('ALTER TABLE $table ADD COLUMN cloud_id TEXT'); } catch (_) {}
+        try { await db.execute('ALTER TABLE $table ADD COLUMN is_synced INTEGER DEFAULT 0'); } catch (_) {}
+        try { await db.execute('ALTER TABLE $table ADD COLUMN created_by TEXT'); } catch (_) {}
+      }
+    }
+    if (oldVersion < 6) {
+      // ── أعمدة صلاحيات جديدة ──
+      try { await db.execute('ALTER TABLE assistants ADD COLUMN can_manage_shortages INTEGER DEFAULT 1'); } catch (_) {}
+      try { await db.execute('ALTER TABLE assistants ADD COLUMN can_manage_reps INTEGER DEFAULT 0'); } catch (_) {}
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -123,6 +137,9 @@ class DatabaseHelper {
         status TEXT DEFAULT 'pending',
         is_urgent INTEGER DEFAULT 0,
         notes TEXT,
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -167,6 +184,9 @@ class DatabaseHelper {
         address TEXT,
         total_debt REAL DEFAULT 0,
         due_date TEXT,
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -182,6 +202,9 @@ class DatabaseHelper {
         discount REAL DEFAULT 0,
         total REAL NOT NULL,
         notes TEXT,
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -194,6 +217,9 @@ class DatabaseHelper {
         amount REAL NOT NULL,
         type TEXT NOT NULL,
         description TEXT,
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
         transaction_date TEXT NOT NULL,
         FOREIGN KEY (customer_id) REFERENCES customers(id)
       )
@@ -253,6 +279,8 @@ class DatabaseHelper {
         can_delete INTEGER DEFAULT 0,
         can_view_reports INTEGER DEFAULT 0,
         can_manage_invoices INTEGER DEFAULT 1,
+        can_manage_shortages INTEGER DEFAULT 1,
+        can_manage_reps INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
         created_at TEXT NOT NULL
       )
@@ -527,7 +555,7 @@ class DatabaseHelper {
   Future<int> getActiveAssistantCount() async {
     final db = await database;
     return Sqflite.firstIntValue(
-        await db.rawQuery("SELECT COUNT(*) FROM assistants")) ?? 0;
+        await db.rawQuery("SELECT COUNT(*) FROM assistants WHERE is_active = 1")) ?? 0;
   }
 
   /// جلب كود الدولة (EG، SA، إلخ)
@@ -604,6 +632,19 @@ class DatabaseHelper {
   Future<int> deleteAssistant(int id) async {
     final db = await database;
     return await db.delete('assistants', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// التحقق من تكرار رمز PIN بين المساعدين النشطين
+  Future<bool> isPinDuplicate(String pin, {int? excludeId}) async {
+    final db = await database;
+    final result = excludeId != null
+        ? await db.query('assistants',
+            where: 'pin = ? AND is_active = 1 AND id != ?',
+            whereArgs: [pin, excludeId])
+        : await db.query('assistants',
+            where: 'pin = ? AND is_active = 1',
+            whereArgs: [pin]);
+    return result.isNotEmpty;
   }
 
   // ── سجل الأنشطة (Activity Log) ────────────────────────────────────────────

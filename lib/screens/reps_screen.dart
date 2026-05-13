@@ -7,6 +7,7 @@ import '../widgets/common_widgets.dart';
 import 'send_to_rep_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_providers.dart';
+import '../providers/current_user_provider.dart';
 
 class RepsScreen extends StatefulWidget {
   const RepsScreen({super.key});
@@ -36,6 +37,12 @@ class _RepsScreenState extends State<RepsScreen> {
   }
 
   Future<void> _showAddSheet({Representative? existing}) async {
+    // فحص صلاحية إدارة المندوبين
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canManageReps) {
+      showSnack(context, '⛔ ليس لديك صلاحية إدارة المندوبين', isError: true);
+      return;
+    }
     final nameCtrl = TextEditingController(text: existing?.name);
     final companyCtrl = TextEditingController(text: existing?.company);
     final phoneCtrl = TextEditingController(text: existing?.phone);
@@ -126,6 +133,14 @@ class _RepsScreenState extends State<RepsScreen> {
                     } else {
                       await context.read<RepsProvider>().update(existing.id!, data);
                     }
+                    // تسجيل النشاط
+                    await DatabaseHelper.instance.logActivity(
+                      assistantId: userProvider.currentAssistantId,
+                      assistantName: userProvider.currentName,
+                      action: existing == null ? 'إضافة مندوب' : 'تعديل مندوب',
+                      details: '${existing == null ? "تم إضافة" : "تم تعديل"} المندوب: $name',
+                      screen: 'reps',
+                    );
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _loadReps();
                     if (mounted)
@@ -215,9 +230,22 @@ class _RepsScreenState extends State<RepsScreen> {
             ),
             SlidableAction(
               onPressed: (_) async {
+                final userProvider = context.read<CurrentUserProvider>();
+                if (!userProvider.canDelete) {
+                  showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+                  return;
+                }
                 final confirm = await showDeleteDialog(context, rep.name);
                 if (confirm == true) {
                   await context.read<RepsProvider>().delete(rep.id!);
+                  // تسجيل النشاط
+                  await DatabaseHelper.instance.logActivity(
+                    assistantId: userProvider.currentAssistantId,
+                    assistantName: userProvider.currentName,
+                    action: 'حذف مندوب',
+                    details: 'تم حذف المندوب: ${rep.name}',
+                    screen: 'reps',
+                  );
                   if (mounted) showSnack(context, 'تم الحذف');
                 }
               },

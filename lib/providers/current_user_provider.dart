@@ -56,6 +56,12 @@ class CurrentUserProvider extends ChangeNotifier {
   /// هل يمكنه إدارة الفواتير؟
   bool get canManageInvoices => _isOwner || (_currentUser?.canManageInvoices ?? false);
 
+  /// هل يمكنه إدارة النواقص؟
+  bool get canManageShortages => _isOwner || (_currentUser?.canManageShortages ?? false);
+
+  /// هل يمكنه إدارة المندوبين؟
+  bool get canManageReps => _isOwner || (_currentUser?.canManageReps ?? false);
+
   /// فحص صلاحية بالاسم
   bool hasPermission(String permission) {
     if (_isOwner) return true;
@@ -70,6 +76,10 @@ class CurrentUserProvider extends ChangeNotifier {
         return canViewReports;
       case 'manage_invoices':
         return canManageInvoices;
+      case 'manage_shortages':
+        return canManageShortages;
+      case 'manage_reps':
+        return canManageReps;
       default:
         return false;
     }

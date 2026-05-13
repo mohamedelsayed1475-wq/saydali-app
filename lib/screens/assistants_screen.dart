@@ -70,6 +70,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     bool canDelete = existing?.canDelete ?? false;
     bool canViewReports = existing?.canViewReports ?? false;
     bool canManageInvoices = existing?.canManageInvoices ?? true;
+    bool canManageShortages = existing?.canManageShortages ?? true;
+    bool canManageReps = existing?.canManageReps ?? false;
 
     await showModalBottomSheet(
       context: context,
@@ -159,6 +161,18 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                   value: canManageInvoices,
                   onChanged: (v) => setBS(() => canManageInvoices = v),
                 ),
+                _permissionTile(
+                  icon: Icons.medication_rounded,
+                  title: 'إدارة النواقص',
+                  value: canManageShortages,
+                  onChanged: (v) => setBS(() => canManageShortages = v),
+                ),
+                _permissionTile(
+                  icon: Icons.people_rounded,
+                  title: 'إدارة المندوبين',
+                  value: canManageReps,
+                  onChanged: (v) => setBS(() => canManageReps = v),
+                ),
                 const SizedBox(height: 16),
 
                 PrimaryButton(
@@ -176,6 +190,17 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       return;
                     }
 
+                    // فحص تكرار PIN
+                    final isDuplicate = await DatabaseHelper.instance
+                        .isPinDuplicate(pin, excludeId: existing?.id);
+                    if (isDuplicate) {
+                      if (ctx.mounted) {
+                        showSnack(ctx, '⚠️ رمز PIN مستخدم بالفعل لمساعد آخر',
+                            isError: true);
+                      }
+                      return;
+                    }
+
                     final data = {
                       'name': name,
                       'phone': phoneCtrl.text.trim(),
@@ -186,6 +211,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       'can_delete': canDelete ? 1 : 0,
                       'can_view_reports': canViewReports ? 1 : 0,
                       'can_manage_invoices': canManageInvoices ? 1 : 0,
+                      'can_manage_shortages': canManageShortages ? 1 : 0,
+                      'can_manage_reps': canManageReps ? 1 : 0,
                       'is_active': 1,
                     };
 

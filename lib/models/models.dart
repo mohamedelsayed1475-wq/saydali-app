@@ -228,6 +228,8 @@ class Assistant {
   final bool canDelete;
   final bool canViewReports;
   final bool canManageInvoices;
+  final bool canManageShortages;
+  final bool canManageReps;
   final bool isActive;
   final DateTime createdAt;
 
@@ -242,6 +244,8 @@ class Assistant {
     this.canDelete = false,
     this.canViewReports = false,
     this.canManageInvoices = true,
+    this.canManageShortages = true,
+    this.canManageReps = false,
     this.isActive = true,
     required this.createdAt,
   });
@@ -257,6 +261,8 @@ class Assistant {
         canDelete: (map['can_delete'] ?? 0) == 1,
         canViewReports: (map['can_view_reports'] ?? 0) == 1,
         canManageInvoices: (map['can_manage_invoices'] ?? 1) == 1,
+        canManageShortages: (map['can_manage_shortages'] ?? 1) == 1,
+        canManageReps: (map['can_manage_reps'] ?? 0) == 1,
         isActive: (map['is_active'] ?? 1) == 1,
         createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
@@ -272,6 +278,8 @@ class Assistant {
         'can_delete': canDelete ? 1 : 0,
         'can_view_reports': canViewReports ? 1 : 0,
         'can_manage_invoices': canManageInvoices ? 1 : 0,
+        'can_manage_shortages': canManageShortages ? 1 : 0,
+        'can_manage_reps': canManageReps ? 1 : 0,
         'is_active': isActive ? 1 : 0,
       };
 
@@ -284,6 +292,8 @@ class Assistant {
     if (canDelete) perms.add('حذف');
     if (canViewReports) perms.add('تقارير');
     if (canManageInvoices) perms.add('فواتير');
+    if (canManageShortages) perms.add('نواقص');
+    if (canManageReps) perms.add('مندوبين');
     return perms.isEmpty ? 'بدون صلاحيات' : perms.join(' · ');
   }
 }

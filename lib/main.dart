@@ -16,6 +16,7 @@ import 'screens/chat_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
+import 'services/sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -146,14 +147,24 @@ class _SplashScreenState extends State<SplashScreen>
         ctx,
         MaterialPageRoute(
           builder: (_) => UserSelectionScreen(
-            onOwnerSelected: () => Navigator.pushReplacement(
-              ctx,
-              MaterialPageRoute(builder: (_) => const MainScreen()),
-            ),
-            onAssistantSelected: () => Navigator.pushReplacement(
-              ctx,
-              MaterialPageRoute(builder: (_) => const MainScreen()),
-            ),
+            onOwnerSelected: () {
+              // تسجيل الصيدلية وبدء المزامنة
+              SyncService.instance.registerPharmacy().then((_) {
+                SyncService.instance.startPeriodicSync();
+              });
+              Navigator.pushReplacement(
+                ctx,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+              );
+            },
+            onAssistantSelected: () {
+              // بدء المزامنة للمساعد
+              SyncService.instance.startPeriodicSync();
+              Navigator.pushReplacement(
+                ctx,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+              );
+            },
           ),
         ),
       );
@@ -161,6 +172,10 @@ class _SplashScreenState extends State<SplashScreen>
       // دخول مباشر كمالك
       if (ctx.mounted) {
         ctx.read<CurrentUserProvider>().loginAsOwner();
+        // تسجيل الصيدلية وبدء المزامنة
+        SyncService.instance.registerPharmacy().then((_) {
+          SyncService.instance.startPeriodicSync();
+        });
         Navigator.pushReplacement(
           ctx,
           MaterialPageRoute(builder: (_) => const MainScreen()),
