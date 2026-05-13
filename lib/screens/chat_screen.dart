@@ -1052,7 +1052,6 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog>
 
   Future<void> _load() async {
     final settings = await ChatService.instance.getApiSettings();
-    final prefs = await SharedPreferences.getInstance();
     setState(() {
       _groqKeyCtrl.text = settings['groq_key'] ?? '';
       _groqValid = _groqKeyCtrl.text.isNotEmpty;

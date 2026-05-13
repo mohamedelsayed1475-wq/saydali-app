@@ -20,7 +20,6 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _loading = false;
   bool _keyVisible = false;
   String? _error;
-  String? _validatedKey;
 
   @override
   void dispose() {
@@ -47,7 +46,6 @@ class _SetupScreenState extends State<SetupScreen> {
       await prefs.setString('groq_api_key', key);
       await prefs.setBool('setup_complete', true);
       setState(() {
-        _validatedKey = key;
         _step = 2;
         _loading = false;
       });

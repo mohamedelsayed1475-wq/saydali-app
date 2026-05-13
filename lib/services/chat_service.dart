@@ -1,10 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:excel/excel.dart' as ex;
-import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf;
-import 'package:archive/archive.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../database/database_helper.dart';
@@ -846,7 +842,6 @@ class ChatService {
       );
     }
 
-    final groqKey = await _getGroqKey();
 
     // ▌ محاولة Groq مع صورة (عبر base64 إن أمكن)
     // ▌ الاستخراج المحلي
