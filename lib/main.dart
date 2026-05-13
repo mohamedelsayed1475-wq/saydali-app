@@ -146,14 +146,14 @@ class _SplashScreenState extends State<SplashScreen>
       Navigator.pushReplacement(
         ctx,
         MaterialPageRoute(
-          builder: (_) => UserSelectionScreen(
+          builder: (navCtx) => UserSelectionScreen(
             onOwnerSelected: () {
               // تسجيل الصيدلية وبدء المزامنة
               SyncService.instance.registerPharmacy().then((_) {
                 SyncService.instance.startPeriodicSync();
               });
               Navigator.pushReplacement(
-                ctx,
+                navCtx,
                 MaterialPageRoute(builder: (_) => const MainScreen()),
               );
             },
@@ -161,7 +161,7 @@ class _SplashScreenState extends State<SplashScreen>
               // بدء المزامنة للمساعد
               SyncService.instance.startPeriodicSync();
               Navigator.pushReplacement(
-                ctx,
+                navCtx,
                 MaterialPageRoute(builder: (_) => const MainScreen()),
               );
             },
@@ -538,14 +538,14 @@ class _MainScreenState extends State<MainScreen> {
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => UserSelectionScreen(
+                    builder: (navCtx) => UserSelectionScreen(
                       onOwnerSelected: () => Navigator.pushReplacement(
-                        context,
+                        navCtx,
                         MaterialPageRoute(
                             builder: (_) => const MainScreen()),
                       ),
                       onAssistantSelected: () => Navigator.pushReplacement(
-                        context,
+                        navCtx,
                         MaterialPageRoute(
                             builder: (_) => const MainScreen()),
                       ),
