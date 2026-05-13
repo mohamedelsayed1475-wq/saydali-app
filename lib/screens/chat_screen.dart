@@ -1,16 +1,19 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/chat_provider.dart';
 import '../services/chat_service.dart';
+import '../services/groq_service.dart';
 import '../utils/app_theme.dart';
+import 'setup_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ شاشة المحادثة المحسّنة - مع اختيار نوع الرسالة قبل الإرسال
+// ▌ شاشة المحادثة - v5.0
+// ▌ مدمجة مع Groq + OpenFDA + RxNorm
 // ════════════════════════════════════════════════════════════════════════════
 
 class ChatScreen extends StatefulWidget {
@@ -27,8 +30,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   MessageType _selectedType = MessageType.general;
   List<String> _attachedFiles = [];
   bool _showTypeSelector = false;
+  bool _groqConfigured = false;
 
-  // اقتراحات سريعة
   static const _chips = [
     ('النواقص', '📋'),
     ('الديون', '💰'),
@@ -46,6 +49,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+    _checkGroqSetup();
+  }
+
+  Future<void> _checkGroqSetup() async {
+    final key = await ChatService.instance.getGroqKey();
+    setState(() => _groqConfigured = key.isNotEmpty);
   }
 
   @override
@@ -59,7 +68,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _send(String text, [List<String>? files]) {
     if (text.trim().isEmpty && (files == null || files.isEmpty)) return;
 
-    // استخدام النوع المحدد مع الرسالة
     context.read<ChatProvider>().sendWithType(
       text.trim(),
       context: context,
@@ -75,7 +83,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scroll.hasClients) {
-        _scroll.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+        _scroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -84,10 +96,40 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() {
       _selectedType = type;
       _showTypeSelector = false;
-      // تحديث الـ hint في حقل النص
-      _ctrl.text = '';
-      _ctrl.clearComposing();
     });
+  }
+
+  // ── فتح إعدادات API ──────────────────────────────────────────────────
+  void _openApiSettings() {
+    showDialog(
+      context: context,
+      builder: (_) => ApiSettingsDialog(
+        onGroqSaved: () {
+          setState(() => _groqConfigured = true);
+        },
+      ),
+    );
+  }
+
+  // ── فتح شاشة الإعداد الأولى ──────────────────────────────────────────────────
+  void _openSetupScreen() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SizedBox(
+        height: MediaQuery.of(context).size.height * 0.92,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: SetupScreen(
+            onComplete: () {
+              Navigator.pop(context);
+              _checkGroqSetup();
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -95,9 +137,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final chat = context.watch<ChatProvider>();
     return Column(
       children: [
-        // ════════════════════════════════════════════════════════════════
-        // ▌ شريط اختيار نوع الرسالة (الميزة الجديدة)
-        // ════════════════════════════════════════════════════════════════
+        // ═══ شريط التحذير لو Groq مش متضاف ════
+        if (!_groqConfigured) _GroqWarningBanner(onSetup: _openSetupScreen),
+
+        // ═══ شريط اختيار نوع الرسالة ════
         _MessageTypeBar(
           selectedType: _selectedType,
           onTypeSelected: _selectType,
@@ -105,14 +148,20 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           onToggle: () => setState(() => _showTypeSelector = !_showTypeSelector),
           chips: _chips,
           onSend: _send,
+          onSettings: _openApiSettings,
         ),
 
         const Divider(height: 1, color: AppColors.darkBorder),
 
-        // قائمة الرسائل
+        // ═══ قائمة الرسائل ════
         Expanded(
           child: chat.messages.isEmpty
-              ? _EmptyState(onTap: _send, selectedType: _selectedType)
+              ? _EmptyState(
+                  onTap: _send,
+                  selectedType: _selectedType,
+                  groqConfigured: _groqConfigured,
+                  onSetup: _openSetupScreen,
+                )
               : ListView.builder(
                   controller: _scroll,
                   reverse: true,
@@ -127,7 +176,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                       message: msg,
                       onCopy: () {
                         Clipboard.setData(ClipboardData(text: msg.text));
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم النسخ')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم النسخ ✅')),
+                        );
                       },
                       onShare: () => Share.share(msg.text),
                     );
@@ -135,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 ),
         ),
 
-        // حقل الإدخال
+        // ═══ حقل الإدخال ════
         _InputBar(
           ctrl: _ctrl,
           onSend: _send,
@@ -151,7 +202,50 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ شريط اختيار نوع الرسالة - Widget جديد
+// ▌ شريط تحذير Groq
+// ════════════════════════════════════════════════════════════════════════════
+
+class _GroqWarningBanner extends StatelessWidget {
+  final VoidCallback onSetup;
+  const _GroqWarningBanner({required this.onSetup});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onSetup,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.12),
+          border: const Border(
+            bottom: BorderSide(color: Colors.orange, width: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Text('⚠️', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'حكيم يحتاج Groq API للعمل بشكل كامل - اضغط هنا للإعداد المجاني',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: Colors.orange, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▌ شريط اختيار نوع الرسالة
 // ════════════════════════════════════════════════════════════════════════════
 
 class _MessageTypeBar extends StatelessWidget {
@@ -161,6 +255,7 @@ class _MessageTypeBar extends StatelessWidget {
   final VoidCallback onToggle;
   final List<(String, String)> chips;
   final void Function(String, [List<String>?]) onSend;
+  final VoidCallback onSettings;
 
   const _MessageTypeBar({
     required this.selectedType,
@@ -169,6 +264,7 @@ class _MessageTypeBar extends StatelessWidget {
     required this.onToggle,
     required this.chips,
     required this.onSend,
+    required this.onSettings,
   });
 
   @override
@@ -177,65 +273,64 @@ class _MessageTypeBar extends StatelessWidget {
       color: AppColors.darkCard,
       child: Column(
         children: [
-          // ═══ النوع الحالي المحدد ════
+          // ═══ النوع الحالي ════
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryDark],
+                // النوع المحدد
+                GestureDetector(
+                  onTap: onToggle,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.primaryDark],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        selectedType.emoji,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        selectedType.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(selectedType.emoji, style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 6),
+                        Text(
+                          selectedType.label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Icon(
+                          showAll ? Icons.expand_less : Icons.expand_more,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const Spacer(),
-                // زر إظهار/إخفاء الأنواع
-                TextButton.icon(
-                  onPressed: onToggle,
-                  icon: Icon(
-                    showAll ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: AppColors.primary,
-                  ),
-                  label: Text(
-                    showAll ? 'اخفاء' : 'تغيير النوع',
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                    ),
-                  ),
+                // زر الإعدادات
+                IconButton(
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.settings_outlined, color: AppColors.textMuted, size: 20),
+                  tooltip: 'إعدادات API',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
               ],
             ),
           ),
 
-          // ═══ جميع الأنواع (عند التوسع) ════
+          // ═══ جميع الأنواع ════
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: showAll ? 140 : 0,
             child: showAll
-                ? Container(
+                ? Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                     child: GridView.count(
                       crossAxisCount: 4,
@@ -256,30 +351,21 @@ class _MessageTypeBar extends StatelessWidget {
                                   : AppColors.dark,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.darkBorder,
+                                color: isSelected ? AppColors.primary : AppColors.darkBorder,
                                 width: isSelected ? 1.5 : 1,
                               ),
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(
-                                  type.emoji,
-                                  style: const TextStyle(fontSize: 18),
-                                ),
+                                Text(type.emoji, style: const TextStyle(fontSize: 18)),
                                 const SizedBox(height: 2),
                                 Text(
                                   type.label,
                                   style: TextStyle(
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : AppColors.textMuted,
+                                    color: isSelected ? AppColors.primary : AppColors.textMuted,
                                     fontSize: 10,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -316,41 +402,38 @@ class _QuickChips extends StatelessWidget {
     required this.selectedType,
   });
 
+  List<(String, String)> get _suggestions {
+    switch (selectedType) {
+      case MessageType.drug:
+        return [('باراسيتامول', '💊'), ('بروفين', '💊'), ('أدول', '💊'), ('كونجستال', '💊')];
+      case MessageType.alternative:
+        return [('بديل بروفين', '🔄'), ('بديل باراسيتامول', '🔄'), ('بديل أدول', '🔄')];
+      case MessageType.shortage:
+        return [('أضف ناقص', '📋'), ('سجل دواء', '📋'), ('النواقص المعلقة', '📋')];
+      case MessageType.debt:
+        return [('الديون', '💰'), ('عميل جديد', '💰'), ('تسجيل دين', '💰')];
+      case MessageType.rep:
+        return [('المندوبين', '👥'), ('أضف مندوب', '👥'), ('تقييم', '👥')];
+      case MessageType.stats:
+        return [('ملخص', '📊'), ('إحصائيات', '📊'), ('تحليل النواقص', '📈')];
+      case MessageType.image:
+        return [('ارفق صورة', '🖼️'), ('روشتة', '🖼️')];
+      default:
+        return chips;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // اقتراحات خاصة بكل نوع
-    List<(String, String)> getSuggestions() {
-      switch (selectedType) {
-        case MessageType.drug:
-          return [('باراسيتامول', '💊'), ('بروفين', '💊'), ('أدول', '💊'), ('كونجستال', '💊'), ('أوميجا 3', '💊')];
-        case MessageType.alternative:
-          return [('بديل بروفين', '🔄'), ('بديل باراسيتامول', '🔄'), ('بديل أدول', '🔄')];
-        case MessageType.shortage:
-          return [('أضف ناقص', '📋'), ('سجل دواء', '📋'), ('ناقص جديد', '📋')];
-        case MessageType.debt:
-          return [('الديون', '💰'), ('عميل جديد', '💰'), ('تسجيل دين', '💰')];
-        case MessageType.rep:
-          return [('المندوبين', '👥'), ('أضف مندوب', '👥'), ('تقييم', '👥')];
-        case MessageType.stats:
-          return [('ملخص', '📊'), ('إحصائيات', '📊'), ('تقرير', '📊')];
-        case MessageType.image:
-          return [('ارفق صورة', '🖼️'), ('روشتة', '🖼️')];
-        default:
-          return chips;
-      }
-    }
-
-    final suggestions = getSuggestions();
-
     return SizedBox(
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: suggestions.length,
+        itemCount: _suggestions.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          final (label, icon) = suggestions[i];
+          final (label, icon) = _suggestions[i];
           return InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: () => onTap(label),
@@ -359,9 +442,7 @@ class _QuickChips extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                ),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
               ),
               child: Text(
                 '$icon $label',
@@ -380,7 +461,7 @@ class _QuickChips extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ فقاعة الرسالة - مع خيارات النسخ والمشاركة
+// ▌ فقاعة الرسالة
 // ════════════════════════════════════════════════════════════════════════════
 
 class _MessageBubble extends StatelessWidget {
@@ -394,57 +475,72 @@ class _MessageBubble extends StatelessWidget {
     this.onShare,
   });
 
+  String get _typeEmoji {
+    final type = message.metadata?['messageType'];
+    if (type == null) return '👤';
+    try {
+      return MessageType.values
+          .firstWhere((t) => t.toString() == type, orElse: () => MessageType.general)
+          .emoji;
+    } catch (_) {
+      return '👤';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isUser = message.isUser;
     return GestureDetector(
-      onLongPress: isUser || message.isError ? null : () {
-        showModalBottomSheet(
-          context: context,
-          backgroundColor: AppColors.darkCard,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.darkBorder,
-                    borderRadius: BorderRadius.circular(2),
+      onLongPress: isUser || message.isError
+          ? null
+          : () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: AppColors.darkCard,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (ctx) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(top: 8, bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkBorder,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.copy, color: AppColors.textMuted),
+                        title: const Text('نسخ', style: TextStyle(color: AppColors.textColor)),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          onCopy?.call();
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.share, color: AppColors.textMuted),
+                        title: const Text('مشاركة', style: TextStyle(color: AppColors.textColor)),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          onShare?.call();
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.copy, color: AppColors.textMuted),
-                  title: const Text('نسخ', style: TextStyle(color: AppColors.textColor)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    onCopy?.call();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.share, color: AppColors.textMuted),
-                  title: const Text('مشاركة', style: TextStyle(color: AppColors.textColor)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    onShare?.call();
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+              );
+            },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            // أيقونة حكيم
             if (!isUser) ...[
               Container(
                 width: 32,
@@ -455,12 +551,12 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Center(
-                  child: Text('🤖', style: TextStyle(fontSize: 16)),
-                ),
+                child: const Center(child: Text('🤖', style: TextStyle(fontSize: 16))),
               ),
               const SizedBox(width: 8),
             ],
+
+            // الفقاعة
             Flexible(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -484,47 +580,19 @@ class _MessageBubble extends StatelessWidget {
                             : AppColors.darkBorder,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // أيقونة نوع الرسالة (للردود من الـ AI)
-                    if (!isUser && message.metadata?['type'] != null) ...[
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${message.metadata!['type']}',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    // نص الرسالة
-                    Text(
-                      message.text,
-                      textDirection: TextDirection.rtl,
-                      style: TextStyle(
-                        color: isUser ? AppColors.textColor : AppColors.textLight,
-                        fontSize: 13.5,
-                        height: 1.55,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  message.text,
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(
+                    color: isUser ? AppColors.textColor : AppColors.textLight,
+                    fontSize: 13.5,
+                    height: 1.55,
+                  ),
                 ),
               ),
             ),
+
+            // أيقونة المستخدم
             if (isUser) ...[
               const SizedBox(width: 8),
               Container(
@@ -534,32 +602,13 @@ class _MessageBubble extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(
-                  child: Text(
-                    selectedTypeEmoji,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
+                child: Center(child: Text(_typeEmoji, style: const TextStyle(fontSize: 16))),
               ),
             ],
           ],
         ),
       ),
     );
-  }
-
-  String get selectedTypeEmoji {
-    final type = message.metadata?['messageType'];
-    if (type == null) return '👤';
-    try {
-      final msgType = MessageType.values.firstWhere(
-        (t) => t.toString() == type,
-        orElse: () => MessageType.general,
-      );
-      return msgType.emoji;
-    } catch (_) {
-      return '👤';
-    }
   }
 }
 
@@ -586,9 +635,7 @@ class _TypingIndicator extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 16)),
-            ),
+            child: const Center(child: Text('🤖', style: TextStyle(fontSize: 16))),
           ),
           const SizedBox(width: 8),
           Container(
@@ -609,8 +656,7 @@ class _TypingIndicator extends StatelessWidget {
                 return AnimatedBuilder(
                   animation: ctrl,
                   builder: (_, __) {
-                    final delay = i * 0.3;
-                    final val = ((ctrl.value - delay).clamp(0.0, 1.0));
+                    final val = ((ctrl.value - i * 0.3).clamp(0.0, 1.0));
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       width: 7,
@@ -632,23 +678,44 @@ class _TypingIndicator extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ حالة فارغة - مع عرض النوع المحدد
+// ▌ الشاشة الفارغة
 // ════════════════════════════════════════════════════════════════════════════
 
 class _EmptyState extends StatelessWidget {
   final void Function(String) onTap;
   final MessageType selectedType;
+  final bool groqConfigured;
+  final VoidCallback onSetup;
 
-  const _EmptyState({required this.onTap, required this.selectedType});
+  const _EmptyState({
+    required this.onTap,
+    required this.selectedType,
+    required this.groqConfigured,
+    required this.onSetup,
+  });
+
+  String get _subtitle {
+    switch (selectedType) {
+      case MessageType.drug: return 'اكتب اسم الدواء أو اسأل عن معلوماته';
+      case MessageType.alternative: return 'اكتب اسم الدواء لاقتراح بدائل';
+      case MessageType.shortage: return 'اكتب اسم الدواء الناقص لإضافته';
+      case MessageType.debt: return 'اسأل عن ديون العملاء أو أضف دين جديد';
+      case MessageType.rep: return 'اسأل عن المندوبين أو أضف مندوب جديد';
+      case MessageType.stats: return 'اطلب إحصائيات أو ملخص الصيدلية';
+      case MessageType.general: return 'مساعدك الذكي للصيدلية';
+      case MessageType.image: return 'أرفق صورة روشتة لاستخراج الأدوية';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // أيقونة
             Container(
               width: 100,
               height: 100,
@@ -659,13 +726,11 @@ class _EmptyState extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
               ),
               child: Center(
-                child: Text(
-                  selectedType.emoji,
-                  style: const TextStyle(fontSize: 48),
-                ),
+                child: Text(selectedType.emoji, style: const TextStyle(fontSize: 48)),
               ),
             ),
             const SizedBox(height: 20),
+
             Text(
               'حكيم - ${selectedType.label}',
               style: const TextStyle(
@@ -676,12 +741,60 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              _getSubtitle(),
+              _subtitle,
               style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            // أمثلة سريعة
+            const SizedBox(height: 20),
+
+            // بطاقة Groq لو مش متضاف
+            if (!groqConfigured) ...[
+              GestureDetector(
+                onTap: onSetup,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('⚡', style: TextStyle(fontSize: 24)),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'فعّل حكيم بالكامل مجاناً',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'أضف Groq API في دقيقتين\nمجاني 100% - بدون بطاقة بنكية',
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, color: Colors.orange, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // اقتراحات سريعة
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -695,9 +808,7 @@ class _EmptyState extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                      ),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       cmd,
@@ -716,31 +827,10 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
-
-  String _getSubtitle() {
-    switch (selectedType) {
-      case MessageType.drug:
-        return 'اكتب اسم الدواء أو اسأل عن معلوماته';
-      case MessageType.alternative:
-        return 'اكتب اسم الدواء لاقتراح بدائل';
-      case MessageType.shortage:
-        return 'اكتب اسم الدواء الناقص لإضافته';
-      case MessageType.debt:
-        return 'اسأل عن ديون العملاء أو أضف دين جديد';
-      case MessageType.rep:
-        return 'اسأل عن المندوبين أو أضف مندوب جديد';
-      case MessageType.stats:
-        return 'اطلب إحصائيات أو ملخص الصيدلية';
-      case MessageType.general:
-        return 'مساعدك الذكي للصيدلية';
-      case MessageType.image:
-        return 'أرفق صورة روشتة لاستخراج الأدوية';
-    }
-  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ حقل الإدخال - مع عرض hint خاص بالنوع المحدد
+// ▌ حقل الإدخال
 // ════════════════════════════════════════════════════════════════════════════
 
 class _InputBar extends StatefulWidget {
@@ -767,22 +857,6 @@ class _InputBar extends StatefulWidget {
 }
 
 class _InputBarState extends State<_InputBar> {
-  late String _hint;
-
-  @override
-  void initState() {
-    super.initState();
-    _hint = widget.hint;
-  }
-
-  @override
-  void didUpdateWidget(covariant _InputBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.hint != widget.hint) {
-      setState(() => _hint = widget.hint);
-    }
-  }
-
   Future<void> _pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -813,15 +887,14 @@ class _InputBarState extends State<_InputBar> {
           // الملفات المرفقة
           if (widget.attachedFiles.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: widget.attachedFiles.map((path) {
                   final name = path.split(Platform.pathSeparator).last;
-                  final isImage = ['jpg', 'jpeg', 'png', 'webp'].contains(
-                    path.split('.').last.toLowerCase(),
-                  );
+                  final isImage = ['jpg', 'jpeg', 'png', 'webp']
+                      .contains(path.split('.').last.toLowerCase());
                   return Chip(
                     avatar: Icon(
                       isImage ? Icons.image : Icons.description,
@@ -847,28 +920,11 @@ class _InputBarState extends State<_InputBar> {
           // شريط الأزرار
           Row(
             children: [
-              // زر إرفاق صورة
               IconButton(
                 icon: const Icon(Icons.attach_file, color: AppColors.textMuted),
                 onPressed: _pickFiles,
                 tooltip: 'إرفاق ملف',
               ),
-              // زر التقاط صورة
-              IconButton(
-                icon: const Icon(Icons.camera_alt, color: AppColors.textMuted),
-                onPressed: () async {
-                  // يمكن إضافة كاميرا هنا
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('📷 يمكن التقاط صورة وإرفاقها من المعرض'),
-                      backgroundColor: AppColors.primary,
-                    ),
-                  );
-                },
-                tooltip: 'التقاط صورة',
-              ),
-
-              // حقل النص
               Expanded(
                 child: TextField(
                   controller: widget.ctrl,
@@ -877,7 +933,7 @@ class _InputBarState extends State<_InputBar> {
                   onSubmitted: widget.loading ? null : (_) => _handleSend(),
                   style: const TextStyle(color: AppColors.textColor, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: _hint,
+                    hintText: widget.hint,
                     hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                     filled: true,
                     fillColor: AppColors.dark,
@@ -912,7 +968,7 @@ class _InputBarState extends State<_InputBar> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ زر الإرسال - مع أيقونة النوع المحدد
+// ▌ زر الإرسال
 // ════════════════════════════════════════════════════════════════════════════
 
 class _SendButton extends StatelessWidget {
@@ -920,11 +976,7 @@ class _SendButton extends StatelessWidget {
   final bool loading;
   final MessageType type;
 
-  const _SendButton({
-    required this.onTap,
-    required this.loading,
-    required this.type,
-  });
+  const _SendButton({required this.onTap, required this.loading, required this.type});
 
   @override
   Widget build(BuildContext context) {
@@ -937,8 +989,7 @@ class _SendButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: loading
               ? null
-              : const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark]),
+              : const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
           color: loading ? AppColors.darkBorder : null,
           borderRadius: BorderRadius.circular(16),
         ),
@@ -947,28 +998,11 @@ class _SendButton extends StatelessWidget {
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                 ),
               )
-            : Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    Icons.send_rounded,
-                    color: Colors.white.withValues(alpha: 0.3),
-                    size: 20,
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    child: Text(
-                      type.emoji,
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  ),
-                ],
+            : Center(
+                child: Text(type.emoji, style: const TextStyle(fontSize: 20)),
               ),
       ),
     );
@@ -976,41 +1010,98 @@ class _SendButton extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ▌ ديالوج إعدادات API - نفس الكود القديم مع تحسينات
+// ▌ ApiSettingsDialog - بيطلبه main.dart
 // ════════════════════════════════════════════════════════════════════════════
 
 class ApiSettingsDialog extends StatefulWidget {
-  const ApiSettingsDialog({super.key});
+  final VoidCallback? onGroqSaved;
+
+  const ApiSettingsDialog({super.key, this.onGroqSaved});
 
   @override
   State<ApiSettingsDialog> createState() => _ApiSettingsDialogState();
 }
 
-class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
+class _ApiSettingsDialogState extends State<ApiSettingsDialog>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+
+  // Groq
+  final _groqKeyCtrl = TextEditingController();
+  bool _groqKeyVisible = false;
+  bool _groqLoading = false;
+  bool _groqValid = false;
+  String? _groqError;
+
+  // Gemini / OpenAI (اختياري)
   final _urlCtrl = TextEditingController();
   final _keyCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   List<String> _knowledgeFiles = [];
   String _type = 'openai';
-  bool _loading = true;
   bool _keyVisible = false;
+
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _load();
   }
 
   Future<void> _load() async {
-    final s = await ChatService.instance.getApiSettings();
+    final settings = await ChatService.instance.getApiSettings();
+    final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _urlCtrl.text = s['url'] ?? '';
-      _keyCtrl.text = s['key'] ?? '';
-      _nameCtrl.text = s['name'] ?? '';
-      _type = s['type'] ?? 'openai';
-      _knowledgeFiles = List<String>.from(s['files'] ?? []);
+      _groqKeyCtrl.text = settings['groq_key'] ?? '';
+      _groqValid = _groqKeyCtrl.text.isNotEmpty;
+      _urlCtrl.text = settings['url'] ?? '';
+      _keyCtrl.text = settings['key'] ?? '';
+      _nameCtrl.text = settings['name'] ?? '';
+      _type = settings['type'] ?? 'openai';
+      _knowledgeFiles = List<String>.from(settings['files'] ?? []);
       _loading = false;
     });
+  }
+
+  Future<void> _validateGroqKey() async {
+    final key = _groqKeyCtrl.text.trim();
+    if (key.isEmpty) {
+      setState(() => _groqError = 'أدخل المفتاح أولاً');
+      return;
+    }
+
+    setState(() {
+      _groqLoading = true;
+      _groqError = null;
+    });
+
+    final valid = await GroqService.instance.validateKey(key);
+
+    if (valid) {
+      await ChatService.instance.saveGroqKey(key);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('setup_complete', true);
+      setState(() {
+        _groqValid = true;
+        _groqLoading = false;
+      });
+      widget.onGroqSaved?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ تم حفظ Groq API بنجاح!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _groqError = '❌ المفتاح غير صحيح';
+        _groqLoading = false;
+      });
+    }
   }
 
   Future<void> _pickFiles() async {
@@ -1027,7 +1118,7 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
     }
   }
 
-  Future<void> _save() async {
+  Future<void> _saveOptionalApi() async {
     await ChatService.instance.saveApiSettings(
       url: _urlCtrl.text.trim(),
       key: _keyCtrl.text.trim(),
@@ -1038,35 +1129,15 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
     if (mounted) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ تم حفظ إعدادات API'),
-          backgroundColor: AppColors.primary,
-        ),
-      );
-    }
-  }
-
-  Future<void> _clear() async {
-    await ChatService.instance.clearApiSettings();
-    _urlCtrl.clear();
-    _keyCtrl.clear();
-    _nameCtrl.clear();
-    setState(() {
-      _type = 'openai';
-      _knowledgeFiles = [];
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🗑️ تم مسح إعدادات API'),
-          backgroundColor: AppColors.danger,
-        ),
+        const SnackBar(content: Text('✅ تم حفظ الإعدادات'), backgroundColor: AppColors.primary),
       );
     }
   }
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
+    _groqKeyCtrl.dispose();
     _urlCtrl.dispose();
     _keyCtrl.dispose();
     _nameCtrl.dispose();
@@ -1084,18 +1155,15 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
       child: _loading
           ? const SizedBox(
               height: 200,
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              ),
+              child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // العنوان
-                  Row(
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: Row(
                     children: [
                       Container(
                         width: 40,
@@ -1104,31 +1172,17 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
                           color: AppColors.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Center(
-                          child: Text('⚙️', style: TextStyle(fontSize: 20)),
-                        ),
+                        child: const Center(child: Text('⚙️', style: TextStyle(fontSize: 20))),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'إعدادات الذكاء الاصطناعي',
-                              style: TextStyle(
-                                color: AppColors.textColor,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              'أضف مفتاح API الخاص بك',
-                              style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'إعدادات الذكاء الاصطناعي',
+                          style: TextStyle(
+                            color: AppColors.textColor,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -1137,205 +1191,269 @@ class _ApiSettingsDialogState extends State<ApiSettingsDialog> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                ),
 
-                  // نوع API
-                  const Text(
-                    'نوع الـ API:',
+                // Tabs
+                TabBar(
+                  controller: _tabCtrl,
+                  indicatorColor: AppColors.primary,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textMuted,
+                  tabs: const [
+                    Tab(text: '⚡ Groq (أساسي)'),
+                    Tab(text: '🔧 اختياري'),
+                  ],
+                ),
+
+                // Tab Content
+                SizedBox(
+                  height: 380,
+                  child: TabBarView(
+                    controller: _tabCtrl,
+                    children: [
+                      _buildGroqTab(),
+                      _buildOptionalTab(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  // ═══ تاب Groq ════
+  Widget _buildGroqTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // حالة Groq
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _groqValid
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _groqValid
+                    ? Colors.green.withValues(alpha: 0.4)
+                    : Colors.orange.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(_groqValid ? '✅' : '⚡', style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _groqValid
+                        ? 'Groq مفعّل - حكيم يعمل بالكامل مجاناً!'
+                        : 'Groq غير مفعّل - أضف المفتاح المجاني',
                     style: TextStyle(
-                      color: AppColors.textMuted,
+                      color: _groqValid ? Colors.greenAccent : Colors.orange,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _TypeChip(
-                        label: 'Gemini',
-                        value: 'gemini',
-                        selected: _type == 'gemini',
-                        onTap: () => setState(() {
-                          _type = 'gemini';
-                          _urlCtrl.text = '';
-                        }),
-                      ),
-                      const SizedBox(width: 8),
-                      _TypeChip(
-                        label: 'OpenAI',
-                        value: 'openai',
-                        selected: _type == 'openai',
-                        onTap: () => setState(() => _type = 'openai'),
-                      ),
-                      const SizedBox(width: 8),
-                      _TypeChip(
-                        label: 'مخصص',
-                        value: 'custom',
-                        selected: _type == 'custom',
-                        onTap: () => setState(() => _type = 'custom'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
-                  // اسم الـ API
-                  _ApiField(
-                    controller: _nameCtrl,
-                    label: 'اسم الـ API (اختياري)',
-                    hint: 'مثال: ChatGPT الخاص',
-                    icon: Icons.label_outline,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // رابط الـ API
-                  if (_type != 'gemini')
-                    _ApiField(
-                      controller: _urlCtrl,
-                      label: 'رابط الـ API',
-                      hint: _type == 'openai'
-                          ? 'https://api.openai.com/v1'
-                          : 'https://your-api.com/endpoint',
-                      icon: Icons.link,
-                    ),
-                  if (_type != 'gemini') const SizedBox(height: 12),
-
-                  // مفتاح الـ API
-                  _ApiField(
-                    controller: _keyCtrl,
-                    label: 'مفتاح الـ API (API Key)',
-                    hint: 'sk-...',
-                    icon: Icons.key,
-                    obscure: !_keyVisible,
-                    suffix: IconButton(
-                      onPressed: () => setState(() => _keyVisible = !_keyVisible),
-                      icon: Icon(
-                        _keyVisible ? Icons.visibility_off : Icons.visibility,
-                        color: AppColors.textMuted,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ملاحظة
-                  if (_type == 'openai')
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                      ),
-                      child: const Text(
-                        '💡 يدعم: OpenAI, Groq, Together AI, OpenRouter, وأي API متوافق مع OpenAI',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                        textDirection: TextDirection.rtl,
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-
-                  // قاعدة المعرفة
+          // رابط الحصول على المفتاح
+          if (!_groqValid)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.dark,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const Text(
-                    'قاعدة المعرفة (ملفات PDF/Excel/Word):',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    '📋 خطوات الحصول على المفتاح:',
+                    style: TextStyle(color: AppColors.textLight, fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.dark,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.darkBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (_knowledgeFiles.isNotEmpty)
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _knowledgeFiles.map((path) {
-                              final name = path.split(Platform.pathSeparator).last;
-                              return Chip(
-                                label: Text(name, style: const TextStyle(fontSize: 10, color: Colors.white)),
-                                onDeleted: () {
-                                  setState(() => _knowledgeFiles.remove(path));
-                                },
-                                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
-                                deleteIconColor: Colors.redAccent,
-                              );
-                            }).toList(),
-                          )
-                        else
-                          const Text(
-                            'لم تقم برفع أي ملفات حتى الآن.',
-                            style: TextStyle(color: AppColors.textMuted, fontSize: 11),
-                          ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: _pickFiles,
-                          icon: const Icon(Icons.upload_file, size: 16),
-                          label: const Text('رفع ملفات (PDF/Excel/Word)'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // أزرار
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _clear,
-                          icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.danger),
-                          label: const Text('مسح', style: TextStyle(color: AppColors.danger)),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.danger),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton.icon(
-                          onPressed: _save,
-                          icon: const Icon(Icons.save_rounded, size: 16),
-                          label: const Text('حفظ الإعدادات'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    '1️⃣ افتح console.groq.com\n'
+                    '2️⃣ اعمل حساب مجاني\n'
+                    '3️⃣ اضغط "API Keys"\n'
+                    '4️⃣ اضغط "Create API Key" وانسخ المفتاح',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 11, height: 1.7),
                   ),
                 ],
               ),
             ),
+          const SizedBox(height: 16),
+
+          // حقل المفتاح
+          const Text(
+            'مفتاح Groq API:',
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.dark,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _groqError != null
+                    ? Colors.redAccent
+                    : _groqValid
+                        ? Colors.green.withValues(alpha: 0.5)
+                        : AppColors.darkBorder,
+              ),
+            ),
+            child: TextField(
+              controller: _groqKeyCtrl,
+              obscureText: !_groqKeyVisible,
+              style: const TextStyle(color: AppColors.textColor, fontSize: 13, fontFamily: 'monospace'),
+              textDirection: TextDirection.ltr,
+              onChanged: (_) => setState(() {
+                _groqError = null;
+                _groqValid = false;
+              }),
+              decoration: InputDecoration(
+                hintText: 'gsk_xxxxxxxxxxxxxxxxxxxx',
+                hintStyle: const TextStyle(color: AppColors.textMuted),
+                prefixIcon: const Icon(Icons.key, color: AppColors.textMuted, size: 18),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _groqKeyVisible = !_groqKeyVisible),
+                  icon: Icon(
+                    _groqKeyVisible ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.textMuted,
+                    size: 18,
+                  ),
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+
+          if (_groqError != null) ...[
+            const SizedBox(height: 6),
+            Text(_groqError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+          ],
+          const SizedBox(height: 16),
+
+          // زر التحقق
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _groqLoading ? null : _validateGroqKey,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _groqValid ? Colors.green : AppColors.primary,
+                disabledBackgroundColor: AppColors.darkBorder,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _groqLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : Text(
+                      _groqValid ? '✅ تم التحقق' : 'تحقق واحفظ',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══ تاب الاختياري ════
+  Widget _buildOptionalTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.dark,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: const Text(
+              '💡 هذا القسم اختياري.\nحكيم يعمل بالكامل بدونه.\nيمكنك إضافة Gemini أو OpenAI كـ Fallback إضافي.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.6),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // نوع API
+          Row(
+            children: [
+              _TypeChip(label: 'Gemini', value: 'gemini', selected: _type == 'gemini',
+                  onTap: () => setState(() => _type = 'gemini')),
+              const SizedBox(width: 8),
+              _TypeChip(label: 'OpenAI', value: 'openai', selected: _type == 'openai',
+                  onTap: () => setState(() => _type = 'openai')),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (_type != 'gemini') ...[
+            _ApiField(controller: _urlCtrl, label: 'رابط API',
+                hint: 'https://api.openai.com/v1', icon: Icons.link),
+            const SizedBox(height: 12),
+          ],
+
+          _ApiField(controller: _keyCtrl, label: 'مفتاح API',
+              hint: 'sk-... أو AIza...', icon: Icons.key,
+              obscure: !_keyVisible,
+              suffix: IconButton(
+                onPressed: () => setState(() => _keyVisible = !_keyVisible),
+                icon: Icon(_keyVisible ? Icons.visibility_off : Icons.visibility,
+                    color: AppColors.textMuted, size: 18),
+              )),
+          const SizedBox(height: 12),
+
+          // قاعدة المعرفة
+          OutlinedButton.icon(
+            onPressed: _pickFiles,
+            icon: const Icon(Icons.upload_file, size: 16),
+            label: Text('رفع ملفات PDF/Excel (${_knowledgeFiles.length})'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saveOptionalApi,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('حفظ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// ▌ Widgets مساعدة
+// ════════════════════════════════════════════════════════════════════════════
 
 class _TypeChip extends StatelessWidget {
   final String label, value;
@@ -1343,10 +1461,8 @@ class _TypeChip extends StatelessWidget {
   final VoidCallback onTap;
 
   const _TypeChip({
-    required this.label,
-    required this.value,
-    required this.selected,
-    required this.onTap,
+    required this.label, required this.value,
+    required this.selected, required this.onTap,
   });
 
   @override
@@ -1385,12 +1501,9 @@ class _ApiField extends StatelessWidget {
   final Widget? suffix;
 
   const _ApiField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.obscure = false,
-    this.suffix,
+    required this.controller, required this.label,
+    required this.hint, required this.icon,
+    this.obscure = false, this.suffix,
   });
 
   @override
@@ -1398,14 +1511,8 @@ class _ApiField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(label, style: const TextStyle(
+            color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
@@ -1434,156 +1541,6 @@ class _ApiField extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// ▌ مساعدة: عرض جميع الأوامر المتاحة
-// ════════════════════════════════════════════════════════════════════════════
-
-class CommandsHelpDialog extends StatelessWidget {
-  const CommandsHelpDialog({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.darkCard,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Center(
-                    child: Text('🤖', style: TextStyle(fontSize: 20)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'أوامر حكيم',
-                  style: TextStyle(
-                    color: AppColors.textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: AppColors.textMuted),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: AppColors.darkBorder),
-            const SizedBox(height: 12),
-            _buildSection('📋 إدارة النواقص', [
-              'أضف دواء [الاسم] - إضافة للنواقص',
-              'النواقص - عرض الكل',
-              'النواقص المعلقة - عرض المعلقة فقط',
-              'تم توفير [الاسم] - تعليم كمتوفر',
-            ]),
-            const SizedBox(height: 12),
-            _buildSection('🔄 البحث والبدائل', [
-              'ابحث عن [الاسم] - البحث في الإنترنت',
-              'بديل [الاسم] - بدائل بنفس المادة الفعالة',
-              'تحليل النواقص - أنماط وتكرارات',
-            ]),
-            const SizedBox(height: 12),
-            _buildSection('💰 إدارة الديون', [
-              'الديون - عرض كل العملاء',
-              'دين [اسم العميل] - دين عميل محدد',
-            ]),
-            const SizedBox(height: 12),
-            _buildSection('👥 المندوبين', [
-              'المندوبين - عرض القائمة',
-              'أضف مندوب - إضافة مندوب جديد',
-            ]),
-            const SizedBox(height: 12),
-            _buildSection('📊 التقارير', [
-              'ملخص - إحصائيات سريعة',
-              'إحصائيات - تقرير مفصل',
-            ]),
-            const SizedBox(height: 12),
-            _buildSection('🖼️ استخراج من صور', [
-              'أرفق صورة روشتة',
-              'أضف أدوية من الصورة',
-            ]),
-            const SizedBox(height: 16),
-            const Divider(color: AppColors.darkBorder),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-              ),
-              child: const Row(
-                children: [
-                  Text('💡', style: TextStyle(fontSize: 20)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'اختر نوع رسالتك من الشريط أعلى الشات لتسهيل فهم طلبك!',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection(String title, List<String> commands) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.textLight,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ...commands.map((cmd) => Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Row(
-            children: [
-              const Text('• ', style: TextStyle(color: AppColors.primary)),
-              Expanded(
-                child: Text(
-                  cmd,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        )),
       ],
     );
   }
