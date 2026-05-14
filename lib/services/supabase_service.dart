@@ -342,6 +342,13 @@ class SupabaseService {
   // ── إضافة كود اشتراك ──────────────────────────────────────────────────
   Future<bool> insertSubscriptionCode(Map<String, dynamic> data) async {
     if (!isConfigured) return false;
+    
+    // ✅ تحقق من الـ Service Key
+    if (EnvConfig.supabaseServiceKey.isEmpty) {
+      debugPrint('❌ insertSubscriptionCode: SUPABASE_SERVICE_KEY فارغ!');
+      return false;
+    }
+    
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
