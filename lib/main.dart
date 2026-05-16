@@ -17,6 +17,7 @@ import 'screens/pin_lock_screen.dart';
 import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
 import 'services/sync_service.dart';
+import 'services/scheduled_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,11 @@ void main() async {
   } catch (e) {
     // في حالة فشل تهيئة قاعدة البيانات، نستمر comunque لتجنب تعطل التطبيق تمامًا
     debugPrint('خطأ في تهيئة قاعدة البيانات: $e');
+  }
+  try {
+    await ScheduledSyncService.initialize();
+  } catch (e) {
+    debugPrint('خطأ في تهيئة WorkManager: $e');
   }
   try {
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -151,6 +157,7 @@ class _SplashScreenState extends State<SplashScreen>
               // تسجيل الصيدلية وبدء المزامنة
               SyncService.instance.registerPharmacy().then((_) {
                 SyncService.instance.startPeriodicSync();
+                ScheduledSyncService.registerDevice();
               });
               Navigator.pushReplacement(
                 navCtx,
@@ -175,6 +182,7 @@ class _SplashScreenState extends State<SplashScreen>
         // تسجيل الصيدلية وبدء المزامنة
         SyncService.instance.registerPharmacy().then((_) {
           SyncService.instance.startPeriodicSync();
+          ScheduledSyncService.registerDevice();
         });
         Navigator.pushReplacement(
           ctx,
@@ -542,6 +550,7 @@ class _MainScreenState extends State<MainScreen> {
                       onOwnerSelected: () {
                         SyncService.instance.registerPharmacy().then((_) {
                           SyncService.instance.startPeriodicSync();
+                          ScheduledSyncService.registerDevice();
                         });
                         Navigator.pushReplacement(
                           navCtx,
