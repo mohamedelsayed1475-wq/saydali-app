@@ -8,6 +8,7 @@ import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});
@@ -440,12 +441,13 @@ class _AssistantsScreenState extends State<AssistantsScreen>
             Text('لديك $_currentCount/$_maxSlots مساعد',
                 style: const TextStyle(color: AppColors.textLight, fontSize: 14)),
             const SizedBox(height: 8),
-            const Text('اشترك بكود مساعد إضافي لإضافة مكان آخر',
+            const Text('لقد وصلت للحد الأقصى من المساعدين المتاحين في باقتك.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
             const SizedBox(height: 8),
-            const Text('💰 100 ج.م = مساعد إضافي واحد',
-                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 15)),
+            const Text('للحصول على أماكن إضافية، يرجى التواصل مع المطور.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 13)),
           ],
         ),
         actions: [
@@ -453,12 +455,15 @@ class _AssistantsScreenState extends State<AssistantsScreen>
             onPressed: () => Navigator.pop(ctx),
             child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
           ),
-          ElevatedButton(
-            onPressed: () {
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+            onPressed: () async {
               Navigator.pop(ctx);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+              final url = Uri.parse('https://wa.me/201012345678?text=أريد+زيادة+عدد+المساعدين');
+              if (await canLaunchUrl(url)) launchUrl(url);
             },
-            child: const Text('اشترك الآن'),
+            icon: const Icon(Icons.chat, color: Colors.white, size: 18),
+            label: const Text('واتساب', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           ),
         ],
       ),

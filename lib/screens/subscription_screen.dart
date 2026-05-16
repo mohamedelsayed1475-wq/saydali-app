@@ -164,7 +164,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       MaterialPageRoute(
                         builder: (navCtx) => UserSelectionScreen(
                           onOwnerSelected: () {
-                            SyncService.instance.startPeriodicSync();
+                            SyncService.instance.registerPharmacy().then((_) {
+                              SyncService.instance.startPeriodicSync();
+                            });
                             Navigator.pushReplacement(navCtx, MaterialPageRoute(builder: (_) => const MainScreen()));
                           },
                           onAssistantSelected: () {
@@ -203,6 +205,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       final expiry =
           DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
+      await DatabaseHelper.instance.addAssistantSlots(3);
+      await DatabaseHelper.instance.setSetting('assistants_activated', '1');
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -316,6 +320,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();
         await db.setSetting('subscription_expiry', expiry);
+        await db.addAssistantSlots(3);
+        await db.setSetting('assistants_activated', '1');
 
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {

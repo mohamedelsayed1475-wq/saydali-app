@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
+import '../services/supabase_service.dart';
 
 // ── Provider للثيم ──────────────────────────────────────────────────
 class ThemeProvider extends ChangeNotifier {
@@ -111,11 +112,25 @@ class CustomersProvider extends ChangeNotifier {
   }
 
   Future<void> add(Map<String, dynamic> data) async {
+    if (data['photo_url'] != null && !data['photo_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadCustomerPhoto(
+        data['photo_url'],
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+      if (url != null) data['photo_url'] = url;
+    }
     await DatabaseHelper.instance.insertCustomer(data);
     await load();
   }
 
   Future<void> update(int id, Map<String, dynamic> data) async {
+    if (data['photo_url'] != null && !data['photo_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadCustomerPhoto(
+        data['photo_url'],
+        id.toString(),
+      );
+      if (url != null) data['photo_url'] = url;
+    }
     await DatabaseHelper.instance.updateCustomer(id, data);
     await load();
   }
@@ -126,6 +141,13 @@ class CustomersProvider extends ChangeNotifier {
   }
 
   Future<void> addTransaction(Map<String, dynamic> data) async {
+    if (data['receipt_url'] != null && !data['receipt_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadReceiptPhoto(
+        data['receipt_url'],
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+      if (url != null) data['receipt_url'] = url;
+    }
     await DatabaseHelper.instance.addDebtTransaction(data);
     await load();
   }

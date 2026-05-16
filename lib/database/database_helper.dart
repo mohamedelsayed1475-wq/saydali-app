@@ -19,7 +19,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -124,6 +124,11 @@ class DatabaseHelper {
       try { await db.execute('ALTER TABLE assistants ADD COLUMN can_manage_shortages INTEGER DEFAULT 1'); } catch (_) {}
       try { await db.execute('ALTER TABLE assistants ADD COLUMN can_manage_reps INTEGER DEFAULT 0'); } catch (_) {}
     }
+    if (oldVersion < 7) {
+      // ── إضافة صور العملاء وإيصالات الديون ──
+      try { await db.execute('ALTER TABLE customers ADD COLUMN photo_url TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE debt_transactions ADD COLUMN receipt_url TEXT'); } catch (_) {}
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -185,6 +190,7 @@ class DatabaseHelper {
         total_debt REAL DEFAULT 0,
         due_date TEXT,
         cloud_id TEXT,
+        photo_url TEXT,
         is_synced INTEGER DEFAULT 0,
         created_by TEXT,
         created_at TEXT NOT NULL
@@ -218,6 +224,7 @@ class DatabaseHelper {
         type TEXT NOT NULL,
         description TEXT,
         cloud_id TEXT,
+        receipt_url TEXT,
         is_synced INTEGER DEFAULT 0,
         created_by TEXT,
         transaction_date TEXT NOT NULL,

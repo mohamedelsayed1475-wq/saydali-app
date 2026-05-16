@@ -10,7 +10,7 @@ class GroqService {
   GroqService._();
 
   static const _baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static const _model = 'llama3-8b-8192'; // مجاني وسريع
+  static const _model = 'llama-3.3-70b-versatile'; // نموذج قوي ومتعدد الاستخدامات
 
   // ── إرسال سؤال لـ Groq ──────────────────────────────────────────────────
   Future<String?> ask({

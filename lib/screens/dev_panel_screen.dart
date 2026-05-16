@@ -331,11 +331,16 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       finalLink = 'https://wa.me/$formattedPhone?text=$msg';
                     }
 
+                    String? imageUrl;
+                    if (pickedImagePath != null) {
+                      imageUrl = await SupabaseService.instance.uploadAdImage(pickedImagePath!);
+                    }
+
                     final db = await DatabaseHelper.instance.database;
                     final data = {
                       'title': titleCtrl.text.trim(),
                       'body': bodyCtrl.text.trim(),
-                      'image_url': pickedImagePath,
+                      'image_url': imageUrl ?? '',
                       'link': finalLink,
                       'button_text': btnTextCtrl.text.trim().isEmpty
                           ? 'التفاصيل'

@@ -324,9 +324,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     });
   }
 
-  void _showAddItemDialog(BuildContext ctx, Function(Map<String, dynamic>) onAdd) {
-    final itemNameCtrl = TextEditingController();
-    TextEditingController? autoCtrl;
+  void _showAddItemDialog(BuildContext ctx, Function(Map<String, dynamic>) onAdd, {String? initialName}) {
+    final itemNameCtrl = TextEditingController(text: initialName ?? '');
+
     final priceCtrl = TextEditingController(); // Box Price
     final stripPriceCtrl = TextEditingController(); // Strip Price
     final boxesCtrl = TextEditingController(text: '1');
@@ -346,14 +346,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
                 tooltip: 'مسح QR/باركود',
                 onPressed: () async {
+                  Navigator.pop(dCtx);
                   final code = await Navigator.push<String>(
                     context,
                     MaterialPageRoute(builder: (_) => const ScannerScreen()),
                   );
                   if (code != null) {
-                    itemNameCtrl.text = code;
-                    if (autoCtrl != null) autoCtrl!.text = code;
-                    setDBS(() {});
+                    _showAddItemDialog(ctx, onAdd, initialName: code);
                   }
                 },
               ),
@@ -391,7 +390,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           }
                         },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                          autoCtrl = ctrl;
+
                           return AppTextField(
                             hint: 'اسم الصنف',
                             controller: ctrl,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
@@ -47,9 +48,16 @@ class SyncService {
       return true;
     }
 
-    final pharmacyCode = await db.getSetting('pharmacy_code');
+    var pharmacyCode = await db.getSetting('pharmacy_code');
+    if (pharmacyCode == null || pharmacyCode.isEmpty) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      final rnd = Random.secure();
+      pharmacyCode = List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
+      await db.setSetting('pharmacy_code', pharmacyCode);
+      debugPrint('🆕 تم توليد كود صيدلية جديد: \$pharmacyCode');
+    }
+    
     final pharmacyName = await db.getSetting('pharmacy_name') ?? 'صيدليتي';
-    if (pharmacyCode == null || pharmacyCode.isEmpty) return false;
 
     try {
       // تحقق هل الكود مسجل بالفعل في السحابة
@@ -389,6 +397,7 @@ class SyncService {
           'phone': item['phone'],
           'address': item['address'],
           'due_date': item['due_date'],
+          'photo_url': item['photo_url'],
           'created_at': item['created_at'],
         };
 
@@ -456,6 +465,7 @@ class SyncService {
             'phone': item['phone'],
             'address': item['address'],
             'due_date': item['due_date'],
+            'photo_url': item['photo_url'],
             'total_debt': 0,
             'created_at': item['created_at'],
             'is_synced': 1,
@@ -499,6 +509,7 @@ class SyncService {
                 'amount': item['amount'],
                 'type': item['type'],
                 'description': item['description'],
+                'receipt_url': item['receipt_url'],
                 'created_by': item['created_by'] ?? 'المالك',
                 'transaction_date': item['transaction_date'],
               }),
@@ -556,6 +567,7 @@ class SyncService {
             'amount': (item['amount'] as num).toDouble(),
             'type': item['type'],
             'description': item['description'],
+            'receipt_url': item['receipt_url'],
             'created_by': item['created_by'],
             'is_synced': 1,
           });

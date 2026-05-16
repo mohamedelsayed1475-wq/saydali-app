@@ -418,6 +418,93 @@ class SupabaseService {
     }
   }
 
+  // ── رفع صورة الإعلان ──────────────────────────────────────────────────
+  Future<String?> uploadAdImage(String filePath) async {
+    if (!isConfigured) return null;
+    try {
+      final file = File(filePath);
+      final fileName = 'ad_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await file.readAsBytes();
+
+      final res = await http.post(
+        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/ads-images/$fileName'),
+        headers: {
+          'apikey': EnvConfig.supabaseServiceKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'Content-Type': 'image/jpeg',
+        },
+        body: bytes,
+      ).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/ads-images/$fileName';
+      }
+      debugPrint('❌ uploadAdImage failed: ${res.statusCode} - ${res.body}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ uploadAdImage error: $e');
+      return null;
+    }
+  }
+
+  // ── رفع صورة العميل ──────────────────────────────────────────────────
+  Future<String?> uploadCustomerPhoto(String filePath, String customerId) async {
+    if (!isConfigured) return null;
+    try {
+      final file = File(filePath);
+      final fileName = 'customer_${customerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await file.readAsBytes();
+
+      final res = await http.post(
+        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/customer-photos/$fileName'),
+        headers: {
+          'apikey': EnvConfig.supabaseServiceKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'Content-Type': 'image/jpeg',
+        },
+        body: bytes,
+      ).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/customer-photos/$fileName';
+      }
+      debugPrint('❌ uploadCustomerPhoto failed: ${res.statusCode} - ${res.body}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ uploadCustomerPhoto error: $e');
+      return null;
+    }
+  }
+
+  // ── رفع إيصال الدين ──────────────────────────────────────────────────
+  Future<String?> uploadReceiptPhoto(String filePath, String transactionId) async {
+    if (!isConfigured) return null;
+    try {
+      final file = File(filePath);
+      final fileName = 'receipt_${transactionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await file.readAsBytes();
+
+      final res = await http.post(
+        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/debt-receipts/$fileName'),
+        headers: {
+          'apikey': EnvConfig.supabaseServiceKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'Content-Type': 'image/jpeg',
+        },
+        body: bytes,
+      ).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/debt-receipts/$fileName';
+      }
+      debugPrint('❌ uploadReceiptPhoto failed: ${res.statusCode} - ${res.body}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ uploadReceiptPhoto error: $e');
+      return null;
+    }
+  }
+
   // ── رابط الصفحة الويب ──────────────────────────────────────────────────
   String buildRepLink(String sessionCode) {
     const fallback = 'https://mohamedelsayed1475-wq.github.io/saydali-app1';

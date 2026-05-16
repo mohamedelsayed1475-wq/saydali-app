@@ -6,7 +6,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
@@ -75,6 +77,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final phoneCtrl = TextEditingController(text: existing?.phone);
     final addressCtrl = TextEditingController(text: existing?.address);
     DateTime? dueDate = existing?.dueDate;
+    String? photoPath = existing?.photoUrl;
+    bool isUploading = false;
 
     await showModalBottomSheet(
       context: context,
@@ -106,6 +110,27 @@ class _DebtsScreenState extends State<DebtsScreen> {
                       color: AppColors.primary,
                       fontWeight: FontWeight.w700,
                       fontSize: 16)),
+              const SizedBox(height: 16),
+              Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                    if (picked != null) {
+                      setBS(() => photoPath = picked.path);
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 40,
+                    backgroundColor: AppColors.dark,
+                    backgroundImage: photoPath != null && !photoPath!.startsWith('http') 
+                        ? FileImage(File(photoPath!)) as ImageProvider
+                        : (photoPath != null ? NetworkImage(photoPath!) : null),
+                    child: photoPath == null 
+                        ? const Icon(Icons.camera_alt, color: AppColors.textMuted, size: 30) 
+                        : null,
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               AppTextField(hint: 'اسم العميل *', controller: nameCtrl),
               const SizedBox(height: 10),
@@ -171,40 +196,51 @@ class _DebtsScreenState extends State<DebtsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              PrimaryButton(
-                text: existing == null ? 'إضافة' : 'حفظ',
-                onTap: () async {
-                  final name = nameCtrl.text.trim();
-                  if (name.isEmpty) {
-                    showSnack(ctx, 'أدخل اسم العميل', isError: true);
-                    return;
-                  }
-                  final Map<String, dynamic> data = {
-                    'name': name,
-                    'phone': phoneCtrl.text.trim(),
-                    'address': addressCtrl.text.trim(),
-                    'due_date': dueDate?.toIso8601String(),
-                  };
-                  if (existing == null) {
-                    await context.read<CustomersProvider>().add(data);
-                  } else {
-                    await context.read<CustomersProvider>().update(existing.id!, data);
-                  }
-                  // تسجيل النشاط
-                  await DatabaseHelper.instance.logActivity(
-                    assistantId: userProvider.currentAssistantId,
-                    assistantName: userProvider.currentName,
-                    action: existing == null ? 'إضافة عميل' : 'تعديل عميل',
-                    details: '${existing == null ? "تم إضافة" : "تم تعديل"} العميل: $name',
-                    screen: 'debts',
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  await _loadCustomers();
-                  if (mounted)
-                    showSnack(context,
-                        existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
-                },
-              ),
+              isUploading
+                  ? const Center(child: CircularProgressIndicator())
+                  : PrimaryButton(
+                      text: existing == null ? 'إضافة' : 'حفظ',
+                      onTap: () async {
+                        final name = nameCtrl.text.trim();
+                        if (name.isEmpty) {
+                          showSnack(ctx, 'أدخل اسم العميل', isError: true);
+                          return;
+                        }
+                        
+                        setBS(() => isUploading = true);
+                        
+                        final Map<String, dynamic> data = {
+                          'name': name,
+                          'phone': phoneCtrl.text.trim(),
+                          'address': addressCtrl.text.trim(),
+                          'due_date': dueDate?.toIso8601String(),
+                          'photo_url': photoPath,
+                        };
+                        if (existing == null) {
+                          await context.read<CustomersProvider>().add(data);
+                        } else {
+                          await context.read<CustomersProvider>().update(existing.id!, data);
+                        }
+                        // تسجيل النشاط
+                        await DatabaseHelper.instance.logActivity(
+                          assistantId: userProvider.currentAssistantId,
+                          assistantName: userProvider.currentName,
+                          action: existing == null ? 'إضافة عميل' : 'تعديل عميل',
+                          details: '${existing == null ? "تم إضافة" : "تم تعديل"} العميل: $name',
+                          screen: 'debts',
+                        );
+                        
+                        if (ctx.mounted) {
+                          setBS(() => isUploading = false);
+                          Navigator.pop(ctx);
+                        }
+                        
+                        await _loadCustomers();
+                        if (mounted)
+                          showSnack(context,
+                              existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
+                      },
+                    ),
               const SizedBox(height: 20),
             ],
           ),
@@ -220,6 +256,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
     final amountCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     String txType = 'debt';
+    String? receiptPath;
+    bool isUploading = false;
 
     if (!mounted) return;
     await showModalBottomSheet(
@@ -352,7 +390,39 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      SizedBox(
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                                if (picked != null) {
+                                  setBS(() => receiptPath = picked.path);
+                                }
+                              },
+                              icon: Icon(receiptPath == null ? Icons.add_photo_alternate : Icons.check_circle, 
+                                  color: receiptPath == null ? AppColors.textLight : Colors.green, size: 18),
+                              label: Text(receiptPath == null ? 'إرفاق إيصال' : 'تم الإرفاق', 
+                                  style: TextStyle(color: receiptPath == null ? AppColors.textLight : Colors.green)),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: receiptPath == null ? AppColors.darkBorder : Colors.green),
+                              ),
+                            ),
+                          ),
+                          if (receiptPath != null) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () => setBS(() => receiptPath = null),
+                              icon: const Icon(Icons.delete, color: AppColors.danger),
+                              tooltip: 'حذف الإيصال',
+                            ),
+                          ]
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      isUploading
+                          ? const Center(child: CircularProgressIndicator())
+                          : SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () async {
@@ -368,11 +438,15 @@ class _DebtsScreenState extends State<DebtsScreen> {
                               showSnack(ctx, '⛔ ليس لديك صلاحية إضافة ديون', isError: true);
                               return;
                             }
+                            
+                            setBS(() => isUploading = true);
+                            
                             await context.read<CustomersProvider>().addTransaction({
                               'customer_id': customer.id,
                               'amount': amount,
                               'type': txType,
                               'description': descCtrl.text.trim(),
+                              'receipt_url': receiptPath,
                             });
                             // تسجيل النشاط
                             await DatabaseHelper.instance.logActivity(
@@ -389,6 +463,8 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                 .instance
                                 .getCustomerTransactions(customer.id!);
                             setBS(() {
+                              isUploading = false;
+                              receiptPath = null;
                               txList.clear();
                               txList.addAll(
                                   newTransactions.map(DebtTransaction.fromMap));
@@ -1149,13 +1225,23 @@ class _DebtsScreenState extends State<DebtsScreen> {
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(
                         color: AppColors.accent.withValues(alpha: 0.3)),
+                    image: customer.photoUrl != null && customer.photoUrl!.isNotEmpty
+                        ? DecorationImage(
+                            image: customer.photoUrl!.startsWith('http')
+                                ? NetworkImage(customer.photoUrl!) as ImageProvider
+                                : FileImage(File(customer.photoUrl!)),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
                   ),
-                  child: Center(
-                      child: Text(customer.name[0],
-                          style: const TextStyle(
-                              color: AppColors.accent,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18))),
+                  child: customer.photoUrl == null || customer.photoUrl!.isEmpty
+                      ? Center(
+                          child: Text(customer.name[0],
+                              style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18)))
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(

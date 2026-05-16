@@ -284,15 +284,15 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
-  Future<void> _showAddSheet({Shortage? existing}) async {
+  Future<void> _showAddSheet({Shortage? existing, String? initialName}) async {
     // فحص صلاحية إدارة النواقص
     final userProvider = context.read<CurrentUserProvider>();
     if (!userProvider.canManageShortages) {
       showSnack(context, '⛔ ليس لديك صلاحية إدارة النواقص', isError: true);
       return;
     }
-    final nameCtrl = TextEditingController(text: existing?.name);
-    TextEditingController? autoCtrl; // Reference to Autocomplete's internal controller
+    final nameCtrl = TextEditingController(text: initialName ?? existing?.name ?? '');
+
     final companyCtrl = TextEditingController(text: existing?.company);
     final qtyCtrl =
         TextEditingController(text: existing?.quantity.toString() ?? '1');
@@ -366,7 +366,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           nameCtrl.text = s['enName']?.toString() ?? '';
                         },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                          autoCtrl = ctrl; // Save the reference
+
                           if (existing != null &&
                               ctrl.text.isEmpty &&
                               existing.name.isNotEmpty)
@@ -460,19 +460,13 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         icon: const Icon(Icons.qr_code_scanner,
                             color: AppColors.primary),
                         onPressed: () async {
-                          final code = await Navigator.push(
+                          Navigator.pop(context);
+                          final code = await Navigator.push<String>(
                               context,
                               MaterialPageRoute(
                                   builder: (_) => const ScannerScreen()));
                           if (code != null) {
-                            nameCtrl.text = code;
-                            if (autoCtrl != null) {
-                              autoCtrl!.text = code;
-                              autoCtrl!.selection = TextSelection.fromPosition(
-                                TextPosition(offset: code.length),
-                              );
-                            }
-                            setBS(() {});
+                            _showAddSheet(initialName: code);
                           }
                         },
                       ),
@@ -613,7 +607,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     await _loadShortages();
                     if (mounted)
                       showSnack(context,
-                          existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅');
+                          existing == null ? 'تم الإضافة ✅' : 'تم التعديل ✅',
+                          durationMs: 800);
                   },
                 ),
                 const SizedBox(height: 20),

@@ -148,6 +148,7 @@ class Customer {
   final String? address;
   final double totalDebt;
   final DateTime? dueDate;
+  final String? photoUrl;
   final DateTime createdAt;
 
   Customer({
@@ -157,6 +158,7 @@ class Customer {
     this.address,
     this.totalDebt = 0.0,
     this.dueDate,
+    this.photoUrl,
     required this.createdAt,
   });
 
@@ -167,6 +169,7 @@ class Customer {
         address: map['address'],
         totalDebt: (map['total_debt'] as num?)?.toDouble() ?? 0.0,
         dueDate: map['due_date'] != null ? DateTime.tryParse(map['due_date']) : null,
+        photoUrl: map['photo_url'],
         createdAt: DateTime.parse(map['created_at']),
       );
 
@@ -177,6 +180,7 @@ class Customer {
         'address': address,
         'total_debt': totalDebt,
         'due_date': dueDate?.toIso8601String(),
+        'photo_url': photoUrl,
       };
 }
 
@@ -187,6 +191,7 @@ class DebtTransaction {
   final double amount;
   final String type; // debt أو payment
   final String? description;
+  final String? receiptUrl;
   final DateTime transactionDate;
 
   DebtTransaction({
@@ -195,6 +200,7 @@ class DebtTransaction {
     required this.amount,
     required this.type,
     this.description,
+    this.receiptUrl,
     required this.transactionDate,
   });
 
@@ -204,6 +210,7 @@ class DebtTransaction {
         amount: (map['amount'] as num).toDouble(),
         type: map['type'],
         description: map['description'],
+        receiptUrl: map['receipt_url'],
         transactionDate: DateTime.parse(map['transaction_date']),
       );
 
@@ -213,6 +220,7 @@ class DebtTransaction {
         'amount': amount,
         'type': type,
         'description': description,
+        'receipt_url': receiptUrl,
       };
 }
 

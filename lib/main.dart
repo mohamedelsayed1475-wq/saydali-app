@@ -539,16 +539,22 @@ class _MainScreenState extends State<MainScreen> {
                   context,
                   MaterialPageRoute(
                     builder: (navCtx) => UserSelectionScreen(
-                      onOwnerSelected: () => Navigator.pushReplacement(
-                        navCtx,
-                        MaterialPageRoute(
-                            builder: (_) => const MainScreen()),
-                      ),
-                      onAssistantSelected: () => Navigator.pushReplacement(
-                        navCtx,
-                        MaterialPageRoute(
-                            builder: (_) => const MainScreen()),
-                      ),
+                      onOwnerSelected: () {
+                        SyncService.instance.registerPharmacy().then((_) {
+                          SyncService.instance.startPeriodicSync();
+                        });
+                        Navigator.pushReplacement(
+                          navCtx,
+                          MaterialPageRoute(builder: (_) => const MainScreen()),
+                        );
+                      },
+                      onAssistantSelected: () {
+                        SyncService.instance.startPeriodicSync();
+                        Navigator.pushReplacement(
+                          navCtx,
+                          MaterialPageRoute(builder: (_) => const MainScreen()),
+                        );
+                      },
                     ),
                   ),
                   (route) => false,

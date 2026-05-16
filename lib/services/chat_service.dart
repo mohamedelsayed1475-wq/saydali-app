@@ -5,7 +5,6 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../database/database_helper.dart';
 import '../utils/fuzzy_search.dart';
-import 'platform_service.dart';
 import 'groq_service.dart';
 import 'openfda_service.dart';
 import 'rxnorm_service.dart';
@@ -17,7 +16,7 @@ import 'rxnorm_service.dart';
 
 enum ChatIntent {
   addShortage, showShortages, showPendingShortages, markCovered, deleteShortage,
-  searchDrug, findAlternative, analyzePatterns, searchPlatform,
+  searchDrug, findAlternative, analyzePatterns,
   addCustomer, showDebts, checkCustomerDebt, addDebt, recordPayment,
   showReps, addRep,
   showStats, generateReport,
@@ -198,9 +197,6 @@ class ChatService {
       return ChatIntent.findAlternative;
     if (RegExp(r'(تحليل|انماط|نمط|تكرار|متكرر)').hasMatch(n))
       return ChatIntent.analyzePatterns;
-    if (RegExp(r'(ابحث|دور|سعر|اسعار|اطلب|طلب|منصة|منصات)').hasMatch(n) &&
-        !RegExp(r'(ناقص|نواقص|اضف|معلق)').hasMatch(n))
-      return ChatIntent.searchPlatform;
     if (RegExp(r'(مساعده|مساعدة|ايه|ازاي|كيف|امر|اوامر)').hasMatch(n))
       return ChatIntent.help;
     if (RegExp(r'(اعمل|ضيف|سجل|انشئ|أنشئ)').hasMatch(n) &&
@@ -235,7 +231,6 @@ class ChatService {
       case ChatIntent.help: return ChatResponse(text: _helpText(), intent: ChatIntent.help);
       case ChatIntent.findAlternative: return _handleFindAlternative(text);
       case ChatIntent.analyzePatterns: return _handleAnalyzePatterns();
-      case ChatIntent.searchPlatform: return _handleSearchPlatform(text);
       case ChatIntent.addCustomer: return _handleAddCustomer(text);
       case ChatIntent.drugInquiry: return _handleDrugInquiry(text);
       case ChatIntent.generalQuestion:
@@ -749,48 +744,6 @@ class ChatService {
     );
   }
 
-  Future<ChatResponse> _handleSearchPlatform(String text) async {
-    final platforms = await PlatformService.instance.getPlatforms();
-    if (platforms.isEmpty) {
-      return ChatResponse(
-        text: '📱 لا توجد منصات مضافة!\n\n💡 أضف منصات من الإعدادات.',
-        intent: ChatIntent.searchPlatform,
-        success: false,
-      );
-    }
-
-    final n = _normalize(text);
-    const stop = {'ابحث', 'دور', 'عن', 'في', 'سعر', 'اسعار', 'منصة', 'شركة'};
-    final words = n.split(' ').where((w) => !stop.contains(w) && w.length > 1).toList();
-    if (words.isEmpty) {
-      return ChatResponse(
-        text: '❓ اكتب: "ابحث عن [اسم الدواء]"',
-        intent: ChatIntent.searchPlatform,
-        success: false,
-      );
-    }
-
-    final drugName = words.join(' ');
-    final results = await PlatformService.instance.searchAll(drugName);
-
-    if (results.isEmpty) {
-      return ChatResponse(
-        text: '🔍 بحثت في ${platforms.length} منصة عن "$drugName"\n\n❌ لم أجد نتائج.',
-        intent: ChatIntent.searchPlatform,
-      );
-    }
-
-    final buf = StringBuffer('🔍 نتائج "$drugName":\n\n');
-    for (final entry in results.entries) {
-      buf.writeln('📦 ${entry.key}:');
-      for (final r in entry.value) {
-        buf.writeln('  ${r.available ? "✅" : "❌"} ${r.drugName} - ${r.price.toStringAsFixed(2)}');
-      }
-      buf.writeln();
-    }
-
-    return ChatResponse(text: buf.toString().trim(), intent: ChatIntent.searchPlatform);
-  }
 
   Future<ChatResponse> _handleAddCustomer(String text) async {
     final patterns = [
