@@ -188,7 +188,6 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
                 const SizedBox(height: 24),
                 PrimaryButton(
                   text: 'حفظ المرتجع',
-                  color: AppColors.warning,
                   onTap: () async {
                     if (itemCtrl.text.trim().isEmpty) {
                       showSnack(ctx, 'أدخل اسم الصنف', isError: true);

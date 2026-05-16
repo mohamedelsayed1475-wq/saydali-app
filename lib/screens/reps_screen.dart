@@ -256,6 +256,7 @@ class _RepsScreenState extends State<RepsScreen> {
               label: 'حذف',
             ),
           ],
+        ),
         child: InkWell(
           onTap: () {
             Navigator.push(
