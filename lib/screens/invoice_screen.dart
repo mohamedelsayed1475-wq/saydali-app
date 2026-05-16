@@ -369,18 +369,30 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       child: Autocomplete<Map<String, dynamic>>(
                         optionsBuilder: (v) {
                           if (v.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
-                          final terms = v.text.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
-                          return _suggestions.where((s) {
+                          final query = v.text;
+                          
+                          // تقييم وتصفية العناصر
+                          final matches = _suggestions.map((s) {
                             final en = s['enName']?.toString() ?? '';
                             final ar = s['arName']?.toString() ?? '';
                             final act = s['activeIngredient']?.toString() ?? '';
                             final bar = s['barcode']?.toString() ?? '';
-                            return terms.every((term) =>
-                                FuzzySearch.match(term, en) ||
-                                FuzzySearch.match(term, ar) ||
-                                FuzzySearch.match(term, act) ||
-                                FuzzySearch.match(term, bar));
-                          });
+
+                            // نجيب أعلى تقييم بين الحقول المختلفة
+                            final scoreEn = FuzzySearch.getScore(query, en);
+                            final scoreAr = FuzzySearch.getScore(query, ar);
+                            final scoreAct = FuzzySearch.getScore(query, act);
+                            final scoreBar = bar.contains(query.trim()) ? 1000 : 0; // الباركود لازم يتطابق
+
+                            final maxScore = [scoreEn, scoreAr, scoreAct, scoreBar].reduce((a, b) => a > b ? a : b);
+
+                            return {'item': s, 'score': maxScore};
+                          }).where((element) => (element['score'] as int) > 0).toList();
+
+                          // الترتيب حسب الأعلى تقييماً (الأكثر صلة)
+                          matches.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
+                          return matches.map((e) => e['item'] as Map<String, dynamic>).take(15);
                         },
                         displayStringForOption: (option) => option['enName']?.toString() ?? '',
                         onSelected: (s) {

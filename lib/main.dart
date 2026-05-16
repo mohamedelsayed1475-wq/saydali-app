@@ -18,6 +18,7 @@ import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
 import 'services/sync_service.dart';
 import 'services/scheduled_sync_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +28,11 @@ void main() async {
   } catch (e) {
     // في حالة فشل تهيئة قاعدة البيانات، نستمر comunque لتجنب تعطل التطبيق تمامًا
     debugPrint('خطأ في تهيئة قاعدة البيانات: $e');
+  }
+  try {
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('خطأ في تهيئة الإشعارات: $e');
   }
   try {
     await ScheduledSyncService.initialize();

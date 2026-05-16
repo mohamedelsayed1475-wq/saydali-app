@@ -19,7 +19,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -129,6 +129,31 @@ class DatabaseHelper {
       try { await db.execute('ALTER TABLE customers ADD COLUMN photo_url TEXT'); } catch (_) {}
       try { await db.execute('ALTER TABLE debt_transactions ADD COLUMN receipt_url TEXT'); } catch (_) {}
     }
+    if (oldVersion < 8) {
+      // ── جدول طلبات المندوبين ──
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS rep_orders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          rep_name TEXT NOT NULL,
+          items TEXT NOT NULL,
+          total REAL NOT NULL,
+          is_paid INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      // ── جدول مرتجعات المندوبين ──
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS rep_returns (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          rep_name TEXT NOT NULL,
+          item_name TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          reminder_time TEXT,
+          is_returned INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -237,6 +262,31 @@ class DatabaseHelper {
       CREATE TABLE settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      )
+    ''');
+
+    // جدول طلبات المندوبين
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS rep_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rep_name TEXT NOT NULL,
+        items TEXT NOT NULL,
+        total REAL NOT NULL,
+        is_paid INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // جدول مرتجعات المندوبين
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS rep_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rep_name TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        reminder_time TEXT,
+        is_returned INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
       )
     ''');
 
@@ -591,6 +641,69 @@ class DatabaseHelper {
   }
 
   // ── الفواتير ──────────────────────────────────────────────────
+  // ── طلبات ومرتجعات المندوبين ──────────────────────────────────────────────────
+  Future<int> insertRepOrder(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = data['created_at'] ?? DateTime.now().toIso8601String();
+    return await db.insert('rep_orders', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getRepOrders(String repName) async {
+    final db = await database;
+    return await db.query(
+      'rep_orders',
+      where: 'rep_name = ?',
+      whereArgs: [repName],
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  Future<int> updateRepOrderPaidStatus(int id, bool isPaid) async {
+    final db = await database;
+    return await db.update(
+      'rep_orders',
+      {'is_paid': isPaid ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteRepOrder(int id) async {
+    final db = await database;
+    return await db.delete('rep_orders', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> insertRepReturn(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = data['created_at'] ?? DateTime.now().toIso8601String();
+    return await db.insert('rep_returns', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getRepReturns(String repName) async {
+    final db = await database;
+    return await db.query(
+      'rep_returns',
+      where: 'rep_name = ?',
+      whereArgs: [repName],
+      orderBy: 'created_at DESC',
+    );
+  }
+
+  Future<int> updateRepReturnStatus(int id, bool isReturned) async {
+    final db = await database;
+    return await db.update(
+      'rep_returns',
+      {'is_returned': isReturned ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteRepReturn(int id) async {
+    final db = await database;
+    return await db.delete('rep_returns', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<int> insertInvoice(Map<String, dynamic> data) async {
     final db = await database;
     data['created_at'] = DateTime.now().toIso8601String();

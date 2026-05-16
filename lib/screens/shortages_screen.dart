@@ -341,24 +341,30 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           if (v.text.isEmpty)
                             return const Iterable<Map<String, dynamic>>.empty();
                           
-                          final normalizedQuery = v.text.toLowerCase().trim();
-                          final terms = normalizedQuery
-                              .split(RegExp(r'[\s/]+'))
-                              .where((t) => t.isNotEmpty);
-                              
-                          return _suggestions.where((s) {
-                            final en = s['enName']?.toString().toLowerCase() ?? '';
-                            final ar = s['arName']?.toString().toLowerCase() ?? '';
-                            final act = s['activeIngredient']?.toString().toLowerCase() ?? '';
-                            final bar = s['barcode']?.toString().toLowerCase() ?? '';
+                          final query = v.text;
+                          
+                          // تقييم وتصفية العناصر
+                          final matches = _suggestions.map((s) {
+                            final en = s['enName']?.toString() ?? '';
+                            final ar = s['arName']?.toString() ?? '';
+                            final act = s['activeIngredient']?.toString() ?? '';
+                            final bar = s['barcode']?.toString() ?? '';
 
-                            return terms.every((term) =>
-                                en.contains(term) ||
-                                ar.contains(term) ||
-                                act.contains(term) ||
-                                bar.contains(term) ||
-                                _fuzzyMatch(term, en));
-                          }).take(10); // الحد الأقصى 10 نتائج
+                            // نجيب أعلى تقييم بين الحقول المختلفة
+                            final scoreEn = FuzzySearch.getScore(query, en);
+                            final scoreAr = FuzzySearch.getScore(query, ar);
+                            final scoreAct = FuzzySearch.getScore(query, act);
+                            final scoreBar = bar.contains(query.trim()) ? 1000 : 0; // الباركود لازم يتطابق
+
+                            final maxScore = [scoreEn, scoreAr, scoreAct, scoreBar].reduce((a, b) => a > b ? a : b);
+
+                            return {'item': s, 'score': maxScore};
+                          }).where((element) => (element['score'] as int) > 0).toList();
+
+                          // الترتيب حسب الأعلى تقييماً (الأكثر صلة)
+                          matches.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+
+                          return matches.map((e) => e['item'] as Map<String, dynamic>).take(15);
                         },
                         displayStringForOption: (option) =>
                             option['enName']?.toString() ?? '',

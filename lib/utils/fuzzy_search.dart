@@ -61,4 +61,71 @@ class FuzzySearch {
     }
     return false;
   }
+
+  static int getScore(String query, String text) {
+    if (query.isEmpty || text.isEmpty) return 0;
+
+    final originalQ = query.toLowerCase().trim();
+    final originalT = text.toLowerCase().trim();
+
+    if (originalT == originalQ) return 1000;
+    if (originalT.startsWith(originalQ)) return 900;
+    if (originalT.contains(originalQ)) return 800 - (originalT.length - originalQ.length);
+
+    final q = normalize(query);
+    final t = normalize(text);
+
+    if (q == t) return 700;
+    if (t.startsWith(q)) return 600 - (t.length - q.length);
+    if (t.contains(q)) return 500 - (t.length - q.length);
+
+    // Word by word matching (for "extra panadol" matching "panadol extra")
+    final terms = originalQ.split(RegExp(r'[\s/]+')).where((e) => e.isNotEmpty).toList();
+    if (terms.length > 1) {
+      bool allMatch = true;
+      int totalWordScore = 0;
+      for (final term in terms) {
+        final termQ = normalize(term);
+        if (t.contains(termQ)) {
+          totalWordScore += 50;
+        } else if (match(term, text)) {
+          totalWordScore += 20;
+        } else {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch) {
+        return 400 + totalWordScore - (t.length - q.length);
+      }
+    }
+
+    // Subsequence match
+    int i = 0;
+    int gaps = 0;
+    int lastMatchIndex = -1;
+    for (int j = 0; j < t.length && i < q.length; j++) {
+      if (t[j] == q[i]) {
+        if (lastMatchIndex != -1 && j > lastMatchIndex + 1) {
+          gaps += (j - lastMatchIndex - 1);
+        }
+        lastMatchIndex = j;
+        i++;
+      }
+    }
+    
+    if (i == q.length) {
+       return 300 - gaps - (t.length - q.length);
+    }
+
+    // Levenshtein
+    if (q.length >= 3 && t.length >= 3) {
+      final maxDist = (q.length / 3).ceil();
+      if (levenshtein(q, t.length > q.length + 3 ? t.substring(0, q.length + 3) : t) <= maxDist) {
+        return 100 - (t.length - q.length);
+      }
+    }
+
+    return 0;
+  }
 }

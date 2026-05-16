@@ -64,6 +64,7 @@ dependencies:
   syncfusion_flutter_pdf: ^33.2.5
   archive: ^3.6.1
   google_mlkit_text_recognition: ^0.15.1
+  timezone: ^0.10.1
 
 
 dev_dependencies:

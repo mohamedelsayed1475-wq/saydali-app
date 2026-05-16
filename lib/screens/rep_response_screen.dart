@@ -173,6 +173,28 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       }
     }
 
+    // ▌ تسجيل الطلبية في سجل المندوبين
+    if (_response!.availableItems.isNotEmpty) {
+      final orderItems = _response!.availableItems.map((item) => {
+        'name': item.drugName,
+        'company': item.company,
+        'quantity': item.quantity,
+        'price': item.price,
+        'discount': item.discount,
+        'finalPrice': item.finalPrice,
+        'totalPrice': item.totalPrice,
+      }).toList();
+
+      final total = _response!.availableItems.fold(0.0, (s, i) => s + i.totalPrice);
+
+      await db.insertRepOrder({
+        'rep_name': _response!.repName,
+        'items': jsonEncode(orderItems),
+        'total': total,
+        'is_paid': 0, // افتراضياً غير مدفوع
+      });
+    }
+
     if (mounted) {
       showSnack(context, endDay ? 'تم إنهاء اليوم ✅' : 'تم قبول الرد بنجاح ✅');
       Navigator.pop(context);

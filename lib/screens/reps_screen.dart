@@ -8,6 +8,7 @@ import 'send_to_rep_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_providers.dart';
 import '../providers/current_user_provider.dart';
+import 'rep_details_screen.dart';
 
 class RepsScreen extends StatefulWidget {
   const RepsScreen({super.key});
@@ -255,9 +256,16 @@ class _RepsScreenState extends State<RepsScreen> {
               label: 'حذف',
             ),
           ],
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(16),
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => RepDetailsScreen(rep: rep)),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
