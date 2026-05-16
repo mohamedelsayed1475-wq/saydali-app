@@ -358,6 +358,7 @@ class _RepsScreenState extends State<RepsScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 

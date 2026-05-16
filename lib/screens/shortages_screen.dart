@@ -32,10 +32,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   String _filter = 'all';
   String _search = '';
 
-  /// ▌ مطابقة ضبابية سريعة (wrapper لـ FuzzySearch)
-  bool _fuzzyMatch(String query, String text) {
-    return FuzzySearch.match(query, text);
-  }
+
   List<Map<String, dynamic>> _suggestions = [];
   final _searchController = TextEditingController();
 
