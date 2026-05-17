@@ -514,6 +514,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   },
                 ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'documents_fab',
         onPressed: _showAddOptions,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_photo_alternate, color: Colors.white),

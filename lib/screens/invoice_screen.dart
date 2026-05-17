@@ -994,6 +994,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'invoice_fab',
         onPressed: _createInvoice,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded),

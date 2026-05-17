@@ -144,6 +144,7 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'platform_settings_fab',
         onPressed: _addPlatform,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded),

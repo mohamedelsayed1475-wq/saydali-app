@@ -278,6 +278,7 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
               ],
             ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'rep_details_fab',
         onPressed: _showAddReturnDialog,
         backgroundColor: AppColors.warning,
         icon: const Icon(Icons.add, color: AppColors.dark),

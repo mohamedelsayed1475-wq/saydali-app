@@ -921,6 +921,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'shortages_fab',
         onPressed: () => _showAddSheet(),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add, color: Colors.white),

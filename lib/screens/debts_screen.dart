@@ -1139,6 +1139,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'debts_fab',
         onPressed: () => _showAddCustomer(),
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.person_add, color: Colors.white),

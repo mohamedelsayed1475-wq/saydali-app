@@ -353,6 +353,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'assistants_fab',
         onPressed: () => _tryAddAssistant(),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.person_add, color: Colors.white),

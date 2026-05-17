@@ -200,6 +200,7 @@ class _RepsScreenState extends State<RepsScreen> {
                   ),
                 ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'reps_fab',
         onPressed: () => _showAddSheet(),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.person_add, color: Colors.white),
