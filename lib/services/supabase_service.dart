@@ -95,7 +95,7 @@ class SupabaseService {
               body: jsonEncode({
                 'session_id': sessionId,
                 'drug_name': item['name'],
-                'company': item['company'] ?? 'غير محدد',
+                'company': item['company']?.toString().isEmpty ?? true ? '' : item['company'],
                 'quantity': item['quantity'] ?? 1,
                 'is_private': item['is_private'] ?? 0,
               }),

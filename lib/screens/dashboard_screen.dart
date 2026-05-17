@@ -11,7 +11,7 @@ import 'debts_screen.dart';
 import 'rep_response_screen.dart';
 import 'reports_screen.dart';
 import 'invoice_screen.dart';
-import 'chat_screen.dart';
+
 import 'documents_screen.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -418,10 +418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const InvoiceScreen()));
               }),
-              _quickAction('🤖', 'حكيم', const Color(0xFF06B6D4), () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ChatScreen()));
-              }),
+
               _quickAction('📁', 'المستندات', const Color(0xFF10B981), () {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const DocumentsScreen()));

@@ -138,8 +138,38 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       
       // تحديث حالة النواقص
       if (shortageMap.containsKey(key)) {
+        // الكمية التي وفرها المندوب لهذا الصنف
+        int remainingQty = item.quantity;
+
         for (final id in shortageMap[key]!) {
-          await db.updateShortage(id, {'status': 'covered'});
+          if (remainingQty <= 0) break; // تم استهلاك كل الكمية اللي وفرها المندوب
+
+          final shortage = shortagesData.firstWhere((s) => s['id'] == id);
+          final reqQty = (shortage['quantity'] as num?)?.toInt() ?? 1;
+
+          if (remainingQty >= reqQty) {
+            // تغطية كاملة لهذا الناقص
+            await db.updateShortage(id, {'status': 'covered'});
+            remainingQty -= reqQty;
+          } else {
+            // تغطية جزئية: الكمية المتبقية مع المندوب أقل من المطلوبة هنا
+            await db.updateShortage(id, {
+              'status': 'covered',
+              'quantity': remainingQty
+            });
+
+            // إنشاء ناقص جديد بالكمية المتبقية
+            await db.insertShortage({
+              'name': shortage['name'],
+              'company': shortage['company'],
+              'quantity': reqQty - remainingQty,
+              'status': 'pending',
+              'is_urgent': shortage['is_urgent'],
+              'notes': 'متبقي من طلبية سابقة (${_response!.repName})',
+            });
+
+            remainingQty = 0;
+          }
         }
       }
 

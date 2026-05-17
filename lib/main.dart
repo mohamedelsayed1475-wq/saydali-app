@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'utils/app_theme.dart';
 import 'providers/app_providers.dart';
-import 'providers/chat_provider.dart';
 import 'providers/current_user_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/shortages_screen.dart';
@@ -12,7 +11,6 @@ import 'screens/debts_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
-import 'screens/chat_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
@@ -62,7 +60,6 @@ class SaydaliApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ShortagesProvider()..load()),
         ChangeNotifierProvider(create: (_) => CustomersProvider()..load()),
         ChangeNotifierProvider(create: (_) => RepsProvider()..load()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => CurrentUserProvider()),
       ],
       child: Consumer<ThemeProvider>(
@@ -281,7 +278,6 @@ class _MainScreenState extends State<MainScreen> {
     RepsScreen(),
     DebtsScreen(),
     ReportsScreen(),
-    ChatScreen(),
     SettingsScreen(),
   ];
 
@@ -291,7 +287,6 @@ class _MainScreenState extends State<MainScreen> {
     (icon: Icons.people_rounded, label: 'المندوبون'),
     (icon: Icons.account_balance_wallet_rounded, label: 'الديون'),
     (icon: Icons.bar_chart_rounded, label: 'التقارير'),
-    (icon: Icons.smart_toy_rounded, label: 'حكيم'),
     (icon: Icons.settings_rounded, label: 'الإعدادات'),
   ];
 
@@ -301,7 +296,6 @@ class _MainScreenState extends State<MainScreen> {
     'المندوبون',
     'ديون العملاء',
     'التقارير',
-    'حكيم - المساعد الذكي',
     'الإعدادات',
   ];
 
@@ -332,25 +326,6 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         actions: [
-          // زر إعدادات API للشات بوت
-          if (_currentIndex == 5)
-            IconButton(
-              tooltip: 'إعدادات الذكاء الاصطناعي',
-              onPressed: () => showDialog(
-                context: context,
-                builder: (_) => const ApiSettingsDialog(),
-              ),
-              icon: Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.settings_suggest_rounded,
-                    color: AppColors.primary, size: 18),
-              ),
-            ),
           // Badge الاشتراك
           GestureDetector(
             onTap: () => Navigator.push(context,
