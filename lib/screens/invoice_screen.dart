@@ -8,6 +8,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
 import '../providers/current_user_provider.dart';
+import '../providers/app_providers.dart';
+import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../utils/fuzzy_search.dart';
@@ -79,8 +81,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       return;
     }
     final nameCtrl = TextEditingController();
+    final paidCtrl = TextEditingController(text: '0');
     final items = <Map<String, dynamic>>[];
     double discount = 0;
+    Customer? selectedCustomer;
+    double paidAmount = 0.0;
 
     await showModalBottomSheet(
       context: context,
@@ -90,8 +95,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setBS) {
+          final customers = context.read<CustomersProvider>().customers;
           double subtotal = items.fold(0, (s, i) => s + (i['line_total'] ?? (i['price'] * i['qty'])));
           double total = subtotal - (subtotal * discount / 100);
+          double remaining = total - paidAmount;
+          if (remaining < 0) remaining = 0.0;
 
           return DraggableScrollableSheet(
             initialChildSize: 0.9,
@@ -124,7 +132,78 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         const SizedBox(height: 12),
                         AppTextField(
                             hint: 'اسم العميل',
-                            controller: nameCtrl),
+                            controller: nameCtrl,
+                            onChanged: (val) {
+                              setBS(() {
+                                if (selectedCustomer != null && selectedCustomer!.name != val) {
+                                  selectedCustomer = null;
+                                }
+                              });
+                            }),
+                        
+                        // قائمة اقتراحات أسماء العملاء
+                        if (nameCtrl.text.isNotEmpty && selectedCustomer == null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(top: 4, bottom: 8),
+                            constraints: const BoxConstraints(maxHeight: 150),
+                            decoration: BoxDecoration(
+                              color: AppColors.darkCard,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.darkBorder),
+                            ),
+                            child: ListView(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              children: customers
+                                  .where((c) => c.name.toLowerCase().contains(nameCtrl.text.toLowerCase()))
+                                  .map((c) => ListTile(
+                                        dense: true,
+                                        title: Text(c.name, style: const TextStyle(color: AppColors.textColor)),
+                                        subtitle: Text('المديونية الحالية: ${c.totalDebt.toStringAsFixed(2)} $_currency', 
+                                            style: const TextStyle(color: AppColors.primary, fontSize: 11)),
+                                        onTap: () {
+                                          setBS(() {
+                                            selectedCustomer = c;
+                                            nameCtrl.text = c.name;
+                                          });
+                                        },
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ] else if (selectedCustomer != null) ...[
+                          Container(
+                            margin: const EdgeInsets.only(top: 4, bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 16),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'تم ربطه بالعميل المسجل: ${selectedCustomer!.name}',
+                                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    setBS(() {
+                                      selectedCustomer = null;
+                                      nameCtrl.clear();
+                                    });
+                                  },
+                                  child: const Icon(Icons.close_rounded, color: AppColors.danger, size: 18),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        
                         const SizedBox(height: 10),
                         // زر إضافة صنف
                         SizedBox(
@@ -237,7 +316,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 child: TextField(
                                   onChanged: (v) {
                                     final parsed = double.tryParse(v);
-                                    // Clamp discount between 0 and 100
                                     final clamped = parsed == null ? 0.0 : parsed.clamp(0.0, 100.0);
                                     setBS(() => discount = clamped);
                                   },
@@ -265,6 +343,50 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                       fontWeight: FontWeight.w800)),
                             ],
                           ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('المبلغ المدفوع',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                              SizedBox(
+                                width: 100,
+                                height: 32,
+                                child: TextField(
+                                  controller: paidCtrl,
+                                  onChanged: (v) {
+                                    final parsed = double.tryParse(v) ?? 0.0;
+                                    setBS(() {
+                                      paidAmount = parsed;
+                                    });
+                                  },
+                                  keyboardType: TextInputType.number,
+                                  style: const TextStyle(
+                                      color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.bold),
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 0),
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('المتبقي (يتحول للمديونية)',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                              Text('${remaining.toStringAsFixed(2)} $_currency',
+                                  style: TextStyle(
+                                      color: remaining > 0 ? AppColors.danger : AppColors.textLight,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800)),
+                            ],
+                          ),
                           const SizedBox(height: 12),
                           PrimaryButton(
                             text: '🧾 حفظ ومشاركة الفاتورة',
@@ -276,12 +398,28 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               }
                               if (items.isEmpty) return;
                               await DatabaseHelper.instance.insertInvoice({
+                                'customer_id': selectedCustomer?.id,
                                 'customer_name': nameCtrl.text.trim(),
                                 'items': jsonEncode(items),
                                 'subtotal': subtotal,
                                 'discount': discount,
                                 'total': total,
                               });
+                              
+                              // تحويل المتبقي للمديونية تلقائياً إذا تم اختيار عميل مسجل
+                              if (selectedCustomer != null && remaining > 0) {
+                                final userProvider = context.read<CurrentUserProvider>();
+                                await DatabaseHelper.instance.addDebtTransaction({
+                                  'customer_id': selectedCustomer!.id,
+                                  'amount': remaining,
+                                  'type': 'debt',
+                                  'description': 'متبقي من الفاتورة الصادرة باسم العميل: ${nameCtrl.text.trim()}',
+                                  'created_by': userProvider.currentName ?? 'المالك',
+                                });
+                                // تحديث مزود بيانات العملاء فوراً لتنعكس الديون في شاشة الديون
+                                await context.read<CustomersProvider>().load();
+                              }
+
                               await _generatePDF(
                                   nameCtrl.text.trim(), items, subtotal,
                                   discount, total);
@@ -291,7 +429,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 assistantId: userProvider.currentAssistantId,
                                 assistantName: userProvider.currentName,
                                 action: 'إنشاء فاتورة',
-                                details: 'تم إنشاء فاتورة للعميل: ${nameCtrl.text.trim()} - الإجمالي: ${total.toStringAsFixed(2)}',
+                                details: 'تم إنشاء فاتورة للعميل: ${nameCtrl.text.trim()} - الإجمالي: ${total.toStringAsFixed(2)} - المدفوع: ${paidAmount.toStringAsFixed(2)} - المتبقي: ${remaining.toStringAsFixed(2)}',
                                 screen: 'invoices',
                               );
                               if (ctx.mounted) Navigator.pop(ctx);
