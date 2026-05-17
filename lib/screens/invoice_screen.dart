@@ -409,11 +409,20 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               // تحويل المتبقي للمديونية تلقائياً إذا تم اختيار عميل مسجل
                               if (selectedCustomer != null && remaining > 0) {
                                 final userProvider = context.read<CurrentUserProvider>();
+                                
+                                // إنشاء وصف تفصيلي للأصناف والكميات
+                                final itemsList = items.map((item) {
+                                  final qtyVal = item['qty'] ?? 1;
+                                  final qtyText = item['qty_text'] ?? '$qtyVal علبة';
+                                  return '• ${item['name']} ($qtyText)';
+                                }).join('\n');
+                                final description = 'متبقي فاتورة أصناف:\n$itemsList';
+
                                 await DatabaseHelper.instance.addDebtTransaction({
                                   'customer_id': selectedCustomer!.id,
                                   'amount': remaining,
                                   'type': 'debt',
-                                  'description': 'متبقي من الفاتورة الصادرة باسم العميل: ${nameCtrl.text.trim()}',
+                                  'description': description,
                                   'created_by': userProvider.currentName ?? 'المالك',
                                 });
                                 // تحديث مزود بيانات العملاء فوراً لتنعكس الديون في شاشة الديون
