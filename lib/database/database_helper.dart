@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -898,5 +899,68 @@ class DatabaseHelper {
     }
     if (synced > 0) debugPrint('✅ تم مزامنة $synced إعلان من السحابة');
     return synced;
+  }
+
+  // ── الإحصائيات والأرباح ────────────────────────────────────
+  Future<Map<String, dynamic>> getStatisticsSummary() async {
+    final db = await database;
+    double totalSales = 0;
+    double totalDebts = 0;
+    int pendingShortagesCount = 0;
+    List<Map<String, dynamic>> topSellingItems = [];
+
+    try {
+      // 1. إجمالي المبيعات
+      final salesResult = await db.rawQuery('SELECT SUM(total) as sum_total FROM invoices');
+      if (salesResult.isNotEmpty && salesResult.first['sum_total'] != null) {
+        totalSales = (salesResult.first['sum_total'] as num).toDouble();
+      }
+
+      // 2. إجمالي الديون المستحقة
+      final debtsResult = await db.rawQuery('SELECT SUM(total_debt) as sum_debt FROM customers');
+      if (debtsResult.isNotEmpty && debtsResult.first['sum_debt'] != null) {
+        totalDebts = (debtsResult.first['sum_debt'] as num).toDouble();
+      }
+
+      // 3. عدد النواقص الحالية
+      final shortagesResult = await db.rawQuery("SELECT COUNT(*) as count FROM shortages WHERE status = 'pending'");
+      if (shortagesResult.isNotEmpty && shortagesResult.first['count'] != null) {
+        pendingShortagesCount = (shortagesResult.first['count'] as num).toInt();
+      }
+
+      // 4. الأصناف الأكثر مبيعاً
+      final invoices = await db.query('invoices', columns: ['items']);
+      Map<String, int> itemCounts = {};
+      for (var invoice in invoices) {
+        try {
+          final itemsJson = invoice['items'] as String?;
+          if (itemsJson != null && itemsJson.isNotEmpty) {
+            final List<dynamic> itemsList = jsonDecode(itemsJson);
+            for (var item in itemsList) {
+              final String name = item['name']?.toString() ?? 'غير معروف';
+              final int qty = (item['qty'] as num?)?.toInt() ?? 1;
+              itemCounts[name] = (itemCounts[name] ?? 0) + qty;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error parsing invoice items for statistics: $e');
+        }
+      }
+
+      var sortedItems = itemCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      
+      topSellingItems = sortedItems.take(5).map((e) => {'name': e.key, 'qty': e.value}).toList();
+
+    } catch (e) {
+      debugPrint('Error generating statistics: $e');
+    }
+
+    return {
+      'total_sales': totalSales,
+      'total_debts': totalDebts,
+      'pending_shortages_count': pendingShortagesCount,
+      'top_selling_items': topSellingItems,
+    };
   }
 }

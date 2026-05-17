@@ -13,6 +13,8 @@ import 'reports_screen.dart';
 import 'invoice_screen.dart';
 
 import 'documents_screen.dart';
+import 'statistics_screen.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -410,9 +412,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     MaterialPageRoute(
                         builder: (_) => const RepResponseScreen()));
               }),
-              _quickAction('📊', 'التقارير', AppColors.warning, () {
+              _quickAction('📈', 'الإحصائيات', AppColors.warning, () {
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ReportsScreen()));
+                    MaterialPageRoute(builder: (_) => const StatisticsScreen()));
               }),
               _quickAction('🧾', 'فاتورة جديدة', const Color(0xFF8B5CF6), () {
                 Navigator.push(context,
