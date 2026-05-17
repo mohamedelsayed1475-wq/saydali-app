@@ -19,6 +19,10 @@ class SyncService {
   bool _isSyncing = false;
   String? _pharmacyCloudId; // UUID من Supabase
 
+  // بث انتهاء المزامنة لتحديث الواجهات تلقائياً
+  final StreamController<void> _syncCompleteController = StreamController<void>.broadcast();
+  Stream<void> get onSyncComplete => _syncCompleteController.stream;
+
   bool get isConfigured =>
       _url.isNotEmpty &&
       _key.isNotEmpty &&
@@ -235,6 +239,9 @@ class SyncService {
       // تحديث وقت آخر مزامنة
       await DatabaseHelper.instance.setSetting(
           'last_sync_at', DateTime.now().toIso8601String());
+
+      // إرسال إشارة بنجاح المزامنة لتحديث الواجهات تلقائياً
+      _syncCompleteController.add(null);
     } catch (e) {
       debugPrint('❌ syncAll error: $e');
     } finally {

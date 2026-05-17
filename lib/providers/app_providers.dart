@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
+import '../services/sync_service.dart';
 
 // ── Provider للثيم ──────────────────────────────────────────────────
 class ThemeProvider extends ChangeNotifier {
@@ -35,6 +37,19 @@ class ShortagesProvider extends ChangeNotifier {
   bool _loading = false;
   String _filter = 'all';
   String _search = '';
+  StreamSubscription<void>? _syncSubscription;
+
+  ShortagesProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
 
   List<Shortage> get shortages => _shortages;
   bool get loading => _loading;
@@ -97,6 +112,19 @@ class ShortagesProvider extends ChangeNotifier {
 class CustomersProvider extends ChangeNotifier {
   List<Customer> _customers = [];
   bool _loading = false;
+  StreamSubscription<void>? _syncSubscription;
+
+  CustomersProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
 
   List<Customer> get customers => _customers;
   bool get loading => _loading;
@@ -157,6 +185,19 @@ class CustomersProvider extends ChangeNotifier {
 class RepsProvider extends ChangeNotifier {
   List<Representative> _reps = [];
   bool _loading = false;
+  StreamSubscription<void>? _syncSubscription;
+
+  RepsProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
 
   List<Representative> get reps => _reps;
   bool get loading => _loading;
