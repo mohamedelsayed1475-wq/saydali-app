@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -72,12 +74,7 @@ jobs:
             --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
             --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
 
-      - name: Upload AppBundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: saydali-pro-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          retention-days: 7
+      # Removed actions/upload-artifact to save quota. Will upload to Release at the end.
 
       - name: Build APK for Local Testing
         env:
@@ -105,9 +102,13 @@ jobs:
             --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
             --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create Release with APK and AAB
+        uses: softprops/action-gh-release@v2
         with:
-          name: saydali-pro-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          body: "Automated build. Download the APK or AAB below."
+          prerelease: true
+          files: |
+            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/flutter-apk/app-release.apk
