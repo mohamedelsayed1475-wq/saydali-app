@@ -37,7 +37,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           }
           if (snapshot.hasError) {
-            return const Center(child: Text('حدث خطأ أثناء تحميل الإحصائيات', style: TextStyle(color: AppColors.error)));
+            return const Center(child: Text('حدث خطأ أثناء تحميل الإحصائيات', style: TextStyle(color: AppColors.danger)));
           }
 
           final data = snapshot.data!;
@@ -55,7 +55,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   title: 'إجمالي المبيعات',
                   value: '${totalSales.toStringAsFixed(2)} ج.م',
                   icon: Icons.point_of_sale_rounded,
-                  color: AppColors.success,
+                  color: AppColors.primary,
                 ),
                 const SizedBox(height: 12),
                 _buildStatCard(
@@ -112,10 +112,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       decoration: BoxDecoration(
         color: AppColors.darkCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )
@@ -126,7 +126,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 30),
