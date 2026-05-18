@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -164,6 +164,21 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE invoices ADD COLUMN remaining REAL DEFAULT 0');
       } catch (_) {}
     }
+    if (oldVersion < 10) {
+      // إضافة تاريخ انتهاء الإعلانات
+      try {
+        await db.execute('ALTER TABLE ads ADD COLUMN expires_at TEXT');
+      } catch (_) {}
+    }
+  }
+
+  /// حذف الإعلانات المنتهية تلقائياً
+  Future<int> cleanupExpiredAds() async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    return await db.delete('ads',
+        where: "expires_at IS NOT NULL AND expires_at != '' AND expires_at < ?",
+        whereArgs: [now]);
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -331,6 +346,7 @@ class DatabaseHelper {
         is_active INTEGER DEFAULT 1,
         screen TEXT DEFAULT 'home',
         skip_duration INTEGER DEFAULT 0,
+        expires_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -588,8 +604,12 @@ class DatabaseHelper {
   Future<Map<String, dynamic>?> getActiveAd(String screen) async {
     final db = await database;
     try {
+      // تنظيف الإعلانات المنتهية أولاً
+      await cleanupExpiredAds();
+      final now = DateTime.now().toIso8601String();
       final result = await db.query('ads',
-          where: 'is_active = 1 AND screen = ?', whereArgs: [screen], limit: 1);
+          where: "is_active = 1 AND screen = ? AND (expires_at IS NULL OR expires_at = '' OR expires_at > ?)",
+          whereArgs: [screen, now], limit: 1);
       if (result.isNotEmpty) return result.first;
     } catch (_) {}
     return null;

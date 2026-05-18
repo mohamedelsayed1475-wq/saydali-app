@@ -18,51 +18,67 @@ class SubscriptionScreen extends StatefulWidget {
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends State<SubscriptionScreen> {
+class _SubscriptionScreenState extends State<SubscriptionScreen>
+    with SingleTickerProviderStateMixin {
   final _codeCtrl = TextEditingController();
   bool _isValidating = false;
   String? _codeError;
-  int _selectedPlan = 0; // 0=premium
-  double _currentPrice = 200;
+  int _selectedPlan = 0;
+  double _currentPrice = 199;
   int _discountPercent = 0;
   String _currency = 'ج.م';
+  late AnimationController _glowCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _glowCtrl = AnimationController(
+      vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+  }
 
   final _plans = [
     (
       name: 'بريميوم',
-      medal: '🥇',
-      price: 200,
+      medal: '👑',
+      badge: '⭐ الأكثر شعبية',
+      price: 199,
       duration: 'شهر',
-      color: AppColors.warning,
+      color: const Color(0xFFFFD700),
+      gradient: const [Color(0xFF2D1B00), Color(0xFF4A3200)],
       features: [
-        'إدارة النواقص والديون',
-        'مندوبون غير محدودون',
-        'تصدير فواتير (PDF & Excel)',
-        'نسخ احتياطي سحابي',
-        'دعم فني متميز 24/7'
+        'كل ميزات التطبيق بلا حدود',
+        'مزامنة سحابية بين الأجهزة',
+        'تصدير فواتير PDF & Excel',
+        'تقارير وإحصائيات متقدمة',
+        'نسخ احتياطي تلقائي',
+        'دعم فني متميز 24/7',
       ],
     ),
     (
       name: 'باقة المساعدين',
       medal: '👥',
-      price: 100,
+      badge: '',
+      price: 99,
       duration: 'شهر',
       color: AppColors.primary,
+      gradient: const [Color(0xFF0D2E1C), Color(0xFF0A3525)],
       features: [
-        'إضافة 3 مساعدين بـ 100 ج.م',
+        'إضافة 3 مساعدين',
         'صلاحيات مخصصة لكل مساعد',
         'تتبع نشاط المساعدين',
-        'مزامنة بين الأجهزة',
+        'مزامنة فورية بين الأجهزة',
       ],
     ),
     (
       name: 'مساعد إضافي',
       medal: '👤',
-      price: 100,
+      badge: '',
+      price: 49,
       duration: 'شهر',
       color: Colors.teal,
+      gradient: const [Color(0xFF0D1B2E), Color(0xFF132A3E)],
       features: [
-        'إضافة 1 مساعد بـ 100 ج.م',
+        'إضافة مساعد واحد إضافي',
         'للمساعدين فوق العدد الأساسي',
       ],
     ),
@@ -71,6 +87,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   @override
   void dispose() {
     _codeCtrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -352,50 +369,100 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0D2E1C), Color(0xFF132233)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.primaryDark),
-            ),
-            child: Column(
-              children: [
-                const Text('💊', style: TextStyle(fontSize: 40)),
-                const SizedBox(height: 8),
-                const Text('صيدلي PRO',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800)),
-                const Text('اختر الباقة المناسبة لصيدليتك',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-              ],
-            ),
+          // ── Premium Hero Section ──
+          AnimatedBuilder(
+            animation: _glowCtrl,
+            builder: (context, child) {
+              final glow = _glowCtrl.value * 0.3 + 0.1;
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0A1628), Color(0xFF0D2E1C), Color(0xFF132233)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: glow),
+                      blurRadius: 30,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 70, height: 70,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.primaryDark],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(color: AppColors.primary.withValues(alpha: 0.5), blurRadius: 20),
+                        ],
+                      ),
+                      child: const Center(child: Text('💊', style: TextStyle(fontSize: 36))),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('صيدلي PRO',
+                        style: TextStyle(color: AppColors.primary, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    const SizedBox(height: 4),
+                    const Text('أدِر صيدليتك باحترافية',
+                        style: TextStyle(color: AppColors.textLight, fontSize: 14, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 16),
+                    // Trust signals
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _trustBadge('🔒', 'مشفّر'),
+                        const SizedBox(width: 12),
+                        _trustBadge('⚡', 'فوري'),
+                        const SizedBox(width: 12),
+                        _trustBadge('💬', 'دعم 24/7'),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Plans
-          const Text('📦 الباقات المتاحة',
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
+          // ── Plans Section ──
+          Row(
+            children: [
+              const Text('📦', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              const Text('اختر باقتك',
+                  style: TextStyle(color: AppColors.textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text('3 باقات', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           for (int i = 0; i < _plans.length; i++) _buildPlanCard(i),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Discount Code
-          const Text('🎟️ كود الخصم أو التفعيل',
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+          // ── Code Section ──
+          Row(
+            children: [
+              const Text('🎟️', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              const Text('كود التفعيل أو الخصم',
+                  style: TextStyle(color: AppColors.textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+            ],
+          ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(16),
@@ -476,13 +543,54 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Payment Methods
-          const Text('💳 طرق الدفع',
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
+          // ── Payment Methods ──
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Text('💳', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              const Text('طرق الدفع',
+                  style: TextStyle(color: AppColors.textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // How-to steps
+          Container(
+            padding: const EdgeInsets.all(14),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(child: Column(
+                  children: [
+                    Text('1️⃣', style: TextStyle(fontSize: 18)),
+                    SizedBox(height: 2),
+                    Text('ادفع', style: TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ],
+                )),
+                Icon(Icons.arrow_forward_rounded, color: AppColors.textMuted, size: 16),
+                Expanded(child: Column(
+                  children: [
+                    Text('2️⃣', style: TextStyle(fontSize: 18)),
+                    SizedBox(height: 2),
+                    Text('أرسل الإيصال', style: TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ],
+                )),
+                Icon(Icons.arrow_forward_rounded, color: AppColors.textMuted, size: 16),
+                Expanded(child: Column(
+                  children: [
+                    Text('3️⃣', style: TextStyle(fontSize: 18)),
+                    SizedBox(height: 2),
+                    Text('استلم الكود', style: TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ],
+                )),
+              ],
+            ),
+          ),
 
           // ── InstaPay Card ──
           GestureDetector(
@@ -716,11 +824,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           const SizedBox(height: 20),
 
           // ── Contact Developer ──
-          const Text('📞 تواصل مع المطور',
-              style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+          Row(
+            children: [
+              const Text('📞', style: TextStyle(fontSize: 18)),
+              const SizedBox(width: 8),
+              const Text('تواصل مع المطور',
+                  style: TextStyle(color: AppColors.textColor, fontSize: 16, fontWeight: FontWeight.w800)),
+            ],
+          ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(18),
@@ -839,14 +950,63 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ),
           ),
           // ── Assistant Join ──
-          const Divider(color: AppColors.darkBorder),
-          const SizedBox(height: 10),
-          TextButton.icon(
-            onPressed: _joinAsAssistant,
-            icon: const Text('👨‍⚕️', style: TextStyle(fontSize: 20)),
-            label: const Text('هل أنت مساعد صيدلي؟ انضم لصيدليتك من هنا', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF132233), Color(0xFF1A2D42)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            ),
+            child: InkWell(
+              onTap: _joinAsAssistant,
+              child: Row(
+                children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(child: Text('👨‍⚕️', style: TextStyle(fontSize: 22))),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('هل أنت مساعد صيدلي؟', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text('انضم لصيدليتك بكود الصيدلية', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.primary, size: 16),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+
+  Widget _trustBadge(String emoji, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -856,86 +1016,98 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final plan = _plans[index];
     final isSelected = _selectedPlan == index;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
         onTap: () => setState(() {
           _selectedPlan = index;
+          _currentPrice = plan.price.toDouble();
           if (_discountPercent > 0) {
-            final basePrice = plan.price;
-            _currentPrice = basePrice - (basePrice * _discountPercent / 100);
+            _currentPrice = plan.price - (plan.price * _discountPercent / 100);
           }
         }),
-        child: Container(
-          padding: const EdgeInsets.all(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: isSelected
-                ? plan.color.withValues(alpha: 0.1)
-                : AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: isSelected
+                  ? plan.gradient
+                  : [AppColors.darkCard, AppColors.darkCard],
+            ),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: isSelected ? plan.color : AppColors.darkBorder,
-                width: isSelected ? 2 : 1),
+              color: isSelected ? plan.color.withValues(alpha: 0.6) : AppColors.darkBorder,
+              width: isSelected ? 2 : 1,
+            ),
+            boxShadow: isSelected ? [
+              BoxShadow(color: plan.color.withValues(alpha: 0.15), blurRadius: 16, spreadRadius: 1),
+            ] : [],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text(plan.medal, style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 10),
-                  Text(plan.name,
-                      style: TextStyle(
-                          color: plan.color,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16)),
-                  const Spacer(),
-                  RichText(
-                    text: TextSpan(
+                  // Icon circle
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color: plan.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(child: Text(plan.medal, style: const TextStyle(fontSize: 22))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextSpan(
-                            text: '${plan.price}',
-                            style: TextStyle(
-                                color: plan.color,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 22,
-                                fontFamily: 'Cairo')),
-                        const TextSpan(
-                            text: '/شهر',
-                            style: TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 12,
-                                fontFamily: 'Cairo')),
+                        Text(plan.name, style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 16)),
+                        if (plan.badge.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: plan.color.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(plan.badge, style: TextStyle(color: plan.color, fontSize: 10, fontWeight: FontWeight.w700)),
+                          ),
                       ],
                     ),
                   ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${plan.price}', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 24)),
+                      Text('$_currency/شهر', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                    ],
+                  ),
                   if (isSelected) ...[
                     const SizedBox(width: 8),
-                    Icon(Icons.check_circle_rounded, color: plan.color),
+                    Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        color: plan.color,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                    ),
                   ],
                 ],
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: plan.features
-                    .map((f) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: plan.color.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: plan.color.withValues(alpha: 0.2)),
-                          ),
-                          child: Text('✓ $f',
-                              style: TextStyle(
-                                  color: plan.color,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600)),
-                        ))
-                    .toList(),
-              ),
+              const SizedBox(height: 14),
+              // Features as clean list
+              ...plan.features.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: plan.color, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(f, style: const TextStyle(color: AppColors.textLight, fontSize: 13, fontWeight: FontWeight.w500))),
+                  ],
+                ),
+              )),
             ],
           ),
         ),

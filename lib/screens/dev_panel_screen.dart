@@ -201,6 +201,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
         text: 'مرحباً، أنا أستخدم تطبيق صيدلي PRO وأود طلب منتجكم.');
     final btnTextCtrl = TextEditingController(text: 'التواصل عبر واتساب');
     final durationCtrl = TextEditingController(text: '0');
+    final expiryDaysCtrl = TextEditingController(text: '7');
     String screen = 'home';
     String? pickedImagePath;
 
@@ -290,6 +291,11 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     controller: durationCtrl,
                     keyboardType: TextInputType.number),
                 const SizedBox(height: 10),
+                AppTextField(
+                    hint: 'مدة الإعلان (أيام) - 0 = بدون انتهاء',
+                    controller: expiryDaysCtrl,
+                    keyboardType: TextInputType.number),
+                const SizedBox(height: 10),
                 const Text('الشاشة',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 6),
@@ -336,6 +342,12 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       imageUrl = await SupabaseService.instance.uploadAdImage(pickedImagePath!);
                     }
 
+                    final now = DateTime.now();
+                    final expiryDays = int.tryParse(expiryDaysCtrl.text) ?? 0;
+                    final expiresAt = expiryDays > 0
+                        ? now.add(Duration(days: expiryDays)).toIso8601String()
+                        : '';
+
                     final db = await DatabaseHelper.instance.database;
                     final data = {
                       'title': titleCtrl.text.trim(),
@@ -348,7 +360,8 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'is_active': 1,
                       'screen': screen,
                       'skip_duration': int.tryParse(durationCtrl.text) ?? 0,
-                      'created_at': DateTime.now().toIso8601String(),
+                      'expires_at': expiresAt,
+                      'created_at': now.toIso8601String(),
                     };
                     await db.insert('ads', data);
                     // أغلق الشيت فوراً بدون انتظار السحابة
@@ -382,12 +395,12 @@ class _DevPanelScreenState extends State<DevPanelScreen>
     return Scaffold(
       backgroundColor: AppColors.dark,
       appBar: AppBar(
-        title: const Text('لوحة المطور 🔐',
+        title: const Text('لوحة المطور',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: AppColors.darkCard,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: AppColors.textColor),
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -396,37 +409,65 @@ class _DevPanelScreenState extends State<DevPanelScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('🔐', style: TextStyle(fontSize: 60)),
-            const SizedBox(height: 16),
-            const Text('الدخول مقصور على المطور فقط',
-                style: TextStyle(
-                    color: AppColors.textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            const Text('أدخل كلمة مرور المطور',
-                style: TextStyle(color: AppColors.textMuted)),
-            const SizedBox(height: 24),
+            Container(
+              width: 90, height: 90,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF2D1B00), Color(0xFF4A3200)]),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: AppColors.warning.withValues(alpha: 0.3), blurRadius: 24)],
+              ),
+              child: const Center(child: Text('🔐', style: TextStyle(fontSize: 44))),
+            ),
+            const SizedBox(height: 20),
+            const Text('لوحة تحكم المطور',
+                style: TextStyle(color: AppColors.textColor, fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text('أدخل كلمة مرور المطور للوصول',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 28),
             TextField(
               controller: _passCtrl,
               obscureText: true,
               style: const TextStyle(color: AppColors.textColor),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'كلمة المرور',
-                prefixIcon: Icon(Icons.lock_rounded, color: AppColors.primary),
+                prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.warning),
+                filled: true,
+                fillColor: AppColors.darkCard,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.warning, width: 1.5),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            PrimaryButton(
-              text: 'دخول',
-              icon: Icons.login_rounded,
-              onTap: () {
-                if (_passCtrl.text == _devPass) {
-                  setState(() => _authenticated = true);
-                } else {
-                  showSnack(context, 'كلمة مرور خاطئة', isError: true);
-                }
-              },
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  if (_passCtrl.text == _devPass) {
+                    setState(() => _authenticated = true);
+                  } else {
+                    showSnack(context, 'كلمة مرور خاطئة', isError: true);
+                  }
+                },
+                icon: const Icon(Icons.login_rounded),
+                label: const Text('دخول', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.warning,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
             ),
           ],
         ),
@@ -440,17 +481,19 @@ class _DevPanelScreenState extends State<DevPanelScreen>
       appBar: AppBar(
         title: const Text('لوحة المطور 🛠️',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: AppColors.darkCard,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: AppColors.textColor),
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textColor),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
           controller: _tabCtrl,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
+          indicatorColor: AppColors.warning,
+          indicatorWeight: 3,
+          labelColor: AppColors.warning,
           unselectedLabelColor: AppColors.textMuted,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: const [
             Tab(text: '🎟️ الأكواد'),
             Tab(text: '📢 الإعلانات'),
@@ -586,46 +629,97 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                   itemBuilder: (ctx, i) {
                     final ad = _ads[i];
                     final isActive = ad['is_active'] == 1;
+                    final expiresAt = ad['expires_at']?.toString() ?? '';
+                    final isExpired = expiresAt.isNotEmpty &&
+                        DateTime.tryParse(expiresAt)?.isBefore(DateTime.now()) == true;
+                    String expiryText = 'بدون انتهاء';
+                    if (expiresAt.isNotEmpty) {
+                      final dt = DateTime.tryParse(expiresAt);
+                      if (dt != null) {
+                        final diff = dt.difference(DateTime.now()).inDays;
+                        expiryText = isExpired ? 'منتهي ❌' : 'متبقي $diff يوم';
+                      }
+                    }
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: AppColors.darkCard,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.darkBorder),
+                        border: Border.all(
+                          color: isExpired
+                              ? AppColors.danger.withValues(alpha: 0.3)
+                              : isActive
+                                  ? AppColors.primary.withValues(alpha: 0.3)
+                                  : AppColors.darkBorder,
+                        ),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(ad['title'],
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(ad['title'],
                                     style: const TextStyle(
                                         color: AppColors.textColor,
                                         fontWeight: FontWeight.w700)),
-                                Text(ad['body'],
-                                    style: const TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 12),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis),
-                                Text('الشاشة: ${ad['screen']}',
-                                    style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontSize: 11)),
-                              ],
-                            ),
+                              ),
+                              // Delete button
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20),
+                                onPressed: () async {
+                                  final db = await DatabaseHelper.instance.database;
+                                  await db.delete('ads', where: 'id = ?', whereArgs: [ad['id']]);
+                                  await _loadAds();
+                                  if (mounted) showSnack(context, 'تم حذف الإعلان 🗑️');
+                                },
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              const SizedBox(width: 8),
+                              Switch(
+                                value: isActive,
+                                activeThumbColor: AppColors.primary,
+                                onChanged: (v) async {
+                                  final db = await DatabaseHelper.instance.database;
+                                  await db.update('ads', {'is_active': v ? 1 : 0},
+                                      where: 'id = ?', whereArgs: [ad['id']]);
+                                  await _loadAds();
+                                },
+                              ),
+                            ],
                           ),
-                          Switch(
-                            value: isActive,
-                            activeThumbColor: AppColors.primary,
-                            onChanged: (v) async {
-                              final db = await DatabaseHelper.instance.database;
-                              await db.update('ads', {'is_active': v ? 1 : 0},
-                                  where: 'id = ?', whereArgs: [ad['id']]);
-                              await _loadAds();
-                            },
+                          Text(ad['body'],
+                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text('📺 ${ad['screen']}',
+                                    style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w600)),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: isExpired
+                                      ? AppColors.danger.withValues(alpha: 0.1)
+                                      : AppColors.warning.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text('⏳ $expiryText',
+                                    style: TextStyle(
+                                        color: isExpired ? AppColors.danger : AppColors.warning,
+                                        fontSize: 10, fontWeight: FontWeight.w600)),
+                              ),
+                            ],
                           ),
                         ],
                       ),
