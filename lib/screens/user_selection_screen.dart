@@ -205,10 +205,8 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
   }
 
   void _showAssistantPinDialog(Assistant assistant) {
-    final pharmacyCodeCtrl = TextEditingController();
     final pinCtrl = TextEditingController();
     String error = '';
-    bool codeVerified = false; // خطوة 1: كود الصيدلية → خطوة 2: PIN
 
     showDialog(
       context: context,
@@ -223,17 +221,13 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: codeVerified
-                      ? AppColors.primary.withValues(alpha: 0.15)
-                      : AppColors.accent.withValues(alpha: 0.15),
+                  color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Center(
                     child: Text(assistant.name[0],
-                        style: TextStyle(
-                            color: codeVerified
-                                ? AppColors.primary
-                                : AppColors.accent,
+                        style: const TextStyle(
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w800,
                             fontSize: 18))),
               ),
@@ -247,11 +241,8 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
                             color: AppColors.textColor,
                             fontWeight: FontWeight.w700,
                             fontSize: 15)),
-                    Text(
-                        codeVerified
-                            ? '2/2 أدخل رمز PIN'
-                            : '1/2 أدخل كود الصيدلية',
-                        style: const TextStyle(
+                    const Text('أدخل رمز PIN',
+                        style: TextStyle(
                             color: AppColors.textMuted, fontSize: 11)),
                   ],
                 ),
@@ -261,155 +252,65 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // مؤشر الخطوات
-              Row(
+              // ── رمز PIN ──
+              const Row(
                 children: [
-                  Expanded(
-                    child: Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Container(
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: codeVerified
-                            ? AppColors.primary
-                            : AppColors.darkBorder,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                  ),
+                  Text('🔐', style: TextStyle(fontSize: 16)),
+                  SizedBox(width: 6),
+                  Text('رمز PIN الشخصي',
+                      style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              TextField(
+                controller: pinCtrl,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                obscureText: true,
+                textAlign: TextAlign.center,
+                autofocus: true,
+                style: const TextStyle(
+                    color: AppColors.textColor,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 12),
+                decoration: InputDecoration(
+                  hintText: '• • • •',
+                  hintStyle: TextStyle(
+                      color: AppColors.textMuted.withValues(alpha: 0.5),
+                      letterSpacing: 8),
+                  counterText: '',
+                  prefixIcon: const Icon(Icons.lock_rounded,
+                      color: AppColors.primary),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                        color: error.isNotEmpty
+                            ? AppColors.danger
+                            : AppColors.darkBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+                onChanged: (val) {
+                  if (error.isNotEmpty) setDlg(() => error = '');
+                  if (val.length == 4) {
+                    if (val == assistant.pin) {
+                      Navigator.pop(ctx);
+                      _loginAsAssistant(assistant);
+                    } else {
+                      setDlg(() => error = 'رمز PIN خاطئ!');
+                      pinCtrl.clear();
+                    }
+                  }
+                },
+              ),
 
-              if (!codeVerified) ...[
-                // ── الخطوة 1: كود الصيدلية ──
-                const Row(
-                  children: [
-                    Text('🔑', style: TextStyle(fontSize: 16)),
-                    SizedBox(width: 6),
-                    Text('كود الصيدلية',
-                        style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: pharmacyCodeCtrl,
-                  textAlign: TextAlign.center,
-                  autofocus: true,
-                  maxLength: 6,
-                  textCapitalization: TextCapitalization.characters,
-                  style: const TextStyle(
-                      color: AppColors.textColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 6),
-                  decoration: InputDecoration(
-                    hintText: '• • • • • •',
-                    hintStyle: TextStyle(
-                        color: AppColors.textMuted.withValues(alpha: 0.5),
-                        letterSpacing: 6),
-                    counterText: '',
-                    prefixIcon: const Icon(Icons.storefront_rounded,
-                        color: Color(0xFFFFD700)),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                          color: error.isNotEmpty
-                              ? AppColors.danger
-                              : AppColors.darkBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFFFD700)),
-                    ),
-                  ),
-                  onChanged: (val) {
-                    if (error.isNotEmpty) setDlg(() => error = '');
-                    if (val.length == 6) {
-                      _verifyPharmacyCode(
-                        val.toUpperCase(),
-                        onSuccess: () =>
-                            setDlg(() { codeVerified = true; error = ''; }),
-                        onError: () {
-                          setDlg(() => error = 'كود الصيدلية خاطئ!');
-                          pharmacyCodeCtrl.clear();
-                        },
-                      );
-                    }
-                  },
-                ),
-              ] else ...[
-                // ── الخطوة 2: رمز PIN ──
-                const Row(
-                  children: [
-                    Text('🔐', style: TextStyle(fontSize: 16)),
-                    SizedBox(width: 6),
-                    Text('رمز PIN الشخصي',
-                        style: TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: pinCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  obscureText: true,
-                  textAlign: TextAlign.center,
-                  autofocus: true,
-                  style: const TextStyle(
-                      color: AppColors.textColor,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 12),
-                  decoration: InputDecoration(
-                    hintText: '• • • •',
-                    hintStyle: TextStyle(
-                        color: AppColors.textMuted.withValues(alpha: 0.5),
-                        letterSpacing: 8),
-                    counterText: '',
-                    prefixIcon: const Icon(Icons.lock_rounded,
-                        color: AppColors.primary),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                          color: error.isNotEmpty
-                              ? AppColors.danger
-                              : AppColors.darkBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.primary),
-                    ),
-                  ),
-                  onChanged: (val) {
-                    if (error.isNotEmpty) setDlg(() => error = '');
-                    if (val.length == 4) {
-                      if (val == assistant.pin) {
-                        Navigator.pop(ctx);
-                        _loginAsAssistant(assistant);
-                      } else {
-                        setDlg(() => error = 'رمز PIN خاطئ!');
-                        pinCtrl.clear();
-                      }
-                    }
-                  },
-                ),
-              ],
 
               if (error.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -423,44 +324,20 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                if (codeVerified) {
-                  // رجوع لخطوة الكود
-                  setDlg(() {
-                    codeVerified = false;
-                    error = '';
-                    pinCtrl.clear();
-                  });
-                } else {
-                  Navigator.pop(ctx);
-                }
-              },
-              child: Text(codeVerified ? 'رجوع' : 'إلغاء',
-                  style: const TextStyle(color: AppColors.textMuted)),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
             ),
             ElevatedButton(
               onPressed: () {
-                if (!codeVerified) {
-                  _verifyPharmacyCode(
-                    pharmacyCodeCtrl.text.toUpperCase(),
-                    onSuccess: () =>
-                        setDlg(() { codeVerified = true; error = ''; }),
-                    onError: () {
-                      setDlg(() => error = 'كود الصيدلية خاطئ!');
-                      pharmacyCodeCtrl.clear();
-                    },
-                  );
+                if (pinCtrl.text == assistant.pin) {
+                  Navigator.pop(ctx);
+                  _loginAsAssistant(assistant);
                 } else {
-                  if (pinCtrl.text == assistant.pin) {
-                    Navigator.pop(ctx);
-                    _loginAsAssistant(assistant);
-                  } else {
-                    setDlg(() => error = 'رمز PIN خاطئ!');
-                    pinCtrl.clear();
-                  }
+                  setDlg(() => error = 'رمز PIN خاطئ!');
+                  pinCtrl.clear();
                 }
               },
-              child: Text(codeVerified ? 'دخول' : 'التالي'),
+              child: const Text('دخول'),
             ),
           ],
         ),

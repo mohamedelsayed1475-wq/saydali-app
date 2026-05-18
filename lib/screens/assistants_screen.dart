@@ -10,7 +10,6 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
 import '../services/supabase_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});

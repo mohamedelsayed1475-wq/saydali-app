@@ -432,7 +432,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   'amount': remaining,
                                   'type': 'debt',
                                   'description': description,
-                                  'created_by': userProvider.currentName ?? 'المالك',
+                                  'created_by': userProvider.currentName,
                                 });
                                 // تحديث مزود بيانات العملاء فوراً لتنعكس الديون في شاشة الديون
                                 await context.read<CustomersProvider>().load();

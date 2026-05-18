@@ -33,7 +33,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     _loadData();
     // تحديث تلقائي كل 30 ثانية
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _loadData();
     });
   }
@@ -83,9 +83,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
       );
     }
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
 
     final total = _stats['total'] ?? 0;
     final covered = _stats['covered'] ?? 0;
