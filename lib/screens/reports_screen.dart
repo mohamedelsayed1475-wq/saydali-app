@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -25,11 +26,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<int> _weeklyData = [0, 0, 0, 0];
   bool _loading = true;
   String _currency = 'ج.م';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {

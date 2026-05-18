@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -28,12 +29,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   
   // ▌ اقتراحات الأصناف
   List<Map<String, dynamic>> _suggestions = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
     _loadSuggestions();
+    // تحديث تلقائي كل 4 ثواني
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _load();
+    });
   }
 
   Future<void> _load() async {
@@ -70,6 +76,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -404,6 +411,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 'subtotal': subtotal,
                                 'discount': discount,
                                 'total': total,
+                                'paid_amount': paidAmount,
+                                'remaining': remaining,
                               });
                               
                               // تحويل المتبقي للمديونية تلقائياً إذا تم اختيار عميل مسجل
@@ -1065,6 +1074,37 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 Text('${(invoice['total'] as num).toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 18)),
               ],
             ),
+            const SizedBox(height: 8),
+            // المبلغ المدفوع والمتبقي
+            () {
+              final paid = (invoice['paid_amount'] as num?)?.toDouble() ?? 0;
+              final rem = (invoice['remaining'] as num?)?.toDouble() ?? 0;
+              return Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('💵 المدفوع', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                      Text('${paid.toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(rem > 0 ? '⚠️ المتبقي (محوّل للمديونية)' : '✅ الحالة', style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                      Text(
+                        rem > 0 ? '${rem.toStringAsFixed(2)} $_currency' : 'مدفوع بالكامل',
+                        style: TextStyle(
+                          color: rem > 0 ? AppColors.danger : AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            }(),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -1248,6 +1288,41 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                         style: const TextStyle(
                                             color: AppColors.warning, fontSize: 11),
                                       ),
+                                    // حالة الدفع
+                                    () {
+                                      final paid = (inv['paid_amount'] as num?)?.toDouble() ?? 0;
+                                      final rem = (inv['remaining'] as num?)?.toDouble() ?? 0;
+                                      final total = (inv['total'] as num).toDouble();
+                                      if (rem > 0) {
+                                        return Container(
+                                          margin: const EdgeInsets.only(top: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.danger.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'متبقي: ${rem.toStringAsFixed(0)}',
+                                            style: const TextStyle(color: AppColors.danger, fontSize: 10, fontWeight: FontWeight.w700),
+                                          ),
+                                        );
+                                      } else if (paid > 0 || total == 0) {
+                                        return Container(
+                                          margin: const EdgeInsets.only(top: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: const Text(
+                                            'مدفوع بالكامل ✅',
+                                            style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w700),
+                                          ),
+                                        );
+                                      } else {
+                                        return const SizedBox.shrink();
+                                      }
+                                    }(),
                                   ],
                                 ),
                                 const SizedBox(width: 6),

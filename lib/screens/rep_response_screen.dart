@@ -227,8 +227,567 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
 
     if (mounted) {
       showSnack(context, endDay ? 'تم إنهاء اليوم ✅' : 'تم قبول الرد بنجاح ✅');
-      Navigator.pop(context);
+
+      // ▌ مقارنة ذكية للأسعار مع المندوبين السابقين
+      if (_response!.availableItems.isNotEmpty) {
+        await _comparePricesWithOtherReps();
+      }
+
+      if (mounted) Navigator.pop(context);
     }
+  }
+
+  // ▌ مقارنة الأسعار والخصومات بين المندوبين
+  Future<void> _comparePricesWithOtherReps() async {
+    if (_response == null) return;
+    final db = DatabaseHelper.instance;
+
+    // قراءة فترة المقارنة من الإعدادات (افتراضي 30 يوم)
+    final daysStr = await db.getSetting('comparison_days') ?? '30';
+    final comparisonDays = int.tryParse(daysStr) ?? 30;
+
+    final allOrders = await db.getAllRepOrders(withinDays: comparisonDays);
+
+    // بناء خريطة: اسم الدواء → [ {repName, finalPrice, discount, price, date} ]
+    final Map<String, List<Map<String, dynamic>>> priceMap = {};
+
+    for (var order in allOrders) {
+      final repName = order['rep_name'] as String;
+      final orderDate = order['created_at'] as String? ?? '';
+      try {
+        final items = jsonDecode(order['items'] as String) as List;
+        for (var item in items) {
+          final name = (item['name'] as String).trim().toLowerCase();
+          final finalPrice = (item['finalPrice'] as num?)?.toDouble() ?? 
+                             (item['price'] as num?)?.toDouble() ?? 0;
+          final discount = (item['discount'] as num?)?.toDouble() ?? 0;
+          final price = (item['price'] as num?)?.toDouble() ?? 0;
+
+          if (finalPrice <= 0) continue;
+
+          priceMap.putIfAbsent(name, () => []);
+          // نأخذ أحدث سعر من كل مندوب
+          priceMap[name]!.removeWhere((e) => e['repName'] == repName);
+          priceMap[name]!.add({
+            'repName': repName,
+            'finalPrice': finalPrice,
+            'discount': discount,
+            'price': price,
+            'date': orderDate,
+          });
+        }
+      } catch (_) {}
+    }
+
+    // مقارنة أصناف المندوب الحالي مع البقية
+    final List<Map<String, dynamic>> alerts = [];
+
+    for (var item in _response!.availableItems) {
+      final key = item.drugName.trim().toLowerCase();
+      final currentNet = item.finalPrice;
+
+      if (!priceMap.containsKey(key)) continue;
+
+      final offers = priceMap[key]!;
+      if (offers.length < 2) continue;
+
+      // ترتيب حسب أقل سعر صافي
+      offers.sort((a, b) => (a['finalPrice'] as double).compareTo(b['finalPrice'] as double));
+      final best = offers.first;
+      final bestPrice = best['finalPrice'] as double;
+      final bestRep = best['repName'] as String;
+
+      // لو فيه مندوب أرخص من الحالي
+      if (bestPrice < currentNet && bestRep != _response!.repName) {
+        final saving = currentNet - bestPrice;
+        alerts.add({
+          'drugName': item.drugName,
+          'currentRep': _response!.repName,
+          'currentPrice': currentNet,
+          'currentDiscount': item.discount,
+          'bestRep': bestRep,
+          'bestPrice': bestPrice,
+          'bestDiscount': best['discount'] as double,
+          'saving': saving,
+          'allOffers': offers,
+        });
+      }
+    }
+
+    if (alerts.isEmpty || !mounted) return;
+
+    // عرض تنبيه ذكي بالمقارنة
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('🔔', style: TextStyle(fontSize: 24)),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('ركّز! فيه عروض أفضل 💰',
+                      style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+                // زر تغيير فترة المقارنة
+                InkWell(
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await _changeComparisonPeriod();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.dark,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.settings, color: AppColors.textMuted, size: 18),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.dark,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '📅 مقارنة آخر $comparisonDays يوم',
+                style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: alerts.length,
+            itemBuilder: (ctx, i) {
+              final a = alerts[i];
+              final allOffers = a['allOffers'] as List<Map<String, dynamic>>;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.dark,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('💊 ${a['drugName']}',
+                        style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w800, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    // جدول المقارنة
+                    ...allOffers.map((offer) {
+                      final isBest = offer == allOffers.first;
+                      final isCurrent = offer['repName'] == _response!.repName;
+                      // عرض التاريخ
+                      String dateText = '';
+                      try {
+                        final d = DateTime.parse(offer['date'] as String);
+                        final now = DateTime.now();
+                        final diff = now.difference(d).inDays;
+                        dateText = diff == 0 ? 'اليوم' : 'من $diff يوم';
+                      } catch (_) {}
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isBest
+                              ? AppColors.primary.withValues(alpha: 0.1)
+                              : isCurrent
+                                  ? AppColors.danger.withValues(alpha: 0.1)
+                                  : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: isBest ? Border.all(color: AppColors.primary.withValues(alpha: 0.4)) : null,
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Text(isBest ? '👑' : isCurrent ? '📍' : '  ', style: const TextStyle(fontSize: 12)),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(offer['repName'] as String,
+                                      style: TextStyle(
+                                        color: isBest ? AppColors.primary : AppColors.textLight,
+                                        fontWeight: isBest ? FontWeight.w800 : FontWeight.w500,
+                                        fontSize: 12,
+                                      )),
+                                ),
+                                Text('خصم ${(offer['discount'] as double).toStringAsFixed(0)}%',
+                                    style: TextStyle(
+                                      color: isBest ? AppColors.primary : AppColors.textMuted,
+                                      fontSize: 11,
+                                    )),
+                                const SizedBox(width: 10),
+                                Text('${(offer['finalPrice'] as double).toStringAsFixed(1)} $_currency',
+                                    style: TextStyle(
+                                      color: isBest ? AppColors.primary : AppColors.textLight,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    )),
+                              ],
+                            ),
+                            if (dateText.isNotEmpty)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 24, top: 2),
+                                  child: Text(dateText,
+                                      style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '💡 توفير ${(a['saving'] as double).toStringAsFixed(1)} $_currency/علبة مع "${a['bestRep']}"',
+                        style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          // زر مشاركة PDF
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _shareComparisonPDF(alerts, comparisonDays);
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: const BorderSide(color: AppColors.danger),
+            ),
+            icon: const Icon(Icons.picture_as_pdf, size: 16),
+            label: const Text('PDF', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
+          // زر مشاركة نص
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _shareComparisonText(alerts, comparisonDays);
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.accent,
+              side: const BorderSide(color: AppColors.accent),
+            ),
+            icon: const Icon(Icons.share, size: 16),
+            label: const Text('نص', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('فهمت ✅', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ▌ إنشاء ومشاركة PDF مقارنة الأسعار
+  Future<void> _shareComparisonPDF(List<Map<String, dynamic>> alerts, int comparisonDays) async {
+    final pdf = pw.Document();
+    final pharmacyName = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدلي PRO';
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(32),
+      theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+      textDirection: pw.TextDirection.rtl,
+      header: (pw.Context context) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('📊 تقرير مقارنة الأسعار',
+                      style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(pharmacyName,
+                      style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('فترة المقارنة: آخر $comparisonDays يوم',
+                      style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+                  pw.Text('التاريخ: ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+                      style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          pw.Divider(),
+          pw.SizedBox(height: 8),
+        ],
+      ),
+      build: (pw.Context context) {
+        final widgets = <pw.Widget>[];
+
+        for (int i = 0; i < alerts.length; i++) {
+          final a = alerts[i];
+          final allOffers = a['allOffers'] as List<Map<String, dynamic>>;
+
+          widgets.add(pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 16),
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey300),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('${i + 1}. ${a['drugName']}',
+                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 8),
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.grey300),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(0.5),
+                    1: const pw.FlexColumnWidth(2.5),
+                    2: const pw.FlexColumnWidth(1.2),
+                    3: const pw.FlexColumnWidth(1.5),
+                    4: const pw.FlexColumnWidth(1.2),
+                  },
+                  children: [
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                      children: ['#', 'المندوب', 'الخصم %', 'السعر الصافي', 'التاريخ']
+                          .map((h) => pw.Padding(
+                                padding: const pw.EdgeInsets.all(6),
+                                child: pw.Text(h,
+                                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                              ))
+                          .toList(),
+                    ),
+                    ...allOffers.asMap().entries.map((e) {
+                      final idx = e.key;
+                      final offer = e.value;
+                      String dateText = '';
+                      try {
+                        final d = DateTime.parse(offer['date'] as String);
+                        dateText = '${d.day}/${d.month}/${d.year}';
+                      } catch (_) {
+                        dateText = '-';
+                      }
+                      final isBest = idx == 0;
+                      return pw.TableRow(
+                        decoration: isBest ? const pw.BoxDecoration(color: PdfColors.green50) : null,
+                        children: [
+                          isBest ? '👑' : '${idx + 1}',
+                          offer['repName'] as String,
+                          '${(offer['discount'] as double).toStringAsFixed(0)}%',
+                          '${(offer['finalPrice'] as double).toStringAsFixed(2)} $_currency',
+                          dateText,
+                        ].map((t) => pw.Padding(
+                              padding: const pw.EdgeInsets.all(6),
+                              child: pw.Text(t, style: pw.TextStyle(
+                                fontSize: 10,
+                                fontWeight: t.startsWith('👑') ? pw.FontWeight.bold : pw.FontWeight.normal,
+                              )),
+                            )).toList(),
+                      );
+                    }),
+                  ],
+                ),
+                pw.SizedBox(height: 6),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.green50,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                  ),
+                  child: pw.Text(
+                    'التوفير: ${(a['saving'] as double).toStringAsFixed(2)} $_currency/علبة عند الشراء من "${a['bestRep']}" بدلاً من "${a['currentRep']}"',
+                    style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
+                  ),
+                ),
+              ],
+            ),
+          ));
+        }
+
+        // ملخص إجمالي
+        widgets.add(pw.SizedBox(height: 12));
+        widgets.add(pw.Container(
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.amber50,
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            border: pw.Border.all(color: PdfColors.amber200),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('📋 ملخص التقرير',
+                  style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.Text('عدد الأصناف التي وُجد لها عروض أفضل: ${alerts.length} صنف',
+                  style: const pw.TextStyle(fontSize: 11)),
+              pw.Text(
+                'إجمالي التوفير الممكن: ${alerts.fold(0.0, (s, a) => s + (a['saving'] as double)).toStringAsFixed(2)} $_currency/علبة',
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              ),
+            ],
+          ),
+        ));
+
+        widgets.add(pw.SizedBox(height: 20));
+        widgets.add(pw.Center(
+          child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO 💊',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
+        ));
+
+        return widgets;
+      },
+    ));
+
+    await Printing.sharePdf(bytes: await pdf.save(), filename: 'price_comparison_report.pdf');
+  }
+
+  // ▌ مشاركة المقارنة كنص
+  void _shareComparisonText(List<Map<String, dynamic>> alerts, int comparisonDays) {
+    String msg = '📊 تقرير مقارنة أسعار المندوبين\n';
+    msg += '📅 فترة المقارنة: آخر $comparisonDays يوم\n';
+    msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
+
+    for (int i = 0; i < alerts.length; i++) {
+      final a = alerts[i];
+      final allOffers = a['allOffers'] as List<Map<String, dynamic>>;
+
+      msg += '💊 ${i + 1}. ${a['drugName']}\n';
+      for (var offer in allOffers) {
+        final isBest = offer == allOffers.first;
+        final icon = isBest ? '👑' : '  ';
+        String dateText = '';
+        try {
+          final d = DateTime.parse(offer['date'] as String);
+          final diff = DateTime.now().difference(d).inDays;
+          dateText = diff == 0 ? '(اليوم)' : '(من $diff يوم)';
+        } catch (_) {}
+        msg += '$icon ${offer['repName']} - خصم ${(offer['discount'] as double).toStringAsFixed(0)}% - ${(offer['finalPrice'] as double).toStringAsFixed(2)} $_currency $dateText\n';
+      }
+      msg += '💡 توفير: ${(a['saving'] as double).toStringAsFixed(2)} $_currency/علبة\n\n';
+    }
+
+    final totalSaving = alerts.fold(0.0, (s, a) => s + (a['saving'] as double));
+    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+    msg += '📋 إجمالي التوفير الممكن: ${totalSaving.toStringAsFixed(2)} $_currency/علبة\n';
+    msg += '\nتم الإرسال عبر صيدلي PRO 💊';
+
+    Share.share(msg);
+  }
+
+  // ▌ تغيير فترة المقارنة
+  Future<void> _changeComparisonPeriod() async {
+    final db = DatabaseHelper.instance;
+    final currentStr = await db.getSetting('comparison_days') ?? '30';
+    final current = int.tryParse(currentStr) ?? 30;
+
+    final options = [7, 14, 30, 60, 90, 180, 365];
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('⚙️ فترة المقارنة',
+            style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w800, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('اختر الفترة الزمنية لمقارنة الأسعار بين المندوبين:',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 16),
+            ...options.map((days) {
+              final isSelected = days == current;
+              String label;
+              if (days == 7) label = 'أسبوع';
+              else if (days == 14) label = 'أسبوعين';
+              else if (days == 30) label = 'شهر';
+              else if (days == 60) label = 'شهرين';
+              else if (days == 90) label = '3 شهور';
+              else if (days == 180) label = '6 شهور';
+              else label = 'سنة';
+
+              return InkWell(
+                onTap: () async {
+                  await db.setSetting('comparison_days', days.toString());
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                    showSnack(context, 'تم تعيين فترة المقارنة: $label ✅');
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary.withValues(alpha: 0.15) : AppColors.dark,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : AppColors.darkBorder,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelected ? Icons.check_circle : Icons.circle_outlined,
+                        color: isSelected ? AppColors.primary : AppColors.textMuted,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(label,
+                          style: TextStyle(
+                            color: isSelected ? AppColors.primary : AppColors.textLight,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                          )),
+                      const Spacer(),
+                      Text('$days يوم',
+                          style: TextStyle(
+                            color: isSelected ? AppColors.primary : AppColors.textMuted,
+                            fontSize: 12,
+                          )),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _exportPDF() async {

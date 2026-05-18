@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
@@ -20,11 +21,22 @@ class RepsScreen extends StatefulWidget {
 class _RepsScreenState extends State<RepsScreen> {
   List<Representative> _reps = [];
   bool _loading = true;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadReps();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadReps();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadReps() async {

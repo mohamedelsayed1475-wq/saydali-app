@@ -5,9 +5,11 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
+import '../utils/env_config.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
+import '../services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AssistantsScreen extends StatefulWidget {
@@ -389,84 +391,503 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   }
 
   void _showSubscriptionRequired() {
-    showDialog(
+    final codeCtrl = TextEditingController();
+    String error = '';
+    bool isValidating = false;
+    int selectedPlan = 0; // 0 = 3 مساعدين, 1 = 1 إضافي
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.darkCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('👥 باقة المساعدين',
-            style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('🔐', style: TextStyle(fontSize: 50)),
-            SizedBox(height: 12),
-            Text('لإضافة مساعدين تحتاج تفعيل باقة المساعدين',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textLight, fontSize: 14)),
-            SizedBox(height: 8),
-            Text('💰 100 ج.م = 3 مساعدين',
-                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
-          ],
+      isScrollControlled: true,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20, right: 20, top: 20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                    child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                            color: AppColors.darkBorder,
+                            borderRadius: BorderRadius.circular(99)))),
+                const SizedBox(height: 16),
+                const Center(child: Text('🔐', style: TextStyle(fontSize: 40))),
+                const SizedBox(height: 8),
+                const Center(
+                  child: Text('تفعيل باقة المساعدين',
+                      style: TextStyle(color: AppColors.primary,
+                          fontWeight: FontWeight.w800, fontSize: 18)),
+                ),
+                const SizedBox(height: 4),
+                const Center(
+                  child: Text('اختر الباقة وأدخل كود التفعيل',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                ),
+                const SizedBox(height: 20),
+
+                // ── اختيار الباقة ──
+                const Text('📦 اختر الباقة',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+
+                // باقة 3 مساعدين
+                InkWell(
+                  onTap: () => setBS(() => selectedPlan = 0),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: selectedPlan == 0
+                          ? AppColors.primary.withValues(alpha: 0.1)
+                          : AppColors.dark,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selectedPlan == 0
+                            ? AppColors.primary
+                            : AppColors.darkBorder,
+                        width: selectedPlan == 0 ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(child: Text('👥', style: TextStyle(fontSize: 22))),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('باقة المساعدين',
+                                  style: TextStyle(color: AppColors.textColor,
+                                      fontWeight: FontWeight.w700, fontSize: 14)),
+                              Text('3 مساعدين + صلاحيات + تتبع النشاط',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          children: [
+                            const Text('100', style: TextStyle(
+                                color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 20)),
+                            Text(_pharmacyCode.isEmpty ? 'ج.م' : 'ج.م/شهر',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // باقة 1 إضافي
+                InkWell(
+                  onTap: () => setBS(() => selectedPlan = 1),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: selectedPlan == 1
+                          ? Colors.teal.withValues(alpha: 0.1)
+                          : AppColors.dark,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: selectedPlan == 1
+                            ? Colors.teal
+                            : AppColors.darkBorder,
+                        width: selectedPlan == 1 ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.teal.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(child: Text('👤', style: TextStyle(fontSize: 22))),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('مساعد إضافي',
+                                  style: TextStyle(color: AppColors.textColor,
+                                      fontWeight: FontWeight.w700, fontSize: 14)),
+                              Text('مكان واحد إضافي فوق العدد الأساسي',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        const Column(
+                          children: [
+                            Text('100', style: TextStyle(
+                                color: Colors.teal, fontWeight: FontWeight.w900, fontSize: 20)),
+                            Text('ج.م/شهر',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── إدخال الكود ──
+                const Text('🎟️ كود التفعيل',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: codeCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4),
+                  decoration: InputDecoration(
+                    hintText: 'أدخل كود التفعيل هنا',
+                    hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, letterSpacing: 0),
+                    counterText: '',
+                    prefixIcon: const Icon(Icons.vpn_key_rounded, color: AppColors.primary),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color: error.isNotEmpty ? AppColors.danger : AppColors.darkBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                  onChanged: (_) {
+                    if (error.isNotEmpty) setBS(() => error = '');
+                  },
+                ),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(error, style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+                const SizedBox(height: 16),
+
+                // ── زر التفعيل ──
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: isValidating ? null : () async {
+                      final code = codeCtrl.text.trim().toUpperCase();
+                      if (code.isEmpty) {
+                        setBS(() => error = 'أدخل كود التفعيل');
+                        return;
+                      }
+                      setBS(() { isValidating = true; error = ''; });
+
+                      // التحقق من الكود
+                      final db = DatabaseHelper.instance;
+                      final result = await _validateAssistantCode(code, selectedPlan == 0 ? 3 : 1);
+                      
+                      setBS(() => isValidating = false);
+                      
+                      if (result == true) {
+                        final totalSlots = await db.getAssistantSlots();
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          showSnack(context, selectedPlan == 0
+                              ? '✅ تم تفعيل 3 أماكن مساعدين! (الإجمالي: $totalSlots)'
+                              : '✅ تم تفعيل مكان إضافي! (الإجمالي: $totalSlots)');
+                          _load();
+                        }
+                      } else {
+                        setBS(() => error = 'كود غير صحيح أو تم استخدامه');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: selectedPlan == 0 ? AppColors.primary : Colors.teal,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: isValidating
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.check_circle, size: 20),
+                    label: Text(
+                      isValidating ? 'جاري التحقق...' : 'تفعيل الباقة',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // رابط شاشة الاشتراك الكاملة
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+                    },
+                    child: const Text('عرض كل الباقات والخصومات ←',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('لاحقاً', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
-            },
-            child: const Text('اشترك الآن'),
-          ),
-        ],
       ),
     );
   }
 
+  /// التحقق من كود التفعيل وإضافة الأماكن
+  Future<bool> _validateAssistantCode(String code, int slotsToAdd) async {
+    final db = DatabaseHelper.instance;
+
+    // Developer bypass
+    const fallbackCodes = {'ADMIN2026', 'DEV@SAYDALI2026'};
+    if (code == EnvConfig.adminCode1 ||
+        code == EnvConfig.adminCode2 ||
+        fallbackCodes.contains(code)) {
+      await db.addAssistantSlots(slotsToAdd);
+      await db.setSetting('assistants_activated', '1');
+      return true;
+    }
+
+    final localDb = await db.database;
+
+    // مزامنة أكواد من السحابة
+    try {
+      final cloudCodes = await SupabaseService.instance.fetchSubscriptionCodes()
+          .timeout(const Duration(seconds: 4), onTimeout: () => []);
+      if (cloudCodes.isNotEmpty) {
+        await db.syncCodesFromCloud(cloudCodes);
+      }
+    } catch (_) {}
+
+    // البحث في الأكواد المحلية
+    List<Map<String, dynamic>> localCodes = [];
+    try {
+      localCodes = await localDb.query('subscription_codes', where: 'code = ?', whereArgs: [code]);
+    } catch (_) {}
+
+    Map<String, dynamic>? data;
+    bool isLocal = false;
+
+    if (localCodes.isNotEmpty) {
+      data = localCodes.first;
+      isLocal = true;
+    } else {
+      try {
+        data = await SupabaseService.instance.checkSubscriptionCode(code)
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+      } catch (_) {}
+    }
+
+    if (data == null) return false;
+
+    final rawActive = data['is_active'];
+    final bool isActive = rawActive == true || rawActive == 1 || rawActive == '1' || rawActive == 'true';
+    if (!isActive) return false;
+
+    final maxUses = (data['max_uses'] is int) ? data['max_uses'] : int.tryParse(data['max_uses']?.toString() ?? '1') ?? 1;
+    final usedCount = (data['used_count'] is int) ? data['used_count'] : int.tryParse(data['used_count']?.toString() ?? '0') ?? 0;
+    if (usedCount >= maxUses) return false;
+
+    // تحديث الاستخدام
+    if (isLocal) {
+      await localDb.update('subscription_codes', {'used_count': usedCount + 1},
+          where: 'code = ?', whereArgs: [code]);
+    }
+    SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
+
+    // إضافة الأماكن
+    await db.addAssistantSlots(slotsToAdd);
+    await db.setSetting('assistants_activated', '1');
+    return true;
+  }
+
   void _showSlotLimitReached() {
-    showDialog(
+    final codeCtrl = TextEditingController();
+    String error = '';
+    bool isValidating = false;
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.darkCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('⚠️ وصلت للحد الأقصى',
-            style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('📊', style: TextStyle(fontSize: 50)),
-            const SizedBox(height: 12),
-            Text('لديك $_currentCount/$_maxSlots مساعد',
-                style: const TextStyle(color: AppColors.textLight, fontSize: 14)),
-            const SizedBox(height: 8),
-            const Text('لقد وصلت للحد الأقصى من المساعدين المتاحين في باقتك.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            const SizedBox(height: 8),
-            const Text('للحصول على أماكن إضافية، يرجى التواصل مع المطور.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 13)),
-          ],
+      isScrollControlled: true,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              left: 20, right: 20, top: 20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                    child: Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                            color: AppColors.darkBorder,
+                            borderRadius: BorderRadius.circular(99)))),
+                const SizedBox(height: 16),
+                const Center(child: Text('⚠️', style: TextStyle(fontSize: 40))),
+                const SizedBox(height: 8),
+                const Center(
+                  child: Text('وصلت للحد الأقصى',
+                      style: TextStyle(color: AppColors.warning,
+                          fontWeight: FontWeight.w800, fontSize: 18)),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Text('لديك $_currentCount/$_maxSlots مساعد نشط',
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                ),
+                const SizedBox(height: 20),
+
+                // خيار إضافة مكان إضافي
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Text('👤', style: TextStyle(fontSize: 28)),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('أضف مكان إضافي',
+                                style: TextStyle(color: AppColors.textColor,
+                                    fontWeight: FontWeight.w700, fontSize: 14)),
+                            Text('أدخل كود تفعيل مساعد إضافي (100 ج.م/مكان)',
+                                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // ── إدخال الكود ──
+                TextField(
+                  controller: codeCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.teal,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 4),
+                  decoration: InputDecoration(
+                    hintText: 'أدخل كود المكان الإضافي',
+                    hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14, letterSpacing: 0),
+                    counterText: '',
+                    prefixIcon: const Icon(Icons.vpn_key_rounded, color: Colors.teal),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                          color: error.isNotEmpty ? AppColors.danger : AppColors.darkBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Colors.teal),
+                    ),
+                  ),
+                  onChanged: (_) {
+                    if (error.isNotEmpty) setBS(() => error = '');
+                  },
+                ),
+                if (error.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(error, style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
+                const SizedBox(height: 14),
+
+                // ── زر التفعيل ──
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: isValidating ? null : () async {
+                      final code = codeCtrl.text.trim().toUpperCase();
+                      if (code.isEmpty) {
+                        setBS(() => error = 'أدخل كود التفعيل');
+                        return;
+                      }
+                      setBS(() { isValidating = true; error = ''; });
+
+                      final db = DatabaseHelper.instance;
+                      final result = await _validateAssistantCode(code, 1);
+
+                      setBS(() => isValidating = false);
+
+                      if (result == true) {
+                        final totalSlots = await db.getAssistantSlots();
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          showSnack(context, '✅ تم تفعيل مكان إضافي! (الإجمالي: $totalSlots)');
+                          _load();
+                        }
+                      } else {
+                        setBS(() => error = 'كود غير صحيح أو تم استخدامه');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: isValidating
+                        ? const SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.add_circle, size: 20),
+                    label: Text(
+                      isValidating ? 'جاري التحقق...' : 'تفعيل مكان إضافي',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // رابط شاشة الاشتراك
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+                    },
+                    child: const Text('عرض كل الباقات ←',
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final url = Uri.parse('https://wa.me/201012345678?text=أريد+زيادة+عدد+المساعدين');
-              if (await canLaunchUrl(url)) launchUrl(url);
-            },
-            icon: const Icon(Icons.chat, color: Colors.white, size: 18),
-            label: const Text('واتساب', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }

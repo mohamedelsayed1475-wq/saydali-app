@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../utils/app_theme.dart';
@@ -11,11 +12,26 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   late Future<Map<String, dynamic>> _statsFuture;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _statsFuture = DatabaseHelper.instance.getStatisticsSummary();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) {
+        setState(() {
+          _statsFuture = DatabaseHelper.instance.getStatisticsSummary();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override

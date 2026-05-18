@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
@@ -31,11 +32,22 @@ class _DebtsScreenState extends State<DebtsScreen> {
   String _search = '';
   String _currency = 'ج.م';
   String _countryCode = 'EG';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadCustomers();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadCustomers();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadCustomers() async {

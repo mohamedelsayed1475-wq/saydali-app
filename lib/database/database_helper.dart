@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -155,6 +155,15 @@ class DatabaseHelper {
         )
       ''');
     }
+    if (oldVersion < 9) {
+      // إضافة أعمدة المبلغ المدفوع والمتبقي للفواتير
+      try {
+        await db.execute('ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE invoices ADD COLUMN remaining REAL DEFAULT 0');
+      } catch (_) {}
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -233,6 +242,8 @@ class DatabaseHelper {
         subtotal REAL NOT NULL,
         discount REAL DEFAULT 0,
         total REAL NOT NULL,
+        paid_amount REAL DEFAULT 0,
+        remaining REAL DEFAULT 0,
         notes TEXT,
         cloud_id TEXT,
         is_synced INTEGER DEFAULT 0,
@@ -657,6 +668,18 @@ class DatabaseHelper {
       whereArgs: [repName],
       orderBy: 'created_at DESC',
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getAllRepOrders({int? withinDays}) async {
+    final db = await database;
+    if (withinDays != null) {
+      final cutoff = DateTime.now().subtract(Duration(days: withinDays)).toIso8601String();
+      return await db.query('rep_orders',
+          where: 'created_at >= ?',
+          whereArgs: [cutoff],
+          orderBy: 'created_at DESC');
+    }
+    return await db.query('rep_orders', orderBy: 'created_at DESC');
   }
 
   Future<int> updateRepOrderPaidStatus(int id, bool isPaid) async {

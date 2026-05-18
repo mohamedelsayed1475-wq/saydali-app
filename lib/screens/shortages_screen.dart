@@ -35,6 +35,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   List<Map<String, dynamic>> _suggestions = [];
   final _searchController = TextEditingController();
+  Timer? _refreshTimer;
 
   final _filters = [
     ('all', 'الكل'),
@@ -46,6 +47,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -55,6 +57,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     super.initState();
     _loadShortages();
     _loadSuggestions();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadShortages();
+    });
   }
 
   Future<void> _loadSuggestions() async {

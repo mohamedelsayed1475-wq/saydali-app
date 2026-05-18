@@ -27,15 +27,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static bool _adShown = false;
   String _currency = 'ج.م';
   List<Map<String, dynamic>> _alerts = [];
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // تحديث تلقائي كل 30 ثانية
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _loadData();
+    });
     if (!_adShown) {
       _adShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkAndShowAd());
     }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkAndShowAd() async {
