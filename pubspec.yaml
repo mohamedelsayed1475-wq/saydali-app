@@ -84,3 +84,10 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+dependency_overrides:
+  flutter_jailbreak_detection:
+    git:
+      url: https://github.com/pdurasie-ecovery/flutter_jailbreak_detection.git
+      ref: add-namespace
+
