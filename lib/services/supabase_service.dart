@@ -33,12 +33,7 @@ class SupabaseService {
         'Prefer': 'return=representation',
       };
 
-  Map<String, String> get _adminHeaders => {
-        'apikey': EnvConfig.supabaseServiceKey,
-        'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      };
+
 
   // ── إنشاء جلسة جديدة ──────────────────────────────────────────────────
   Future<String?> createSession({
@@ -343,12 +338,6 @@ class SupabaseService {
   Future<bool> insertSubscriptionCode(Map<String, dynamic> data) async {
     if (!isConfigured) return false;
     
-    // ✅ تحقق من الـ Service Key
-    if (EnvConfig.supabaseServiceKey.isEmpty) {
-      debugPrint('❌ insertSubscriptionCode: SUPABASE_SERVICE_KEY فارغ!');
-      return false;
-    }
-    
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
@@ -357,16 +346,24 @@ class SupabaseService {
       
       final res = await http
           .post(
-            Uri.parse('$_url/subscription_codes'),
-            headers: _adminHeaders,
-            body: jsonEncode(payload),
+            Uri.parse('$_url/rpc/add_subscription_code_rpc'),
+            headers: _headers,
+            body: jsonEncode({
+              'p_code': payload['code'],
+              'p_plan': payload['plan'],
+              'p_duration_days': payload['duration_days'] ?? 0,
+              'p_discount_percent': payload['discount_percent'] ?? 0.0,
+              'p_max_uses': payload['max_uses'] ?? 1,
+              'p_is_active': payload['is_active'] ?? true,
+              'p_secret_pass': EnvConfig.devPassword,
+            }),
           )
           .timeout(const Duration(seconds: 10));
           
-      if (res.statusCode != 201 && res.statusCode != 200) {
+      if (res.statusCode != 200 && res.statusCode != 201) {
         debugPrint('❌ insertSubscriptionCode failed: ${res.statusCode} - ${res.body}');
       }
-      return res.statusCode == 201 || res.statusCode == 200;
+      return res.statusCode == 200 || res.statusCode == 201;
     } catch (e) {
       debugPrint('❌ insertSubscriptionCode error: $e');
       return false;
@@ -402,16 +399,23 @@ class SupabaseService {
 
       final res = await http
           .post(
-            Uri.parse('$_url/ads'),
-            headers: _adminHeaders,
-            body: jsonEncode(payload),
+            Uri.parse('$_url/rpc/add_ad_rpc'),
+            headers: _headers,
+            body: jsonEncode({
+              'p_title': payload['title'],
+              'p_image_url': payload['image_url'],
+              'p_link_url': payload['link_url'],
+              'p_is_active': payload['is_active'] ?? true,
+              'p_display_order': payload['display_order'] ?? 0,
+              'p_secret_pass': EnvConfig.devPassword,
+            }),
           )
           .timeout(const Duration(seconds: 10));
           
-      if (res.statusCode != 201 && res.statusCode != 200) {
+      if (res.statusCode != 200 && res.statusCode != 201) {
         debugPrint('❌ insertAd failed: ${res.statusCode} - ${res.body}');
       }
-      return res.statusCode == 201 || res.statusCode == 200;
+      return res.statusCode == 200 || res.statusCode == 201;
     } catch (e) {
       debugPrint('❌ insertAd error: $e');
       return false;
@@ -429,8 +433,8 @@ class SupabaseService {
       final res = await http.post(
         Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/ads-images/$fileName'),
         headers: {
-          'apikey': EnvConfig.supabaseServiceKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'apikey': EnvConfig.supabaseKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
           'Content-Type': 'image/jpeg',
         },
         body: bytes,
@@ -458,8 +462,8 @@ class SupabaseService {
       final res = await http.post(
         Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/customer-photos/$fileName'),
         headers: {
-          'apikey': EnvConfig.supabaseServiceKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'apikey': EnvConfig.supabaseKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
           'Content-Type': 'image/jpeg',
         },
         body: bytes,
@@ -487,8 +491,8 @@ class SupabaseService {
       final res = await http.post(
         Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/debt-receipts/$fileName'),
         headers: {
-          'apikey': EnvConfig.supabaseServiceKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseServiceKey}',
+          'apikey': EnvConfig.supabaseKey,
+          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
           'Content-Type': 'image/jpeg',
         },
         body: bytes,

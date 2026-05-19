@@ -27,9 +27,6 @@ class EnvConfig {
   static const supabaseKey =
       String.fromEnvironment('SUPABASE_KEY');
 
-  static const supabaseServiceKey =
-      String.fromEnvironment('SUPABASE_SERVICE_KEY');
-
   // ── Developer Panel ──
   static const devPassword =
       String.fromEnvironment('DEV_PASS');

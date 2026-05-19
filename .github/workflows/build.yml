@@ -52,7 +52,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DEV_PASS: ${{ secrets.DEV_PASS }}
           ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
           ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
@@ -60,7 +59,6 @@ jobs:
         run: |
           CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
           CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
-          CLEAN_SUPABASE_SERVICE_KEY=$(echo -n "$SUPABASE_SERVICE_KEY" | tr -d '\n\r')
           CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
           CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
           CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
@@ -69,7 +67,6 @@ jobs:
             --obfuscate --split-debug-info=build/debug-info \
             --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
             --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
-            --dart-define="SUPABASE_SERVICE_KEY=$CLEAN_SUPABASE_SERVICE_KEY" \
             --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
             --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
             --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
@@ -81,7 +78,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           DEV_PASS: ${{ secrets.DEV_PASS }}
           ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
           ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
@@ -89,7 +85,6 @@ jobs:
         run: |
           CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
           CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
-          CLEAN_SUPABASE_SERVICE_KEY=$(echo -n "$SUPABASE_SERVICE_KEY" | tr -d '\n\r')
           CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
           CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
           CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
@@ -98,7 +93,6 @@ jobs:
             --obfuscate --split-debug-info=build/debug-info \
             --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
             --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
-            --dart-define="SUPABASE_SERVICE_KEY=$CLEAN_SUPABASE_SERVICE_KEY" \
             --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
             --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
             --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
