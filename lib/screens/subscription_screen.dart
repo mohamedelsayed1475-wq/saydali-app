@@ -24,19 +24,44 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   bool _isValidating = false;
   String? _codeError;
   int _selectedPlan = 0;
-  double _currentPrice = 199;
+  double _currentPrice = 300;
   int _discountPercent = 0;
   String _currency = 'ج.م';
   late AnimationController _glowCtrl;
+  int _extraSlots = 0;
 
   @override
   void initState() {
     super.initState();
     _glowCtrl = AnimationController(
       vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _loadExtraSlots();
+  }
+
+  Future<void> _loadExtraSlots() async {
+    final extras = await DatabaseHelper.instance.getExtraAssistantSlots();
+    if (mounted) setState(() => _extraSlots = extras);
   }
 
   final _plans = [
+    (
+      name: 'بريميوم + مساعدين',
+      medal: '💎',
+      badge: '🔥 الأفضل قيمة',
+      price: 300,
+      duration: 'شهر',
+      color: const Color(0xFFAB47BC),
+      gradient: const [Color(0xFF1A0A2E), Color(0xFF2D1060)],
+      features: [
+        'كل ميزات البريميوم بلا حدود',
+        '3 مساعدين + صلاحيات + تتبع نشاط',
+        'مزامنة سحابية بين الأجهزة',
+        'تصدير فواتير PDF & Excel',
+        'تقارير وإحصائيات متقدمة',
+        'نسخ احتياطي تلقائي',
+        'دعم فني متميز 24/7',
+      ],
+    ),
     (
       name: 'بريميوم',
       medal: '👑',
@@ -73,13 +98,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       name: 'مساعد إضافي',
       medal: '👤',
       badge: '',
-      price: 49,
+      price: 49, // سعر أساسي (يتغير ديناميكياً)
       duration: 'شهر',
       color: Colors.teal,
       gradient: const [Color(0xFF0D1B2E), Color(0xFF132A3E)],
       features: [
         'إضافة مساعد واحد إضافي',
-        'للمساعدين فوق العدد الأساسي',
+        'بحد أقصى 3 أماكن إضافية',
+        'التسعير: الأول 49 · الثاني 99 · الثالث 149 ج.م',
       ],
     ),
   ];
@@ -214,16 +240,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       return;
     }
 
-    // Developer / Manager Bypass
-    const fallbackCodes = {'ADMIN2026', 'DEV@SAYDALI2026'};
-    if (code == EnvConfig.adminCode1 ||
-        code == EnvConfig.adminCode2 ||
-        fallbackCodes.contains(code)) {
+
+    // Admin bypass (من GitHub Secrets فقط)
+    if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
+        EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
       final expiry =
           DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
-      await DatabaseHelper.instance.addAssistantSlots(3);
-      await DatabaseHelper.instance.setSetting('assistants_activated', '1');
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -307,19 +330,46 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       }
       SupabaseService.instance.updateSubscriptionCodeUsage(code, usedCount + 1);
 
+      // ── كود بريميوم + مساعدين: يفعل الاشتراك + 3 مساعدين ──
+      if (plan == 'premium_assistants') {
+        // تفعيل الاشتراك
+        final expiry = DateTime.now().add(Duration(days: duration)).toIso8601String();
+        await db.setSetting('subscription_expiry', expiry);
+        // تفعيل المساعدين
+        await db.addAssistantSlots(3);
+        await db.setSetting('assistants_activated', '1');
+        final totalSlots = await db.getAssistantSlots();
+        showSnack(context, '✅ تم تفعيل البريميوم + 3 مساعدين! (الإجمالي: $totalSlots)');
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+                (route) => false);
+          }
+        });
+        return;
+      }
+
       // ── كود مساعدين: يضيف 3 أماكن مساعدين ──
       if (plan == 'assistant' || plan == 'assistant_3') {
         await db.addAssistantSlots(3);
+        await db.setSetting('assistants_activated', '1');
         final totalSlots = await db.getAssistantSlots();
         showSnack(context, '✅ تم تفعيل 3 أماكن مساعدين! (الإجمالي: $totalSlots)');
         return;
       }
 
-      // ── كود مساعد إضافي: يضيف مكان واحد ──
+      // ── كود مساعد إضافي: يضيف مكان واحد (بحد أقصى 3 إضافية) ──
       if (plan == 'assistant_1') {
+        final extras = await db.getExtraAssistantSlots();
+        if (extras >= DatabaseHelper.maxExtraAssistantSlots) {
+          setState(() => _codeError = '❌ وصلت للحد الأقصى (${DatabaseHelper.maxExtraAssistantSlots} أماكن إضافية)');
+          return;
+        }
         await db.addAssistantSlots(1);
         final totalSlots = await db.getAssistantSlots();
-        showSnack(context, '✅ تم تفعيل مكان مساعد إضافي! (الإجمالي: $totalSlots)');
+        showSnack(context, '✅ تم تفعيل مكان مساعد إضافي! (${extras + 1}/${DatabaseHelper.maxExtraAssistantSlots} إضافي - الإجمالي: $totalSlots)');
         return;
       }
 
@@ -337,8 +387,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();
         await db.setSetting('subscription_expiry', expiry);
-        await db.addAssistantSlots(3);
-        await db.setSetting('assistants_activated', '1');
 
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {
@@ -446,7 +494,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text('3 باقات', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
+                child: const Text('4 باقات', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -1079,8 +1127,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('${plan.price}', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 24)),
-                      Text('$_currency/شهر', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                      // السعر الديناميكي للمساعد الإضافي
+                      if (index == 3 && _extraSlots < DatabaseHelper.maxExtraAssistantSlots) ...[
+                        Text('${DatabaseHelper.getNextExtraPrice(_extraSlots)}', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 24)),
+                        Text('$_currency/شهر', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                        Text('(${_extraSlots}/3 مفعّل)', style: TextStyle(color: plan.color.withValues(alpha: 0.7), fontSize: 9, fontWeight: FontWeight.w600)),
+                      ] else if (index == 3 && _extraSlots >= DatabaseHelper.maxExtraAssistantSlots) ...[
+                        Text('مكتمل', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 16)),
+                        const Text('3/3 ✅', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                      ] else ...[
+                        Text('${plan.price}', style: TextStyle(color: plan.color, fontWeight: FontWeight.w800, fontSize: 24)),
+                        Text('$_currency/شهر', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                      ],
                     ],
                   ),
                   if (isSelected) ...[

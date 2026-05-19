@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
@@ -55,12 +56,27 @@ class _DevPanelScreenState extends State<DevPanelScreen>
     if (mounted) setState(() => _ads = ads);
   }
 
+  // خريطة الباقات مع التفاصيل
+  static const _planOptions = [
+    {'id': 'premium', 'label': '👑 بريميوم', 'desc': 'كل ميزات التطبيق (199 ج.م/شهر)'},
+    {'id': 'assistant', 'label': '👥 3 مساعدين', 'desc': '3 أماكن مساعدين (99 ج.م/شهر)'},
+    {'id': 'assistant_1', 'label': '👤 مساعد إضافي', 'desc': 'مكان واحد - تسعير تصاعدي (49→99→149 ج.م)'},
+    {'id': 'premium_assistants', 'label': '💎 بريميوم+مساعدين', 'desc': 'كل الميزات + 3 مساعدين (300 ج.م/شهر)'},
+  ];
+
+  String _getPlanLabel(String planId) {
+    for (final p in _planOptions) {
+      if (p['id'] == planId) return p['label']!;
+    }
+    return planId;
+  }
+
   Future<void> _addCode() async {
     final codeCtrl = TextEditingController();
     final daysCtrl = TextEditingController(text: '30');
     final discountCtrl = TextEditingController(text: '0');
     final maxUsesCtrl = TextEditingController(text: '1');
-    String plan = 'pro';
+    String plan = 'premium';
 
     void generateRandomCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -76,118 +92,132 @@ class _DevPanelScreenState extends State<DevPanelScreen>
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setBS) => Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              left: 20,
-              right: 20,
-              top: 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('🎟️ إضافة كود جديد',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16)),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                        child: AppTextField(
-                            hint: 'الكود (مثال: SAYDALI2026)',
-                            controller: codeCtrl)),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon:
-                          const Icon(Icons.autorenew, color: AppColors.primary),
-                      onPressed: () => setBS(() => generateRandomCode()),
-                      tooltip: 'توليد تلقائي',
-                    )
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(
-                      child: AppTextField(
-                          hint: 'مدة (أيام)',
-                          controller: daysCtrl,
-                          keyboardType: TextInputType.number)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: AppTextField(
-                          hint: 'خصم %',
-                          controller: discountCtrl,
-                          keyboardType: TextInputType.number)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: AppTextField(
-                          hint: 'عدد مرات الاستخدام',
-                          controller: maxUsesCtrl,
-                          keyboardType: TextInputType.number)),
-                ]),
-                const SizedBox(height: 10),
-                const Text('الباقة',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                const SizedBox(height: 6),
-                Wrap(spacing: 8, children: [
-                  for (final p in ['basic', 'pro', 'premium', 'assistant'])
-                    ChoiceChip(
-                      label: Text(p == 'assistant' ? '👥 مساعدين' : p),
-                      selected: plan == p,
-                      onSelected: (_) => setBS(() => plan = p),
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.dark,
-                      labelStyle: TextStyle(
-                          color: plan == p ? Colors.white : AppColors.textMuted,
-                          fontSize: 12),
-                      side: BorderSide(
-                          color: plan == p
-                              ? AppColors.primary
-                              : AppColors.darkBorder),
+        builder: (ctx, setBS) {
+          final selectedPlan = _planOptions.firstWhere(
+              (p) => p['id'] == plan, orElse: () => _planOptions.first);
+
+          return Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(child: Container(width: 40, height: 4,
+                      decoration: BoxDecoration(color: AppColors.darkBorder,
+                          borderRadius: BorderRadius.circular(99)))),
+                  const SizedBox(height: 12),
+                  const Text('🎟️ إضافة كود جديد',
+                      style: TextStyle(color: AppColors.primary,
+                          fontWeight: FontWeight.w700, fontSize: 16)),
+                  const SizedBox(height: 16),
+
+                  // ── الكود ──
+                  Row(
+                    children: [
+                      Expanded(child: AppTextField(
+                          hint: 'الكود (مثال: SAYDALI2026)',
+                          controller: codeCtrl)),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.autorenew, color: AppColors.primary),
+                        onPressed: () => setBS(() => generateRandomCode()),
+                        tooltip: 'توليد تلقائي',
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── اختيار الباقة ──
+                  const Text('📦 نوع الباقة',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final p in _planOptions)
+                      ChoiceChip(
+                        label: Text(p['label']!, style: const TextStyle(fontSize: 11)),
+                        selected: plan == p['id'],
+                        onSelected: (_) => setBS(() => plan = p['id']!),
+                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.dark,
+                        labelStyle: TextStyle(
+                            color: plan == p['id'] ? Colors.white : AppColors.textMuted),
+                        side: BorderSide(
+                            color: plan == p['id'] ? AppColors.primary : AppColors.darkBorder),
+                      ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
                     ),
-                ]),
-                const SizedBox(height: 16),
-                PrimaryButton(
-                  text: 'إضافة الكود',
-                  onTap: () async {
-                    final code = codeCtrl.text.trim().toUpperCase();
-                    if (code.isEmpty) return;
-                    final db = await DatabaseHelper.instance.database;
-                    final data = {
-                      'code': code,
-                      'plan': plan,
-                      'duration_days': int.tryParse(daysCtrl.text) ?? 30,
-                      'discount_percent': int.tryParse(discountCtrl.text) ?? 0,
-                      'max_uses': int.tryParse(maxUsesCtrl.text) ?? 1,
-                      'used_count': 0,
-                      'is_active': 1,
-                      'created_at': DateTime.now().toIso8601String(),
-                    };
-                    await db.insert('subscription_codes', data);
-                    // أغلق الشيت فوراً وحدّث القائمة بدون انتظار السحابة
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    await _loadCodes();
-                    if (mounted) showSnack(context, 'تم حفظ الكود ✅ جاري الرفع للسحابة...');
-                    // رفع للسحابة في الخلفية
-                    SupabaseService.instance.insertSubscriptionCode(data).then((ok) {
-                      if (mounted) {
-                        if (ok) {
-                          showSnack(context, 'تم رفع الكود للسحابة بنجاح ☁️✅');
-                        } else {
-                          showSnack(context, 'فشل الرفع للسحابة - الكود محفوظ محلياً فقط ⚠️', isError: true, durationMs: 3000);
-                        }
+                    child: Text('ℹ️ ${selectedPlan['desc']}',
+                      style: const TextStyle(color: AppColors.textLight, fontSize: 11, fontWeight: FontWeight.w500)),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── الإعدادات ──
+                  Row(children: [
+                    Expanded(child: AppTextField(
+                        hint: 'مدة (أيام)', controller: daysCtrl,
+                        keyboardType: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: AppTextField(
+                        hint: 'خصم %', controller: discountCtrl,
+                        keyboardType: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: AppTextField(
+                        hint: 'مرات الاستخدام', controller: maxUsesCtrl,
+                        keyboardType: TextInputType.number)),
+                  ]),
+                  const SizedBox(height: 16),
+
+                  PrimaryButton(
+                    text: 'إضافة الكود',
+                    onTap: () async {
+                      final code = codeCtrl.text.trim().toUpperCase();
+                      if (code.isEmpty) {
+                        showSnack(ctx, 'أدخل الكود', isError: true);
+                        return;
                       }
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-              ],
+                      final db = await DatabaseHelper.instance.database;
+                      final data = {
+                        'code': code,
+                        'plan': plan,
+                        'duration_days': int.tryParse(daysCtrl.text) ?? 30,
+                        'discount_percent': int.tryParse(discountCtrl.text) ?? 0,
+                        'max_uses': int.tryParse(maxUsesCtrl.text) ?? 1,
+                        'used_count': 0,
+                        'is_active': 1,
+                        'created_at': DateTime.now().toIso8601String(),
+                      };
+                      await db.insert('subscription_codes', data);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      await _loadCodes();
+                      if (mounted) showSnack(context, 'تم حفظ الكود ✅ جاري الرفع للسحابة...');
+                      SupabaseService.instance.insertSubscriptionCode(data).then((ok) {
+                        if (mounted) {
+                          if (ok) {
+                            showSnack(context, 'تم رفع الكود للسحابة بنجاح ☁️✅');
+                          } else {
+                            showSnack(context, 'فشل الرفع للسحابة - محفوظ محلياً فقط ⚠️', isError: true, durationMs: 3000);
+                          }
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -532,61 +562,121 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                   itemBuilder: (ctx, i) {
                     final c = _codes[i];
                     final isActive = c['is_active'] == 1;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.darkCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: isActive
-                                ? AppColors.primary.withValues(alpha: 0.3)
-                                : AppColors.darkBorder),
+                    final planLabel = _getPlanLabel(c['plan'] ?? '');
+                    return Dismissible(
+                      key: Key('code_${c['id']}'),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 24),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.delete_outline, color: AppColors.danger),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(c['code'],
-                                    style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16,
-                                        letterSpacing: 2)),
+                      confirmDismiss: (_) async {
+                        return await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppColors.darkCard,
+                            title: const Text('حذف الكود؟', style: TextStyle(color: AppColors.danger)),
+                            content: Text('هل تريد حذف الكود ${c['code']}؟',
+                                style: const TextStyle(color: AppColors.textMuted)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('إلغاء')),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('حذف'),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: isActive
-                                      ? AppColors.primaryLight
-                                      : const Color(0xFFFEE2E2),
-                                  borderRadius: BorderRadius.circular(20),
+                            ],
+                          ),
+                        );
+                      },
+                      onDismissed: (_) async {
+                        final db = await DatabaseHelper.instance.database;
+                        await db.delete('subscription_codes', where: 'id = ?', whereArgs: [c['id']]);
+                        _loadCodes();
+                        if (mounted) showSnack(context, 'تم حذف الكود 🗑️');
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkCard,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: isActive
+                                  ? AppColors.primary.withValues(alpha: 0.3)
+                                  : AppColors.darkBorder),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      Clipboard.setData(ClipboardData(text: c['code']));
+                                      showSnack(context, 'تم نسخ الكود 📋');
+                                    },
+                                    child: Row(
+                                      children: [
+                                        Text(c['code'],
+                                            style: const TextStyle(
+                                                color: AppColors.primary,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                                letterSpacing: 2)),
+                                        const SizedBox(width: 6),
+                                        const Icon(Icons.copy_rounded, color: AppColors.textMuted, size: 14),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                                child: Text(isActive ? 'فعال' : 'منتهي',
-                                    style: TextStyle(
-                                        color: isActive
-                                            ? AppColors.primary
-                                            : AppColors.danger,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700)),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 12,
-                            children: [
-                              _codeInfo('الباقة', c['plan']),
-                              _codeInfo('المدة', '${c['duration_days']} يوم'),
-                              _codeInfo('خصم', '${c['discount_percent']}%'),
-                              _codeInfo('الاستخدام',
-                                  '${c['used_count']}/${c['max_uses']}'),
-                            ],
-                          ),
-                        ],
+                                // Toggle active/inactive
+                                GestureDetector(
+                                  onTap: () async {
+                                    final db = await DatabaseHelper.instance.database;
+                                    await db.update('subscription_codes',
+                                        {'is_active': isActive ? 0 : 1},
+                                        where: 'id = ?', whereArgs: [c['id']]);
+                                    _loadCodes();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? AppColors.primaryLight
+                                          : const Color(0xFFFEE2E2),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(isActive ? '✅ فعال' : '⛔ معطل',
+                                        style: TextStyle(
+                                            color: isActive ? AppColors.primary : AppColors.danger,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 4,
+                              children: [
+                                _codeInfo('📦', planLabel),
+                                _codeInfo('📅', '${c['duration_days']} يوم'),
+                                if ((c['discount_percent'] ?? 0) > 0)
+                                  _codeInfo('🏷️', 'خصم ${c['discount_percent']}%'),
+                                _codeInfo('👥', '${c['used_count']}/${c['max_uses']} استخدام'),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -596,17 +686,23 @@ class _DevPanelScreenState extends State<DevPanelScreen>
     );
   }
 
-  Widget _codeInfo(String label, String value) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ',
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-          Text(value,
-              style: const TextStyle(
-                  color: AppColors.textLight,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
-        ],
+  Widget _codeInfo(String emoji, String value) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.dark,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('$emoji ', style: const TextStyle(fontSize: 11)),
+            Text(value,
+                style: const TextStyle(
+                    color: AppColors.textLight,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
       );
 
   Widget _buildAdsTab() {

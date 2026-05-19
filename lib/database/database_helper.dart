@@ -634,10 +634,33 @@ class DatabaseHelper {
     return int.tryParse(val ?? '0') ?? 0;
   }
 
+  /// عدد الأماكن الإضافية المفردة (من كود assistant_1)
+  Future<int> getExtraAssistantSlots() async {
+    final val = await getSetting('extra_assistant_slots');
+    return int.tryParse(val ?? '0') ?? 0;
+  }
+
+  /// الحد الأقصى للأماكن الإضافية المفردة
+  static const int maxExtraAssistantSlots = 3;
+
+  /// التسعير التصاعدي للمساعد الإضافي
+  static const List<int> extraAssistantPrices = [49, 99, 149];
+
+  /// سعر المساعد الإضافي التالي بناءً على عدد الأماكن المفعلة
+  static int getNextExtraPrice(int currentExtras) {
+    if (currentExtras >= maxExtraAssistantSlots) return 0;
+    return extraAssistantPrices[currentExtras];
+  }
+
   /// إضافة أماكن مساعدين جديدة (عند تفعيل كود assistant)
   Future<void> addAssistantSlots(int count) async {
     final current = await getAssistantSlots();
     await setSetting('assistant_slots', '${current + count}');
+    // تتبع الأماكن الإضافية المفردة
+    if (count == 1) {
+      final extras = await getExtraAssistantSlots();
+      await setSetting('extra_assistant_slots', '${extras + 1}');
+    }
   }
 
   /// عدد المساعدين النشطين حالياً

@@ -27,6 +27,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   String _pharmacyCode = '';
   int _maxSlots = 0;
   int _currentCount = 0;
+  int _extraSlots = 0;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
       code = _generatePharmacyCode();
       await DatabaseHelper.instance.setSetting('pharmacy_code', code);
     }
+    final extras = await DatabaseHelper.instance.getExtraAssistantSlots();
     if (mounted) {
       setState(() {
         _assistants = assistantsData.map(Assistant.fromMap).toList();
@@ -59,9 +61,12 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         _pharmacyCode = code!;
         _maxSlots = slots;
         _currentCount = count;
+        _extraSlots = extras;
         _loading = false;
       });
     }
+    // رفع كود الصيدلية للسحابة تلقائياً عند فتح الشاشة
+    SyncService.instance.registerPharmacy();
   }
 
   Future<void> _showAddAssistant({Assistant? existing}) async {
@@ -480,7 +485,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                         ),
                         Column(
                           children: [
-                            const Text('100', style: TextStyle(
+                            const Text('99', style: TextStyle(
                                 color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 20)),
                             Text(_pharmacyCode.isEmpty ? 'ج.م' : 'ج.م/شهر',
                                 style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
@@ -533,12 +538,14 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                             ],
                           ),
                         ),
-                        const Column(
+                        Column(
                           children: [
-                            Text('100', style: TextStyle(
-                                color: Colors.teal, fontWeight: FontWeight.w900, fontSize: 20)),
-                            Text('ج.م/شهر',
+                            Text('${DatabaseHelper.getNextExtraPrice(_extraSlots)}',
+                                style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.w900, fontSize: 20)),
+                            const Text('ج.م/شهر',
                                 style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                            Text('(${_extraSlots}/3)',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 9)),
                           ],
                         ),
                       ],
@@ -657,11 +664,17 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   Future<bool> _validateAssistantCode(String code, int slotsToAdd) async {
     final db = DatabaseHelper.instance;
 
-    // Developer bypass
-    const fallbackCodes = {'ADMIN2026', 'DEV@SAYDALI2026'};
-    if (code == EnvConfig.adminCode1 ||
-        code == EnvConfig.adminCode2 ||
-        fallbackCodes.contains(code)) {
+    // التحقق من حد الأماكن الإضافية (assistant_1 = 1 مكان بحد أقصى 3)
+    if (slotsToAdd == 1) {
+      final extras = await db.getExtraAssistantSlots();
+      if (extras >= DatabaseHelper.maxExtraAssistantSlots) {
+        return false; // وصل للحد الأقصى
+      }
+    }
+
+    // Admin bypass (من GitHub Secrets فقط)
+    if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
+        EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
       await db.addAssistantSlots(slotsToAdd);
       await db.setSetting('assistants_activated', '1');
       return true;
@@ -770,7 +783,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
                       Text('👤', style: TextStyle(fontSize: 28)),
                       SizedBox(width: 12),
@@ -781,8 +794,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                             Text('أضف مكان إضافي',
                                 style: TextStyle(color: AppColors.textColor,
                                     fontWeight: FontWeight.w700, fontSize: 14)),
-                            Text('أدخل كود تفعيل مساعد إضافي (100 ج.م/مكان)',
-                                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            Text('أدخل كود تفعيل مساعد إضافي (${DatabaseHelper.getNextExtraPrice(_extraSlots)} ج.م - ${_extraSlots}/3 مفعّل)',
+                                style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
                           ],
                         ),
                       ),
@@ -1153,6 +1166,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     if (confirm == true) {
       final newCode = _generatePharmacyCode();
       await DatabaseHelper.instance.setSetting('pharmacy_code', newCode);
+      // مسح الـ cloud_id القديم حتى يتم التسجيل بالكود الجديد
+      await DatabaseHelper.instance.setSetting('pharmacy_cloud_id', '');
       await DatabaseHelper.instance.logActivity(
         assistantName: 'المالك',
         action: 'تجديد كود الصيدلية',
@@ -1160,7 +1175,13 @@ class _AssistantsScreenState extends State<AssistantsScreen>
         screen: 'assistants',
       );
       setState(() => _pharmacyCode = newCode);
-      if (mounted) showSnack(context, 'تم تجديد الكود بنجاح ✅');
+      // رفع الكود الجديد للسحابة فوراً
+      final registered = await SyncService.instance.registerPharmacy();
+      if (mounted) {
+        showSnack(context, registered
+            ? 'تم تجديد الكود ورفعه للسحابة ✅'
+            : 'تم تجديد الكود محلياً ⚠️ (تحقق من الإنترنت)');
+      }
     }
   }
 

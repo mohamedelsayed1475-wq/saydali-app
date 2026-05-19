@@ -87,12 +87,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       showSnack(context, '⛔ ليس لديك صلاحية إدارة الفواتير', isError: true);
       return;
     }
-    final nameCtrl = TextEditingController();
+    final nameCtrl = TextEditingController(text: 'بيع نقدي');
     final paidCtrl = TextEditingController(text: '0');
     final items = <Map<String, dynamic>>[];
     double discount = 0;
     Customer? selectedCustomer;
     double paidAmount = 0.0;
+    String debtOption = 'cash'; // 'cash' | 'full_debt' | 'partial_debt'
+    double partialDebtAmount = 0.0;
 
     await showModalBottomSheet(
       context: context,
@@ -137,19 +139,48 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 fontWeight: FontWeight.w700,
                                 fontSize: 16)),
                         const SizedBox(height: 12),
-                        AppTextField(
-                            hint: 'اسم العميل',
-                            controller: nameCtrl,
-                            onChanged: (val) {
-                              setBS(() {
-                                if (selectedCustomer != null && selectedCustomer!.name != val) {
+                        // ── اسم العميل ──
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                hint: 'اسم العميل',
+                                controller: nameCtrl,
+                                onChanged: (val) {
+                                  setBS(() {
+                                    if (selectedCustomer != null && selectedCustomer!.name != val) {
+                                      selectedCustomer = null;
+                                      debtOption = 'cash';
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // زر البحث في العملاء
+                            InkWell(
+                              onTap: () {
+                                setBS(() {
+                                  nameCtrl.clear();
                                   selectedCustomer = null;
-                                }
-                              });
-                            }),
+                                  debtOption = 'cash';
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.person_search_rounded, color: AppColors.primary, size: 22),
+                              ),
+                            ),
+                          ],
+                        ),
                         
                         // قائمة اقتراحات أسماء العملاء
-                        if (nameCtrl.text.isNotEmpty && selectedCustomer == null) ...[
+                        if (nameCtrl.text.isNotEmpty && nameCtrl.text != 'بيع نقدي' && selectedCustomer == null) ...[
                           Container(
                             margin: const EdgeInsets.only(top: 4, bottom: 8),
                             constraints: const BoxConstraints(maxHeight: 150),
@@ -165,13 +196,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   .where((c) => c.name.toLowerCase().contains(nameCtrl.text.toLowerCase()))
                                   .map((c) => ListTile(
                                         dense: true,
+                                        leading: const Icon(Icons.person, color: AppColors.primary, size: 18),
                                         title: Text(c.name, style: const TextStyle(color: AppColors.textColor)),
-                                        subtitle: Text('المديونية الحالية: ${c.totalDebt.toStringAsFixed(2)} $_currency', 
-                                            style: const TextStyle(color: AppColors.primary, fontSize: 11)),
+                                        subtitle: c.totalDebt > 0
+                                            ? Text('عليه: ${c.totalDebt.toStringAsFixed(2)} $_currency', 
+                                                style: const TextStyle(color: AppColors.danger, fontSize: 11))
+                                            : const Text('لا مديونية', style: TextStyle(color: AppColors.primary, fontSize: 11)),
                                         onTap: () {
                                           setBS(() {
                                             selectedCustomer = c;
                                             nameCtrl.text = c.name;
+                                            debtOption = 'cash';
                                           });
                                         },
                                       ))
@@ -181,31 +216,43 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         ] else if (selectedCustomer != null) ...[
                           Container(
                             margin: const EdgeInsets.only(top: 4, bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                               border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                             ),
-                            child: Row(
+                            child: Column(
                               children: [
-                                const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 16),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'تم ربطه بالعميل المسجل: ${selectedCustomer!.name}',
-                                    style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 16),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'عميل مسجل: ${selectedCustomer!.name}',
+                                        style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        setBS(() {
+                                          selectedCustomer = null;
+                                          nameCtrl.text = 'بيع نقدي';
+                                          debtOption = 'cash';
+                                        });
+                                      },
+                                      child: const Icon(Icons.close_rounded, color: AppColors.danger, size: 18),
+                                    ),
+                                  ],
+                                ),
+                                if (selectedCustomer!.totalDebt > 0) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'المديونية الحالية: ${selectedCustomer!.totalDebt.toStringAsFixed(2)} $_currency',
+                                    style: const TextStyle(color: AppColors.warning, fontSize: 11, fontWeight: FontWeight.w600),
                                   ),
-                                ),
-                                GestureDetector(
-                                  onTap: () {
-                                    setBS(() {
-                                      selectedCustomer = null;
-                                      nameCtrl.clear();
-                                    });
-                                  },
-                                  child: const Icon(Icons.close_rounded, color: AppColors.danger, size: 18),
-                                ),
+                                ],
                               ],
                             ),
                           ),
@@ -382,18 +429,156 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('المتبقي (يتحول للمديونية)',
-                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                              Text('${remaining.toStringAsFixed(2)} $_currency',
-                                  style: TextStyle(
-                                      color: remaining > 0 ? AppColors.danger : AppColors.textLight,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800)),
+
+                          // ── حساب الباقي / الفكة / المديونية ──
+                          if (selectedCustomer == null) ...[
+                            // === بيع نقدي (لغير العملاء) ===
+                            if (paidAmount > total && total > 0) ...[
+                              // الفكة (الباقي للعميل)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.keyboard_return_rounded, color: AppColors.primary, size: 18),
+                                        SizedBox(width: 6),
+                                        Text('الباقي (الفكة)',
+                                            style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
+                                      ],
+                                    ),
+                                    Text('${(paidAmount - total).toStringAsFixed(2)} $_currency',
+                                        style: const TextStyle(
+                                            color: AppColors.primary,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ),
+                            ] else if (remaining > 0) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('المتبقي',
+                                      style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                                  Text('${remaining.toStringAsFixed(2)} $_currency',
+                                      style: const TextStyle(
+                                          color: AppColors.danger,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800)),
+                                ],
+                              ),
                             ],
-                          ),
+                          ] else ...[
+                            // === عميل مسجل (من المديونية) ===
+                            if (paidAmount > total && total > 0) ...[
+                              // الفكة
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.keyboard_return_rounded, color: AppColors.primary, size: 18),
+                                        SizedBox(width: 6),
+                                        Text('الباقي (الفكة)',
+                                            style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
+                                      ],
+                                    ),
+                                    Text('${(paidAmount - total).toStringAsFixed(2)} $_currency',
+                                        style: const TextStyle(
+                                            color: AppColors.primary,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                              ),
+                            ] else if (remaining > 0) ...[
+                              // المتبقي على العميل
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.warning.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('المتبقي على العميل',
+                                            style: TextStyle(color: AppColors.warning, fontSize: 13, fontWeight: FontWeight.w700)),
+                                        Text('${remaining.toStringAsFixed(2)} $_currency',
+                                            style: const TextStyle(
+                                                color: AppColors.danger,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text('تنزيل من الحساب؟',
+                                        style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                    const SizedBox(height: 6),
+                                    // خيارات الدفع
+                                    Wrap(
+                                      spacing: 6,
+                                      children: [
+                                        _debtChip('💰 كاش', 'cash', debtOption, (v) => setBS(() => debtOption = v)),
+                                        _debtChip('📥 المبلغ كامل', 'full_debt', debtOption, (v) => setBS(() => debtOption = v)),
+                                        _debtChip('📝 جزء منه', 'partial_debt', debtOption, (v) => setBS(() => debtOption = v)),
+                                      ],
+                                    ),
+                                    if (debtOption == 'partial_debt') ...[
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: 36,
+                                        child: TextField(
+                                          onChanged: (v) {
+                                            setBS(() => partialDebtAmount = double.tryParse(v) ?? 0);
+                                          },
+                                          keyboardType: TextInputType.number,
+                                          style: const TextStyle(color: AppColors.warning, fontSize: 14),
+                                          decoration: InputDecoration(
+                                            hintText: 'المبلغ المراد تنزيله من الحساب',
+                                            hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                              borderSide: BorderSide(color: AppColors.warning.withValues(alpha: 0.4)),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (debtOption == 'full_debt') ...[
+                                      const SizedBox(height: 4),
+                                      Text('سيتم إضافة ${remaining.toStringAsFixed(2)} $_currency على حساب العميل',
+                                          style: const TextStyle(color: AppColors.danger, fontSize: 11)),
+                                    ] else if (debtOption == 'cash') ...[
+                                      const SizedBox(height: 4),
+                                      const Text('العميل سيدفع المتبقي كاش - لن يُضاف للمديونية',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                           const SizedBox(height: 12),
                           PrimaryButton(
                             text: '🧾 حفظ ومشاركة الفاتورة',
@@ -415,7 +600,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 'remaining': remaining,
                               });
                               
-                              // تحويل المتبقي للمديونية تلقائياً إذا تم اختيار عميل مسجل
+                              // تحويل المتبقي للمديونية حسب اختيار المستخدم
                               if (selectedCustomer != null && remaining > 0) {
                                 final userProvider = context.read<CurrentUserProvider>();
                                 
@@ -425,17 +610,27 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   final qtyText = item['qty_text'] ?? '$qtyVal علبة';
                                   return '• ${item['name']} ($qtyText)';
                                 }).join('\n');
-                                final description = 'متبقي فاتورة أصناف:\n$itemsList';
 
-                                await DatabaseHelper.instance.addDebtTransaction({
-                                  'customer_id': selectedCustomer!.id,
-                                  'amount': remaining,
-                                  'type': 'debt',
-                                  'description': description,
-                                  'created_by': userProvider.currentName,
-                                });
-                                // تحديث مزود بيانات العملاء فوراً لتنعكس الديون في شاشة الديون
-                                await context.read<CustomersProvider>().load();
+                                double debtAmount = 0;
+                                if (debtOption == 'full_debt') {
+                                  debtAmount = remaining;
+                                } else if (debtOption == 'partial_debt') {
+                                  debtAmount = partialDebtAmount.clamp(0, remaining);
+                                }
+                                // debtOption == 'cash' → لا يُضاف شيء للمديونية
+
+                                if (debtAmount > 0) {
+                                  final description = 'متبقي فاتورة أصناف:\n$itemsList';
+                                  await DatabaseHelper.instance.addDebtTransaction({
+                                    'customer_id': selectedCustomer!.id,
+                                    'amount': debtAmount,
+                                    'type': 'debt',
+                                    'description': description,
+                                    'created_by': userProvider.currentName,
+                                  });
+                                  // تحديث مزود بيانات العملاء فوراً
+                                  await context.read<CustomersProvider>().load();
+                                }
                               }
 
                               await _generatePDF(
@@ -464,6 +659,30 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _debtChip(String label, String value, String current, ValueChanged<String> onSelect) {
+    final isSelected = current == value;
+    return GestureDetector(
+      onTap: () => onSelect(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.warning.withValues(alpha: 0.2) : AppColors.dark,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.warning : AppColors.darkBorder,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              color: isSelected ? AppColors.warning : AppColors.textMuted,
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            )),
       ),
     );
   }

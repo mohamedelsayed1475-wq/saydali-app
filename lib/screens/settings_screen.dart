@@ -634,10 +634,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           // تحقق من الكود
                           bool valid = false;
 
-                          // 1. Admin bypass
-                          if (code == 'ASSIST2026' ||
-                              code == EnvConfig.adminCode1 ||
-                              code == EnvConfig.adminCode2) {
+                          // 1. Admin bypass (من GitHub Secrets فقط)
+                          if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
+                              EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
                             valid = true;
                           }
 
@@ -646,7 +645,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             try {
                               final db = await DatabaseHelper.instance.database;
                               final local = await db.query('subscription_codes',
-                                  where: "code = ? AND is_active = 1 AND plan = 'assistant'",
+                                  where: "code = ? AND is_active = 1 AND (plan = 'assistant' OR plan = 'premium_assistants')",
                                   whereArgs: [code]);
                               if (local.isNotEmpty) {
                                 final maxUses = local.first['max_uses'] as int? ?? 1;
@@ -670,7 +669,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .checkSubscriptionCode(code);
                               if (cloudData != null &&
                                   (cloudData['plan'] == 'assistant' ||
-                                      cloudData['plan'] == 'premium') &&
+                                      cloudData['plan'] == 'premium' ||
+                                      cloudData['plan'] == 'premium_assistants') &&
                                   (cloudData['is_active'] == true ||
                                       cloudData['is_active'] == 1)) {
                                 final maxUses = cloudData['max_uses'] ?? 1;
@@ -690,6 +690,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (valid) {
                             await DatabaseHelper.instance
                                 .setSetting('assistants_activated', '1');
+                            await DatabaseHelper.instance.addAssistantSlots(3);
+                            // تفعيل الاشتراك أيضاً إذا كان الكود premium_assistants
+                            final expiry = DateTime.now().add(const Duration(days: 30)).toIso8601String();
+                            await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
                               showSnack(context, '✅ تم تفعيل إدارة المساعدين بنجاح!');
