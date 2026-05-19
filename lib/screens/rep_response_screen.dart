@@ -848,37 +848,39 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
               border: pw.TableBorder.all(color: PdfColors.grey300),
               columnWidths: {
                 0: const pw.FlexColumnWidth(3),
-                1: const pw.FlexColumnWidth(1.5),
-                2: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(1),
+                2: const pw.FlexColumnWidth(1.2),
                 3: const pw.FlexColumnWidth(1),
-                4: const pw.FlexColumnWidth(1.5),
+                4: const pw.FlexColumnWidth(1.2),
+                5: const pw.FlexColumnWidth(1.5),
               },
               children: [
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                   children:
-                      ['الصنف', 'الشركة', 'الكمية', 'الخصم%', 'السعر النهائي']
+                      ['الصنف', 'الكمية', 'السعر', 'الخصم', 'الصافي', 'الإجمالي']
                           .map((h) => pw.Padding(
                                 padding: const pw.EdgeInsets.all(6),
                                 child: pw.Text(h,
                                     style: pw.TextStyle(
                                         fontWeight: pw.FontWeight.bold,
-                                        fontSize: 10)),
+                                        fontSize: 9)),
                               ))
                           .toList(),
                 ),
                 ..._response!.availableItems.map((item) => pw.TableRow(
                       children: [
-                        item.drugName,
-                        item.company,
+                        '${item.drugName}\n(${item.company})',
                         '${item.quantity}',
+                        item.price.toStringAsFixed(2),
                         '${item.discount.toStringAsFixed(0)}%',
-                        '${item.finalPrice.toStringAsFixed(2)} $_currency',
+                        item.finalPrice.toStringAsFixed(2),
+                        '${item.totalPrice.toStringAsFixed(2)} $_currency',
                       ]
                           .map((t) => pw.Padding(
                                 padding: const pw.EdgeInsets.all(6),
                                 child: pw.Text(t,
-                                    style: const pw.TextStyle(fontSize: 10)),
+                                    style: const pw.TextStyle(fontSize: 9)),
                               ))
                           .toList(),
                     )),
@@ -941,8 +943,8 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     if (r.availableItems.isNotEmpty) {
       msg += '✅ الأصناف المتاحة:\n';
       for (var item in r.availableItems) {
-        msg +=
-            '- ${item.drugName} (${item.quantity} علبة) - ${item.finalPrice.toStringAsFixed(2)}ج\n';
+        msg += '- ${item.drugName} (${item.quantity} علبة)\n';
+        msg += '  سعر: ${item.price.toStringAsFixed(2)} | خصم: ${item.discount.toStringAsFixed(0)}% | صافي: ${item.finalPrice.toStringAsFixed(2)} | إجمالي: ${item.totalPrice.toStringAsFixed(2)} $_currency\n';
       }
       msg +=
           '\n💰 الإجمالي: ${r.availableItems.fold(0.0, (s, i) => s + i.totalPrice).toStringAsFixed(2)} $_currency\n';
@@ -1306,20 +1308,37 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                     Text('${item.company} · ${item.quantity} علبة',
                         style: const TextStyle(
                             color: AppColors.textMuted, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    if (item.discount > 0) ...[
+                      Text('سعر القطعة الأساسي: ${item.price.toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.textMuted, fontSize: 11, decoration: TextDecoration.lineThrough)),
+                      Text('الصافي للقطعة: ${item.finalPrice.toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.textLight, fontSize: 11)),
+                      Text('الإجمالي قبل الخصم: ${(item.price * item.quantity).toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.textMuted, fontSize: 11, decoration: TextDecoration.lineThrough)),
+                    ] else ...[
+                      Text('سعر القطعة: ${item.price.toStringAsFixed(2)} $_currency', style: const TextStyle(color: AppColors.textLight, fontSize: 11)),
+                    ]
                   ],
                 ),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${item.finalPrice.toStringAsFixed(2)} $_currency',
+                  const Text('الإجمالي', style: TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                  Text('${item.totalPrice.toStringAsFixed(2)} $_currency',
                       style: const TextStyle(
                           color: AppColors.primary,
-                          fontWeight: FontWeight.w800)),
+                          fontWeight: FontWeight.w800, fontSize: 15)),
                   if (item.discount > 0)
-                    Text('خصم ${item.discount.toStringAsFixed(0)}%',
-                        style: const TextStyle(
-                            color: AppColors.warning, fontSize: 11)),
+                    Container(
+                      margin: const EdgeInsets.top(4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text('خصم ${item.discount.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              color: AppColors.warning, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
                 ],
               ),
             ],
