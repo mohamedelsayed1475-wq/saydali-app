@@ -1329,7 +1329,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                           fontWeight: FontWeight.w800, fontSize: 15)),
                   if (item.discount > 0)
                     Container(
-                      margin: const EdgeInsets.top(4),
+                      margin: const EdgeInsets.only(top: 4),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppColors.warning.withValues(alpha: 0.15),
