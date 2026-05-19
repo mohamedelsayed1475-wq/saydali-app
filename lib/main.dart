@@ -14,6 +14,7 @@ import 'screens/subscription_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/user_selection_screen.dart';
 import 'database/database_helper.dart';
+import 'utils/security_helper.dart';
 import 'services/sync_service.dart';
 import 'services/scheduled_sync_service.dart';
 import 'services/notification_service.dart';
@@ -107,19 +108,56 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
+    // ── فحص أمان الجهاز (Root Detection) ──
+    final warnings = await SecurityHelper.runSecurityChecks();
+    if (warnings.isNotEmpty && mounted) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Text('⚠️', style: TextStyle(fontSize: 24)),
+              SizedBox(width: 8),
+              Text('تحذير أمني', style: TextStyle(color: Color(0xFFFF6B6B), fontWeight: FontWeight.w800, fontSize: 18)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: warnings.map((w) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(w, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            )).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('فهمت، متابعة', style: TextStyle(color: Color(0xFF00C896))),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!mounted) return;
+
     bool isValid = false;
     try {
-      final expiryStr =
-          await DatabaseHelper.instance.getSetting('subscription_expiry');
-      if (expiryStr != null) {
-        final expiry = DateTime.tryParse(expiryStr);
-        if (expiry != null && expiry.isAfter(DateTime.now())) {
-          isValid = true;
+      // ── فحص أمني محلي (HMAC + server time) ──
+      isValid = await SecurityHelper.isSubscriptionValid();
+
+      // ── تحقق سحابي (لو فيه إنترنت) ──
+      if (isValid) {
+        final cloudResult = await SecurityHelper.verifySubscriptionCloud();
+        if (cloudResult == false) {
+          isValid = false;
         }
       }
     } catch (e) {
       debugPrint('خطأ في قراءة إعدادات الاشتراك: $e');
-      // في حالة الخطأ، نفترض أن الاشتراك غير صالح ونوجه المستخدم لشاشة الاشتراك
     }
 
     if (isValid) {

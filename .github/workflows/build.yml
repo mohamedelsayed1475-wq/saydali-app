@@ -66,6 +66,7 @@ jobs:
           CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
           CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
           flutter build appbundle --release \
+            --obfuscate --split-debug-info=build/debug-info \
             --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
             --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
             --dart-define="SUPABASE_SERVICE_KEY=$CLEAN_SUPABASE_SERVICE_KEY" \
@@ -94,6 +95,7 @@ jobs:
           CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
           CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
           flutter build apk --release \
+            --obfuscate --split-debug-info=build/debug-info \
             --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
             --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
             --dart-define="SUPABASE_SERVICE_KEY=$CLEAN_SUPABASE_SERVICE_KEY" \

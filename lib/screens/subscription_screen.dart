@@ -6,6 +6,7 @@ import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
+import '../utils/security_helper.dart';
 import '../main.dart';
 import 'user_selection_screen.dart';
 import '../services/sync_service.dart';
@@ -198,7 +199,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   
                   await db.setSetting('assistants_activated', '1');
                   final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
-                  await db.setSetting('subscription_expiry', expiry);
+                  await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
                   
                   if (ctx.mounted) {
                     Navigator.pop(ctx); // Close Dialog
@@ -246,7 +247,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
       final expiry =
           DateTime.now().add(const Duration(days: 3650)).toIso8601String();
-      await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
+      await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -334,7 +335,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       if (plan == 'premium_assistants') {
         // تفعيل الاشتراك
         final expiry = DateTime.now().add(Duration(days: duration)).toIso8601String();
-        await db.setSetting('subscription_expiry', expiry);
+        await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
         // تفعيل المساعدين
         await db.addAssistantSlots(3);
         await db.setSetting('assistants_activated', '1');
@@ -386,7 +387,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         showSnack(context, '✅ تم تفعيل الاشتراك بنجاح!');
         final expiry =
             DateTime.now().add(Duration(days: duration)).toIso8601String();
-        await db.setSetting('subscription_expiry', expiry);
+        await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
 
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) {

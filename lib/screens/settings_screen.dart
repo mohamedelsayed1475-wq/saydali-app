@@ -6,6 +6,7 @@ import 'invoice_screen.dart';
 import '../utils/country_config.dart';
 import '../database/database_helper.dart';
 import '../services/supabase_service.dart';
+import '../utils/security_helper.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import 'dev_panel_screen.dart';
@@ -693,7 +694,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             await DatabaseHelper.instance.addAssistantSlots(3);
                             // تفعيل الاشتراك أيضاً إذا كان الكود premium_assistants
                             final expiry = DateTime.now().add(const Duration(days: 30)).toIso8601String();
-                            await DatabaseHelper.instance.setSetting('subscription_expiry', expiry);
+                            await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
                               showSnack(context, '✅ تم تفعيل إدارة المساعدين بنجاح!');
