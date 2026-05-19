@@ -20,6 +20,7 @@ import '../providers/current_user_provider.dart';
 
 import 'package:flutter/services.dart';
 import 'scanner_screen.dart';
+import 'rep_message_parser_screen.dart';
 
 class ShortagesScreen extends StatefulWidget {
   const ShortagesScreen({super.key});
@@ -839,6 +840,25 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                   fontWeight: FontWeight.w600)),
                           backgroundColor: AppColors.accent,
                           onPressed: _shareShortages,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.auto_awesome,
+                              size: 16, color: Colors.white),
+                          label: const Text('تحليل رسالة مندوب',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600)),
+                          backgroundColor: AppColors.accent,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const RepMessageParserScreen()),
+                            );
+                          },
                         ),
                       ),
                       Padding(

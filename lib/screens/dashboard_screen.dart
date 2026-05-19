@@ -12,6 +12,7 @@ import 'rep_response_screen.dart';
 import 'invoice_screen.dart';
 import 'documents_screen.dart';
 import 'statistics_screen.dart';
+import 'rep_message_parser_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -429,10 +430,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const InvoiceScreen()));
               }),
-
               _quickAction('📁', 'المستندات', const Color(0xFF10B981), () {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const DocumentsScreen()));
+              }),
+              _quickAction('🪄', 'تحليل رسائل', AppColors.accent, () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const RepMessageParserScreen()));
               }),
             ],
           ),
