@@ -118,6 +118,7 @@ class _SplashScreenState extends State<SplashScreen>
           backgroundColor: const Color(0xFF1A1A2E),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
+            textDirection: TextDirection.rtl,
             children: [
               Text('⚠️', style: TextStyle(fontSize: 24)),
               SizedBox(width: 8),
@@ -129,7 +130,11 @@ class _SplashScreenState extends State<SplashScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: warnings.map((w) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(w, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              child: Text(
+                w,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
             )).toList(),
           ),
           actions: [

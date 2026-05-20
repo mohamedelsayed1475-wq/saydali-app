@@ -185,9 +185,8 @@ class SecurityHelper {
   static Future<bool> isDeviceCompromised() async {
     try {
       final jailbroken = await FlutterJailbreakDetection.jailbroken;
-      final developerMode = await FlutterJailbreakDetection.developerMode;
-      if (jailbroken || developerMode) {
-        debugPrint('🚨 جهاز مشبوه! Root: $jailbroken, DevMode: $developerMode');
+      if (jailbroken) {
+        debugPrint('🚨 جهاز مشبوه! يحتوي على صلاحيات الروت (Root)');
         return true;
       }
       return false;
@@ -201,9 +200,18 @@ class SecurityHelper {
   static Future<List<String>> runSecurityChecks() async {
     final warnings = <String>[];
 
-    // 1. فحص Root/Jailbreak
-    if (await isDeviceCompromised()) {
-      warnings.add('📱 الجهاز يحتوي على صلاحيات Root - بياناتك قد تكون معرضة للخطر');
+    try {
+      final jailbroken = await FlutterJailbreakDetection.jailbroken;
+      final developerMode = await FlutterJailbreakDetection.developerMode;
+
+      if (jailbroken) {
+        warnings.add('📱 جهازك يحتوي على صلاحيات الروت (Root) - قد تكون بياناتك معرضة للخطر');
+      }
+      if (developerMode) {
+        warnings.add('🛠️ وضع خيارات المطور (Developer Options) نشط في جهازك');
+      }
+    } catch (e) {
+      debugPrint('⚠️ فحص أمان الجهاز فشل: $e');
     }
 
     // 2. فحص التلاعب بالاشتراك
