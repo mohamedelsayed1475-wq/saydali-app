@@ -324,15 +324,17 @@ class SupabaseService {
   }
 
   // ── إضافة كود اشتراك ──────────────────────────────────────────────────
-  Future<bool> insertSubscriptionCode(Map<String, dynamic> data) async {
-    if (!isConfigured) return false;
-
+  Future<({bool ok, String error})> insertSubscriptionCode(Map<String, dynamic> data) async {
+    if (!isConfigured) {
+      return (ok: false, error: 'إعدادات السحابة غير مكتملة:\n$configDiagnostic');
+    }
+    
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
         payload['is_active'] = payload['is_active'] == 1 || payload['is_active'] == true;
       }
-
+      
       final res = await http
           .post(
             Uri.parse('$_url/rpc/add_subscription_code_rpc'),
@@ -348,14 +350,23 @@ class SupabaseService {
             }),
           )
           .timeout(const Duration(seconds: 10));
-
-      if (res.statusCode != 200 && res.statusCode != 201) {
+          
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return (ok: true, error: '');
+      } else {
+        String errorMsg = 'رمز الاستجابة ${res.statusCode}';
+        try {
+          final parsed = jsonDecode(res.body);
+          if (parsed is Map && parsed.containsKey('message')) {
+            errorMsg = '${parsed['message']} (${res.statusCode})';
+          }
+        } catch (_) {}
         debugPrint('❌ insertSubscriptionCode failed: ${res.statusCode} - ${res.body}');
+        return (ok: false, error: errorMsg);
       }
-      return res.statusCode == 200 || res.statusCode == 201;
     } catch (e) {
       debugPrint('❌ insertSubscriptionCode error: $e');
-      return false;
+      return (ok: false, error: 'حدث خطأ أثناء الاتصال: $e');
     }
   }
 
@@ -378,8 +389,10 @@ class SupabaseService {
   }
 
   // ── إضافة إعلان ──────────────────────────────────────────────────
-  Future<bool> insertAd(Map<String, dynamic> data) async {
-    if (!isConfigured) return false;
+  Future<({bool ok, String error})> insertAd(Map<String, dynamic> data) async {
+    if (!isConfigured) {
+      return (ok: false, error: 'إعدادات السحابة غير مكتملة:\n$configDiagnostic');
+    }
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
@@ -400,14 +413,23 @@ class SupabaseService {
             }),
           )
           .timeout(const Duration(seconds: 10));
-
-      if (res.statusCode != 200 && res.statusCode != 201) {
+          
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return (ok: true, error: '');
+      } else {
+        String errorMsg = 'رمز الاستجابة ${res.statusCode}';
+        try {
+          final parsed = jsonDecode(res.body);
+          if (parsed is Map && parsed.containsKey('message')) {
+            errorMsg = '${parsed['message']} (${res.statusCode})';
+          }
+        } catch (_) {}
         debugPrint('❌ insertAd failed: ${res.statusCode} - ${res.body}');
+        return (ok: false, error: errorMsg);
       }
-      return res.statusCode == 200 || res.statusCode == 201;
     } catch (e) {
       debugPrint('❌ insertAd error: $e');
-      return false;
+      return (ok: false, error: 'حدث خطأ أثناء الاتصال: $e');
     }
   }
 

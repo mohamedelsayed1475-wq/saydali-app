@@ -201,12 +201,17 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       if (ctx.mounted) Navigator.pop(ctx);
                       await _loadCodes();
                       if (mounted) showSnack(context, 'تم حفظ الكود ✅ جاري الرفع للسحابة...');
-                      SupabaseService.instance.insertSubscriptionCode(data).then((ok) {
+                      SupabaseService.instance.insertSubscriptionCode(data).then((res) {
                         if (mounted) {
-                          if (ok) {
+                          if (res.ok) {
                             showSnack(context, 'تم رفع الكود للسحابة بنجاح ☁️✅');
                           } else {
-                            showSnack(context, 'فشل الرفع للسحابة - محفوظ محلياً فقط ⚠️', isError: true, durationMs: 3000);
+                            showSnack(
+                              context,
+                              '⚠️ فشل الرفع للسحابة (محفوظ محلياً فقط):\n${res.error}',
+                              isError: true,
+                              durationMs: 6000,
+                            );
                           }
                         }
                       });
@@ -399,9 +404,14 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     await _loadAds();
                     if (mounted) showSnack(context, 'تم نشر الإعلان ✅');
                     // رفع للسحابة في الخلفية
-                    SupabaseService.instance.insertAd(data).then((ok) {
-                      if (mounted && !ok) {
-                        showSnack(context, 'فشل رفع الإعلان للسحابة ⚠️', isError: true, durationMs: 3000);
+                    SupabaseService.instance.insertAd(data).then((res) {
+                      if (mounted && !res.ok) {
+                        showSnack(
+                          context,
+                          '⚠️ فشل رفع الإعلان للسحابة:\n${res.error}',
+                          isError: true,
+                          durationMs: 6000,
+                        );
                       }
                     });
                   },

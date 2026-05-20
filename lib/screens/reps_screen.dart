@@ -280,20 +280,20 @@ class _RepsScreenState extends State<RepsScreen> {
           borderRadius: BorderRadius.circular(16),
           child: Container(
             padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border(
-              top: BorderSide(
-                  color: index == 0 ? AppColors.warning : AppColors.darkBorder,
-                  width: index == 0 ? 2 : 1),
-              bottom: BorderSide(color: AppColors.darkBorder),
-              left: BorderSide(color: AppColors.darkBorder),
-              right: BorderSide(color: AppColors.darkBorder),
+            decoration: BoxDecoration(
+              color: AppColors.darkCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border(
+                top: BorderSide(
+                    color: index == 0 ? AppColors.warning : AppColors.darkBorder,
+                    width: index == 0 ? 2 : 1),
+                bottom: BorderSide(color: AppColors.darkBorder),
+                left: BorderSide(color: AppColors.darkBorder),
+                right: BorderSide(color: AppColors.darkBorder),
+              ),
             ),
-          ),
-          child: Column(
-            children: [
+            child: Column(
+              children: [
               Row(
                 children: [
                   // Avatar
@@ -371,9 +371,9 @@ class _RepsScreenState extends State<RepsScreen> {
           ),
         ),
       ),
-      ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _statBox(String label, String value, bool highlight) {
     return Container(
