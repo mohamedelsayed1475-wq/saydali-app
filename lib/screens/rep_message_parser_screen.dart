@@ -40,7 +40,9 @@ class RepMessageParserScreen extends StatefulWidget {
 class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
   Representative? _selectedRep;
   final TextEditingController _messageCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = TextEditingController();
   List<ParsedItem> _parsedItems = [];
+  List<ParsedItem> _filteredItems = [];
   bool _isParsing = false;
   bool _sending = false;
 
@@ -66,9 +68,22 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
     }
   }
 
+  void _filterItems(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredItems = List.from(_parsedItems);
+      } else {
+        _filteredItems = _parsedItems
+            .where((item) => item.name.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _messageCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -149,6 +164,10 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
     for (String line in lines) {
       line = line.trim();
       if (line.isEmpty) continue;
+      // تجاهل الأسطر القصيرة جداً (أقل من حرفين)
+      if (line.length < 2) continue;
+      // تجاهل الأسطر التي تحتوي فقط على أرقام أو رموز
+      if (RegExp(r'^[\d\s\-\+\*\.\,\/\\@#]+$').hasMatch(line)) continue;
 
       // Extract Name
       String name = line;
@@ -217,20 +236,37 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
         name = name.replaceAll('؟', '').replaceAll('?', '').trim();
       }
 
-      // Clean up name
-      name = name.replaceAll('/', '').replaceAll('-', '').trim();
+      // ── تنظيف الاسم من الرموز والعشوائيات ──
+      name = name.replaceAll('/', ' ').replaceAll('-', ' ').trim();
+      // إزالة @ والرموز الخاصة من بداية الاسم
+      name = name.replaceAll(RegExp(r'^[@#\*\+]+'), '').trim();
+      // إزالة الحروف العربية المكررة أكثر من مرتين (مثل رررررر → ر)
+      name = name.replaceAllMapped(
+        RegExp(r'([\u0600-\u06FF])\1{2,}'),
+        (m) => m.group(1)! * 2,
+      );
+      // إزالة الحروف الإنجليزية المكررة أكثر من مرتين
+      name = name.replaceAllMapped(
+        RegExp(r'([a-zA-Z])\1{2,}', caseSensitive: false),
+        (m) => m.group(1)! * 2,
+      );
+      // إزالة المسافات المتعددة
+      name = name.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+      // إزالة الأرقام المنفردة من بداية أو نهاية الاسم
+      name = name.replaceAll(RegExp(r'^\d+\s+'), '').replaceAll(RegExp(r'\s+\d+$'), '').trim();
 
-      if (name.isNotEmpty) {
-        final key = name.toLowerCase();
-        // Deduplicate: Keep the latest item if it appears multiple times
-        uniqueItems[key] = ParsedItem(
-          originalText: line,
-          name: name,
-          price: price,
-          isNewPrice: isNewPrice,
-          notes: notes,
-        );
-      }
+      // تجاهل الأسماء الفارغة أو القصيرة جداً بعد التنظيف
+      if (name.length < 2) continue;
+
+      final key = name.toLowerCase();
+      // Deduplicate: Keep the latest item if it appears multiple times
+      uniqueItems[key] = ParsedItem(
+        originalText: line,
+        name: name,
+        price: price,
+        isNewPrice: isNewPrice,
+        notes: notes,
+      );
     }
 
     // Save new items to dictionary
@@ -244,6 +280,8 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
         if (a.price == null && b.price != null) return 1;
         return 0;
       });
+      _filteredItems = List.from(_parsedItems);
+      _searchCtrl.clear();
       _isParsing = false;
     });
   }
@@ -488,6 +526,7 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
   @override
   Widget build(BuildContext context) {
     int selectedCount = _parsedItems.where((i) => i.isSelected).length;
+    final displayItems = _filteredItems;
 
     return Scaffold(
       backgroundColor: AppColors.dark,
@@ -588,8 +627,8 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('الأصناف المستخرجة',
-                            style: TextStyle(
+                        Text('الأصناف المستخرجة (${_parsedItems.length})',
+                            style: const TextStyle(
                                 color: AppColors.textColor,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 16)),
@@ -602,13 +641,53 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
                               }
                             });
                           },
-                          child: Text('تحديد الكل', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                          child: Text(
+                            _parsedItems.every((i) => i.isSelected) ? 'إلغاء الكل' : 'تحديد الكل',
+                            style: const TextStyle(color: AppColors.primary, fontSize: 12)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
+                    // ── شريط البحث ──
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.darkCard,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: _filterItems,
+                        style: const TextStyle(color: AppColors.textColor, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'ابحث عن صنف...',
+                          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 20),
+                          suffixIcon: _searchCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close_rounded, color: AppColors.textMuted, size: 18),
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    _filterItems('');
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    if (_filteredItems.isEmpty && _searchCtrl.text.isNotEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Center(
+                          child: Text('لا توجد نتائج مطابقة',
+                              style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                        ),
+                      ),
                     // Parsed Items List
-                    ..._parsedItems.map((item) {
+                    ...displayItems.map((item) {
                       final bool needsConfirmation = item.notes != null && item.notes!.contains('تأكيد');
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
