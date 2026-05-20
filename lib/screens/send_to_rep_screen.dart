@@ -6,6 +6,7 @@ import '../services/supabase_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
+import 'shortages_screen.dart';
 import 'rep_response_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 

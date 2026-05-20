@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_providers.dart';
 import '../providers/current_user_provider.dart';
 import 'rep_details_screen.dart';
+import 'shortages_screen.dart';
 
 class RepsScreen extends StatefulWidget {
   const RepsScreen({super.key});
@@ -176,6 +177,9 @@ class _RepsScreenState extends State<RepsScreen> {
     if (shortages.isEmpty) {
       if (mounted)
         showSnack(context, 'لا توجد نواقص بانتظار الرد', isError: true);
+      // Navigate to ShortagesScreen to allow adding shortages
+      if (mounted)
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ShortagesScreen()));
       return;
     }
 
@@ -188,41 +192,17 @@ class _RepsScreenState extends State<RepsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.dark,
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
-          : _reps.isEmpty
-              ? EmptyState(
-                  emoji: '👥',
-                  title: 'لا يوجد مندوبون',
-                  subtitle: 'أضف مندوبيك لإرسال النواقص وتتبع الردود',
-                  buttonText: 'إضافة مندوب',
-                  onButton: () => _showAddSheet(),
-                )
-              : RefreshIndicator(
-                  color: AppColors.primary,
-                  backgroundColor: AppColors.darkCard,
-                  onRefresh: _loadReps,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                    itemCount: _reps.length,
-                    itemBuilder: (ctx, i) => _buildRepCard(_reps[i], i),
-                  ),
-                ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'reps_fab',
-        onPressed: () => _showAddSheet(),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('إضافة مندوب',
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo')),
-      ),
-    );
+      elevation: 0,
+      title: const Text('المندوبون', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: AppColors.textColor),
+          onPressed: () {
+            showSnack(context, '🔍 البحث غير مفعل بعد', isError: false);
+          },
+        ),
+      ],
+    ),
   }
 
   Widget _buildRepCard(Representative rep, int index) {
