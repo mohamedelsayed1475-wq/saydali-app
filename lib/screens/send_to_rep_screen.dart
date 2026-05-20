@@ -32,6 +32,20 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
     _loadShortages();
   }
 
+  Future<void> _searchGoogleImages(String query) async {
+    if (query.trim().isEmpty) {
+      showSnack(context, 'الرجاء إدخال اسم الدواء للبحث', isError: true);
+      return;
+    }
+    final url = Uri.parse(
+        'https://www.google.com/search?tbm=isch&q=${Uri.encodeComponent(query)}+دواء');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) showSnack(context, 'تعذر فتح المتصفح', isError: true);
+    }
+  }
+
   Future<void> _loadShortages() async {
     final data = await DatabaseHelper.instance.getShortages();
     if (mounted) {
@@ -511,11 +525,24 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name,
-                      style: const TextStyle(
-                          color: AppColors.textColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(item.name,
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                        onPressed: () => _searchGoogleImages(item.name),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        constraints: const BoxConstraints(),
+                        tooltip: 'بحث في جوجل (صور)',
+                      ),
+                    ],
+                  ),
                   Text('${item.company} · ${item.quantity} علبة',
                       style: const TextStyle(
                           color: AppColors.textMuted, fontSize: 12)),

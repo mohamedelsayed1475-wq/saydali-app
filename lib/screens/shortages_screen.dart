@@ -1037,11 +1037,24 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.name,
-                            style: const TextStyle(
-                                color: AppColors.textColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15)),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(item.name,
+                                  style: const TextStyle(
+                                      color: AppColors.textColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                              onPressed: () => _searchGoogleImages(item.name),
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              constraints: const BoxConstraints(),
+                              tooltip: 'بحث في جوجل (صور)',
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 3),
                         Text(
                             '${item.company} · ${item.quantity} علبة · ${item.timeAgo}',

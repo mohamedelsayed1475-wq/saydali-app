@@ -8,6 +8,7 @@ import '../services/supabase_service.dart';
 import '../database/database_helper.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class RepResponseScreen extends StatefulWidget {
   final String? initialCode;
@@ -41,6 +42,20 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   Future<void> _loadCurrency() async {
     final c = await DatabaseHelper.instance.getCurrency();
     if (mounted) setState(() => _currency = c);
+  }
+
+  Future<void> _searchGoogleImages(String query) async {
+    if (query.trim().isEmpty) {
+      showSnack(context, 'الرجاء إدخال اسم الدواء للبحث', isError: true);
+      return;
+    }
+    final url = Uri.parse(
+        'https://www.google.com/search?tbm=isch&q=${Uri.encodeComponent(query)}+دواء');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) showSnack(context, 'تعذر فتح المتصفح', isError: true);
+    }
   }
 
   @override
@@ -1301,10 +1316,23 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.drugName,
-                        style: const TextStyle(
-                            color: AppColors.textColor,
-                            fontWeight: FontWeight.w700)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(item.drugName,
+                              style: const TextStyle(
+                                  color: AppColors.textColor,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                          onPressed: () => _searchGoogleImages(item.drugName),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          constraints: const BoxConstraints(),
+                          tooltip: 'بحث في جوجل (صور)',
+                        ),
+                      ],
+                    ),
                     Text('${item.company} · ${item.quantity} علبة',
                         style: const TextStyle(
                             color: AppColors.textMuted, fontSize: 12)),
@@ -1370,10 +1398,23 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.drugName,
-                    style: const TextStyle(
-                        color: AppColors.textLight,
-                        fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(item.drugName,
+                          style: const TextStyle(
+                              color: AppColors.textLight,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                      onPressed: () => _searchGoogleImages(item.drugName),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      constraints: const BoxConstraints(),
+                      tooltip: 'بحث في جوجل (صور)',
+                    ),
+                  ],
+                ),
                 Text('${item.company} · ${item.quantity} علبة',
                     style: const TextStyle(
                         color: AppColors.textMuted, fontSize: 12)),
