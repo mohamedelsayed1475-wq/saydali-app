@@ -19,6 +19,8 @@ class SupabaseService {
       !_url.contains('REPLACE') &&
       !_key.contains('REPLACE');
 
+  String? lastError;
+
   String get configDiagnostic {
     if (_url.isEmpty) return 'SUPABASE_URL فارغ - أضف --dart-define=SUPABASE_URL=...';
     if (_key.isEmpty) return 'SUPABASE_KEY فارغ - أضف --dart-define=SUPABASE_KEY=...';
@@ -40,6 +42,7 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
     String currency = 'ج.م',
   }) async {
+    lastError = null;
     if (!isConfigured) {
       debugPrint('⚠️ Supabase مش مضبوط: ${configDiagnostic}. سيتم استخدام وضع المحاكاة (Mock Mode)');
       await Future.delayed(const Duration(seconds: 1));
@@ -70,7 +73,8 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (sessionRes.statusCode != 201) {
-        debugPrint('❌ خطأ في إنشاء الجلسة: ${sessionRes.statusCode} ${sessionRes.body}');
+        lastError = 'فشل إنشاء جلسة المندوب (${sessionRes.statusCode}): ${sessionRes.body}';
+        debugPrint('❌ $lastError');
         return null;
       }
       final sessionData = jsonDecode(sessionRes.body);
@@ -99,6 +103,7 @@ class SupabaseService {
 
       return sessionCode;
     } catch (e) {
+      lastError = 'خطأ اتصال بالشبكة: $e';
       debugPrint('❌ createSession error: $e');
       return null;
     }

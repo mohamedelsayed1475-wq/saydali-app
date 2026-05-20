@@ -329,7 +329,7 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
           });
           _showLinkSheet();
         } else {
-          showSnack(context, 'فشل إنشاء الطلب، يرجى المحاولة لاحقاً', isError: true);
+          showSnack(context, SupabaseService.instance.lastError ?? 'فشل إنشاء الطلب، يرجى المحاولة لاحقاً', isError: true);
         }
       }
     } catch (e) {

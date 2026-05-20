@@ -97,7 +97,7 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
           });
           _showLinkSheet();
         } else {
-          _showSendFailedDialog();
+          _showSendFailedDialog(error: SupabaseService.instance.lastError);
         }
       }
     } catch (e) {
