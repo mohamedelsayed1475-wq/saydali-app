@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -168,6 +168,12 @@ class DatabaseHelper {
       // إضافة تاريخ انتهاء الإعلانات
       try {
         await db.execute('ALTER TABLE ads ADD COLUMN expires_at TEXT');
+      } catch (_) {}
+    }
+    if (oldVersion < 11) {
+      // إضافة الدولة المستهدفة للإعلانات
+      try {
+        await db.execute('ALTER TABLE ads ADD COLUMN target_country TEXT');
       } catch (_) {}
     }
   }
@@ -347,6 +353,7 @@ class DatabaseHelper {
         screen TEXT DEFAULT 'home',
         skip_duration INTEGER DEFAULT 0,
         expires_at TEXT,
+        target_country TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -607,9 +614,12 @@ class DatabaseHelper {
       // تنظيف الإعلانات المنتهية أولاً
       await cleanupExpiredAds();
       final now = DateTime.now().toIso8601String();
+      final countryCode = await getCountryCode();
       final result = await db.query('ads',
-          where: "is_active = 1 AND screen = ? AND (expires_at IS NULL OR expires_at = '' OR expires_at > ?)",
-          whereArgs: [screen, now], limit: 1);
+          where: "is_active = 1 AND screen = ? AND (expires_at IS NULL OR expires_at = '' OR expires_at > ?) AND (target_country IS NULL OR target_country = '' OR target_country = ?)",
+          whereArgs: [screen, now, countryCode],
+          orderBy: "target_country DESC",
+          limit: 1);
       if (result.isNotEmpty) return result.first;
     } catch (_) {}
     return null;
@@ -955,6 +965,8 @@ class DatabaseHelper {
           'is_active': ad['is_active'] == true || ad['is_active'] == 1 ? 1 : 0,
           'screen': ad['screen'] ?? 'home',
           'skip_duration': ad['skip_duration'] ?? 0,
+          'expires_at': ad['expires_at'],
+          'target_country': ad['target_country'],
           'created_at': ad['created_at'] ?? DateTime.now().toIso8601String(),
         });
         synced++;

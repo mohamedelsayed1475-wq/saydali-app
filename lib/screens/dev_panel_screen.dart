@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
+import '../utils/country_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
@@ -234,6 +235,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
     final durationCtrl = TextEditingController(text: '0');
     final expiryDaysCtrl = TextEditingController(text: '7');
     String screen = 'home';
+    String targetCountry = ''; // فارغ = كل الدول
     String? pickedImagePath;
 
     await showModalBottomSheet(
@@ -354,6 +356,38 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     ),
                 ]),
                 const SizedBox(height: 16),
+                const Text('الدولة المستهدفة',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.dark,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: DropdownButton<String>(
+                    value: targetCountry,
+                    isExpanded: true,
+                    dropdownColor: AppColors.darkCard,
+                    underline: const SizedBox(),
+                    style: const TextStyle(color: AppColors.textColor, fontSize: 14),
+                    items: [
+                      const DropdownMenuItem(
+                        value: '',
+                        child: Text('🌍 كل الدول',
+                            style: TextStyle(color: AppColors.textColor)),
+                      ),
+                      ...CountryConfig.countries.map((c) => DropdownMenuItem(
+                            value: c.code,
+                            child: Text('${c.flag} ${c.name}',
+                                style: const TextStyle(color: AppColors.textColor)),
+                          )),
+                    ],
+                    onChanged: (v) => setBS(() => targetCountry = v ?? ''),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 PrimaryButton(
                   text: 'نشر الإعلان',
                   onTap: () async {
@@ -392,6 +426,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                       'screen': screen,
                       'skip_duration': int.tryParse(durationCtrl.text) ?? 0,
                       'expires_at': expiresAt,
+                      'target_country': targetCountry,
                       'created_at': now.toIso8601String(),
                     };
                     await db.insert('ads', data);
@@ -817,6 +852,31 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                                         color: isExpired ? AppColors.danger : AppColors.warning,
                                         fontSize: 10, fontWeight: FontWeight.w600)),
                               ),
+                              const SizedBox(width: 8),
+                              Builder(builder: (_) {
+                                final tc = ad['target_country']?.toString() ?? '';
+                                if (tc.isEmpty) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text('🌍 كل الدول',
+                                        style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.w600)),
+                                  );
+                                }
+                                final country = CountryConfig.getByCode(tc);
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text('${country.flag} ${country.name}',
+                                      style: const TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.w600)),
+                                );
+                              }),
                             ],
                           ),
                         ],
