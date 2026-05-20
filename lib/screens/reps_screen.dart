@@ -192,17 +192,43 @@ class _RepsScreenState extends State<RepsScreen> {
 
   @override
   Widget build(BuildContext context) {
-      elevation: 0,
-      title: const Text('المندوبون', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.search, color: AppColors.textColor),
-          onPressed: () {
-            showSnack(context, '🔍 البحث غير مفعل بعد', isError: false);
-          },
-        ),
-      ],
-    ),
+    return Scaffold(
+      backgroundColor: AppColors.dark,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('المندوبون', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: AppColors.textColor),
+            onPressed: () {
+              showSnack(context, '🔍 البحث غير مفعل بعد', isError: false);
+            },
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : _reps.isEmpty
+              ? const EmptyState(
+                  emoji: '👥',
+                  title: 'لا يوجد مندوبون',
+                  subtitle: 'أضف مندوبين لإرسال النواقص')
+              : RefreshIndicator(
+                  onRefresh: _loadReps,
+                  color: AppColors.primary,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _reps.length,
+                    itemBuilder: (ctx, i) => _buildRepCard(_reps[i], i),
+                  ),
+                ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddSheet(),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.person_add_rounded, color: Colors.white),
+      ),
+    );
   }
 
   Widget _buildRepCard(Representative rep, int index) {

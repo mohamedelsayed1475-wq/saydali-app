@@ -206,7 +206,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                           if (res.ok) {
                             showSnack(context, 'تم رفع الكود للسحابة بنجاح ☁️✅');
                           } else {
-                            final errMsg = '⚠️ فشل رفع الكود للسحابة:\n${res.error}\nStatus: ${res.status}';
+                            final errMsg = '⚠️ فشل رفع الكود للسحابة:\n${res.error}';
                             showSnack(context, errMsg, isError: true, durationMs: 6000);
                           }
                         }
@@ -402,7 +402,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
                     // رفع للسحابة في الخلفية
                     SupabaseService.instance.insertAd(data).then((res) {
                       if (mounted && !res.ok) {
-                        final errMsg = '⚠️ فشل رفع الإعلان للسحابة:\n${res.error}\nStatus: ${res.statusCode}';
+                        final errMsg = '⚠️ فشل رفع الإعلان للسحابة:\n${res.error}';
                         showSnack(context, errMsg, isError: true, durationMs: 6000);
                       }
                     });
