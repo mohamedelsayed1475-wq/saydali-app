@@ -47,6 +47,24 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
   String? _generatedLink;
   String? _sessionCode;
   String _countryCode = 'EG';
+  String _currency = 'ج.م';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  void _loadSettings() async {
+    final currency = await DatabaseHelper.instance.getCurrency();
+    final countryCode = await DatabaseHelper.instance.getCountryCode();
+    if (mounted) {
+      setState(() {
+        _currency = currency;
+        _countryCode = countryCode;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -121,6 +139,13 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
     final lines = _messageCtrl.text.split('\n');
     final Map<String, ParsedItem> uniqueItems = {};
 
+    final curPattern = r'(?:ج\.م|ر\.س|د\.إ|د\.ك|ر\.ق|د\.ب|ر\.ع|د\.ع|د\.أ|د\.ل|ج\.س|ر\.ي|ل\.س|ل\.ل|ش\.ج|د\.م\.?|د\.ج|د\.ت|ش\.ص|ف\.ج\.ق|ف\.ج|جنيهات|جنيه|دراهم|درهم|ريالات|ريال|دنانير|دينار|ليرات|ليرة|شواكل|شيكل|أوقية|فرنكات|فرنك|شلنات|شلن|EGP|SAR|AED|KWD|QAR|BHD|OMR|IQD|JOD|LYD|SDG|YER|SYP|LBP|ILS|MAD|DZD|TND|MRU|SOS|DJF|KMF|ج|ر|ل|ش)';
+    final pattern1 = RegExp('(جديد\\s*)?(\\d+(?:\\.\\d+)?)\\s*($curPattern)', caseSensitive: false);
+    final pattern2 = RegExp('(جديد\\s*)?($curPattern)\\s*(\\d+(?:\\.\\d+)?)', caseSensitive: false);
+    final pattern3 = RegExp('(?:سعر|سعرها|بسعر|بـ|ب)\\s*(\\d+(?:\\.\\d+)?)', caseSensitive: false);
+    final pattern4 = RegExp('(جديد)\\s*(\\d+(?:\\.\\d+)?)', caseSensitive: false);
+    final pattern5 = RegExp('(\\d+(?:\\.\\d+)?)\\s*\$');
+
     for (String line in lines) {
       line = line.trim();
       if (line.isEmpty) continue;
@@ -131,19 +156,46 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
       bool isNewPrice = false;
       String? notes;
 
-      // Check for price and "جديد"
-      // Matches things like: "جديد 44ج", "جديد 39", "71ج"
-      final priceRegex = RegExp(r'(جديد\s*)?(\d+(\.\d+)?)\s*(ج|جنيه)?');
-      final priceMatch = priceRegex.firstMatch(line);
+      Match? match;
+      int matchType = 0;
 
-      if (priceMatch != null) {
-        if (priceMatch.group(1) != null) {
+      if (pattern1.hasMatch(line)) {
+        match = pattern1.firstMatch(line);
+        matchType = 1;
+      } else if (pattern2.hasMatch(line)) {
+        match = pattern2.firstMatch(line);
+        matchType = 2;
+      } else if (pattern3.hasMatch(line)) {
+        match = pattern3.firstMatch(line);
+        matchType = 3;
+      } else if (pattern4.hasMatch(line)) {
+        match = pattern4.firstMatch(line);
+        matchType = 4;
+      } else if (pattern5.hasMatch(line)) {
+        match = pattern5.firstMatch(line);
+        matchType = 5;
+      }
+
+      if (match != null) {
+        if (matchType == 1) {
+          if (match.group(1) != null) isNewPrice = true;
+          price = double.tryParse(match.group(2) ?? '');
+        } else if (matchType == 2) {
+          if (match.group(1) != null) isNewPrice = true;
+          price = double.tryParse(match.group(3) ?? '');
+        } else if (matchType == 3) {
+          price = double.tryParse(match.group(1) ?? '');
+        } else if (matchType == 4) {
           isNewPrice = true;
+          price = double.tryParse(match.group(2) ?? '');
+        } else if (matchType == 5) {
+          price = double.tryParse(match.group(1) ?? '');
         }
-        price = double.tryParse(priceMatch.group(2) ?? '');
         // Remove the price part from the name
-        name = name.replaceAll(priceMatch.group(0)!, '').trim();
-      } else if (line.contains('جديد')) {
+        name = name.replaceAll(match.group(0)!, '').trim();
+      }
+
+      if (line.contains('جديد') && !isNewPrice) {
         isNewPrice = true;
         name = name.replaceAll('جديد', '').trim();
       }
@@ -589,11 +641,32 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(item.name,
-                                            style: const TextStyle(
-                                                color: AppColors.textColor,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14)),
+                                        child: Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(item.name,
+                                                  style: const TextStyle(
+                                                      color: AppColors.textColor,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 14)),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                                              onPressed: () async {
+                                                final query = Uri.encodeComponent(item.name);
+                                                final url = Uri.parse('https://www.google.com/search?q=$query');
+                                                try {
+                                                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                                                } catch (e) {
+                                                  if (mounted) showSnack(context, 'تعذر فتح المتصفح', isError: true);
+                                                }
+                                              },
+                                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                                              constraints: const BoxConstraints(),
+                                              tooltip: 'بحث في جوجل',
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                       if (item.isNewPrice)
                                         Container(
@@ -611,7 +684,7 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      Text(item.price != null ? '${item.price} ج' : '—',
+                                      Text(item.price != null ? '${item.price} $_currency' : '—',
                                           style: const TextStyle(
                                               color: AppColors.textLight,
                                               fontSize: 13,
@@ -660,10 +733,64 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen> {
                                       child: Icon(Icons.remove, size: 16, color: item.isSelected ? AppColors.textColor : AppColors.textMuted),
                                     ),
                                   ),
-                                  Text('${item.quantity}',
-                                      style: TextStyle(
-                                          color: item.isSelected ? AppColors.textColor : AppColors.textMuted,
-                                          fontWeight: FontWeight.w700)),
+                                  GestureDetector(
+                                    onTap: item.isSelected ? () async {
+                                      final controller = TextEditingController(text: '${item.quantity}');
+                                      final newQty = await showDialog<int>(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          backgroundColor: AppColors.darkCard,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          title: const Text('تعديل الكمية', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                          content: TextField(
+                                            controller: controller,
+                                            keyboardType: TextInputType.number,
+                                            autofocus: true,
+                                            style: const TextStyle(color: Colors.white),
+                                            decoration: const InputDecoration(
+                                              hintText: 'الكمية المطلوبة',
+                                              hintStyle: TextStyle(color: AppColors.textMuted),
+                                              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.darkBorder)),
+                                              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primary)),
+                                            ),
+                                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(ctx),
+                                              child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                final val = int.tryParse(controller.text);
+                                                if (val != null && val > 0) {
+                                                  Navigator.pop(ctx, val);
+                                                } else {
+                                                  Navigator.pop(ctx);
+                                                }
+                                              },
+                                              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                              child: const Text('حفظ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (newQty != null) {
+                                        setState(() => item.quantity = newQty);
+                                      }
+                                    } : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        border: Border.symmetric(vertical: BorderSide(color: AppColors.darkBorder.withValues(alpha: 0.5))),
+                                      ),
+                                      child: Text('${item.quantity}',
+                                          style: TextStyle(
+                                              color: item.isSelected ? AppColors.primary : AppColors.textMuted,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14)),
+                                    ),
+                                  ),
                                   InkWell(
                                     onTap: item.isSelected ? () {
                                       setState(() => item.quantity++);
