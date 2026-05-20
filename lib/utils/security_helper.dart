@@ -143,7 +143,20 @@ class SecurityHelper {
 
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as List;
-      if (data.isEmpty) return null;
+      if (data.isEmpty) {
+        // ⚠️ تم حذف الصيدلية من السحابة! نقوم بمسح تفعيل التطبيق محلياً فوراً
+        final db = DatabaseHelper.instance;
+        await db.setSetting('pharmacy_code', '');
+        await db.setSetting('pharmacy_cloud_id', '');
+        await db.setSetting('is_assistant_device', '0');
+        await db.setSetting('subscription_expiry', '');
+        await db.setSetting('subscription_expiry_sig', '');
+        await db.setSetting('assistants_activated', '0');
+        await db.setSetting('assistant_slots', '0');
+        await db.setSetting('extra_assistant_slots', '0');
+        await db.setSetting('last_sync_at', '');
+        return false;
+      }
 
       final cloudExpiry = data[0]['subscription_expiry'];
       if (cloudExpiry == null) return null;

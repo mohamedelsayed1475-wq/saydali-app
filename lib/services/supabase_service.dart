@@ -620,8 +620,8 @@ class SupabaseService {
   }
 
   // ── سحب الإعلانات من السحابة ──────────────────────────────────────
-  Future<List<Map<String, dynamic>>> fetchAds() async {
-    if (!isConfigured) return [];
+  Future<List<Map<String, dynamic>>?> fetchAds() async {
+    if (!isConfigured) return null;
     try {
       final res = await http
           .get(
@@ -630,7 +630,7 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      if (res.statusCode != 200) return [];
+      if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as List;
       final activeAds = data.where((a) {
         final val = a['is_active'];
@@ -639,7 +639,7 @@ class SupabaseService {
       return activeAds.cast<Map<String, dynamic>>();
     } catch (e) {
       debugPrint('❌ fetchAds error: $e');
-      return [];
+      return null;
     }
   }
 }

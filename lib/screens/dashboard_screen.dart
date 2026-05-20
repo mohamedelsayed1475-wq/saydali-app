@@ -54,7 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // ── مزامنة الإعلانات من السحابة أولاً ──
     try {
       final cloudAds = await SupabaseService.instance.fetchAds();
-      if (cloudAds.isNotEmpty) {
+      if (cloudAds != null) {
         await DatabaseHelper.instance.syncAdsFromCloud(cloudAds);
       }
     } catch (_) {}
@@ -544,16 +544,27 @@ class _AdDialogState extends State<AdDialog> {
               ClipRRect(
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(20)),
-                child: Image.file(
-                  File(widget.ad['image_url']),
-                  height: 200,
-                  fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, st) => const SizedBox(
-                      height: 100,
-                      child: Center(
-                          child: Icon(Icons.broken_image,
-                              color: AppColors.textMuted, size: 40))),
-                ),
+                child: widget.ad['image_url'].toString().startsWith('http')
+                    ? Image.network(
+                        widget.ad['image_url'],
+                        height: 200,
+                        fit: BoxFit.cover,
+                        errorBuilder: (ctx, err, st) => const SizedBox(
+                            height: 100,
+                            child: Center(
+                                child: Icon(Icons.broken_image,
+                                    color: AppColors.textMuted, size: 40))),
+                      )
+                    : Image.file(
+                        File(widget.ad['image_url']),
+                        height: 200,
+                        fit: BoxFit.cover,
+                        errorBuilder: (ctx, err, st) => const SizedBox(
+                            height: 100,
+                            child: Center(
+                                child: Icon(Icons.broken_image,
+                                    color: AppColors.textMuted, size: 40))),
+                      ),
               ),
             Padding(
               padding: const EdgeInsets.all(20),

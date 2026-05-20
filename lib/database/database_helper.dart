@@ -936,29 +936,28 @@ class DatabaseHelper {
   // ── مزامنة الإعلانات من السحابة ────────────────────────────────────
   /// يسحب الإعلانات من Supabase ويحفظها محلياً
   Future<int> syncAdsFromCloud(List<Map<String, dynamic>> cloudAds) async {
-    if (cloudAds.isEmpty) return 0;
     final db = await database;
+    
+    // مسح الإعلانات القديمة لتحديثها بالإعلانات النشطة الحالية فقط
+    await db.delete('ads');
+    
+    if (cloudAds.isEmpty) return 0;
+    
     int synced = 0;
     for (final ad in cloudAds) {
       try {
-        // تحقق لو الإعلان موجود بنفس العنوان وتاريخ الإنشاء
-        final existing = await db.query('ads',
-            where: 'title = ? AND created_at = ?',
-            whereArgs: [ad['title'], ad['created_at']]);
-        if (existing.isEmpty) {
-          await db.insert('ads', {
-            'title': ad['title'] ?? '',
-            'body': ad['body'] ?? '',
-            'image_url': ad['image_url'],
-            'link': ad['link'],
-            'button_text': ad['button_text'] ?? 'التفاصيل',
-            'is_active': ad['is_active'] == true || ad['is_active'] == 1 ? 1 : 0,
-            'screen': ad['screen'] ?? 'home',
-            'skip_duration': ad['skip_duration'] ?? 0,
-            'created_at': ad['created_at'] ?? DateTime.now().toIso8601String(),
-          });
-          synced++;
-        }
+        await db.insert('ads', {
+          'title': ad['title'] ?? '',
+          'body': ad['body'] ?? '',
+          'image_url': ad['image_url'],
+          'link': ad['link'],
+          'button_text': ad['button_text'] ?? 'التفاصيل',
+          'is_active': ad['is_active'] == true || ad['is_active'] == 1 ? 1 : 0,
+          'screen': ad['screen'] ?? 'home',
+          'skip_duration': ad['skip_duration'] ?? 0,
+          'created_at': ad['created_at'] ?? DateTime.now().toIso8601String(),
+        });
+        synced++;
       } catch (e) {
         debugPrint('⚠️ خطأ في مزامنة إعلان: $e');
       }
