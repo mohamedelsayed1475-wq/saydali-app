@@ -14,7 +14,8 @@ class ParsedItem {
   final String originalText;
   String name;
   double? price;       // سعر المندوب (من الرسالة — بعلامة عملة فقط)
-  double? storedPrice; // سعر التخزين المحلي
+  double? storedPrice;   // سعر التخزين المحلي
+  String? suggestedName; // اقتراح من القاموس (fuzzy match)
   bool isNewPrice;
   String? notes;
   int quantity;
@@ -25,6 +26,7 @@ class ParsedItem {
     required this.name,
     this.price,
     this.storedPrice,
+    this.suggestedName,
     this.isNewPrice = false,
     this.notes,
     this.quantity = 1,
@@ -215,14 +217,6 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen>
       // ── تنظيف الاسم ──
       name = name.replaceAll('/', ' ').replaceAll('-', ' ').trim();
       name = name.replaceAll(RegExp(r'^[@#\*\+]+'), '').trim();
-      name = name.replaceAllMapped(
-        RegExp(r'([\u0600-\u06FF])\1{2,}'),
-        (m) => m.group(1)! * 2,
-      );
-      name = name.replaceAllMapped(
-        RegExp(r'([a-zA-Z])\1{2,}', caseSensitive: false),
-        (m) => m.group(1)! * 2,
-      );
       name = name.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
       name = name
           .replaceAll(RegExp(r'^\d+\s+'), '')
@@ -257,6 +251,7 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen>
     });
 
     await _loadStoredPrices();
+    await _findSuggestions();
     if (mounted) {
       setState(() {});
       _fadeCtrl.forward();
@@ -291,6 +286,77 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen>
     }
   }
 
+  Future<void> _findSuggestions() async {
+    try {
+      final dictStr =
+          await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+      if (dictStr == null) return;
+
+      final List<dynamic> decoded = jsonDecode(dictStr);
+      final drugList = decoded.cast<Map<String, dynamic>>();
+      final dictNames = drugList
+          .map((d) => d['enName']?.toString() ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
+
+      for (var item in _parsedItems) {
+        // لو الاسم موجود بالظبط في القاموس، مفيش داعي للاقتراح
+        final exactMatch = dictNames.any(
+          (n) => n.toLowerCase() == item.name.toLowerCase(),
+        );
+        if (exactMatch) continue;
+
+        // دور على أقرب اسم بنسبة 70%+
+        String? bestMatch;
+        double bestScore = 0.0;
+
+        for (final dictName in dictNames) {
+          final score = _similarityScore(item.name, dictName);
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = dictName;
+          }
+        }
+
+        if (bestScore >= 0.70 && bestMatch != null) {
+          item.suggestedName = bestMatch;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error finding suggestions: $e');
+    }
+  }
+
+  /// حساب نسبة التشابه بين نصين باستخدام Levenshtein distance
+  double _similarityScore(String a, String b) {
+    final s1 = a.toLowerCase();
+    final s2 = b.toLowerCase();
+    if (s1 == s2) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final dist = _levenshtein(s1, s2);
+    final maxLen = s1.length > s2.length ? s1.length : s2.length;
+    return 1.0 - (dist / maxLen);
+  }
+
+  int _levenshtein(String a, String b) {
+    final m = a.length, n = b.length;
+    final dp = List.generate(m + 1, (i) => List.filled(n + 1, 0));
+    for (int i = 0; i <= m; i++) dp[i][0] = i;
+    for (int j = 0; j <= n; j++) dp[0][j] = j;
+    for (int i = 1; i <= m; i++) {
+      for (int j = 1; j <= n; j++) {
+        if (a[i - 1] == b[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1];
+        } else {
+          dp[i][j] = 1 +
+              [dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]]
+                  .reduce((x, y) => x < y ? x : y);
+        }
+      }
+    }
+    return dp[m][n];
+  }
   Future<void> _saveNewItemsToDictionary(List<String> names) async {
     try {
       final dictStr =
@@ -463,6 +529,10 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen>
                                       setState(() => item.quantity++),
                                   onQtyEdit: () => _showQtyDialog(item),
                                   onSearch: () => _searchGoogle(item.name),
+                                  onAcceptSuggestion: () => setState(() {
+                                    item.name = item.suggestedName!;
+                                    item.suggestedName = null;
+                                  }),
                                 ))
                             .toList(),
                       ),
@@ -1010,6 +1080,7 @@ class _ItemCard extends StatelessWidget {
   final VoidCallback onQtyIncrease;
   final VoidCallback onQtyEdit;
   final VoidCallback onSearch;
+  final VoidCallback onAcceptSuggestion;
 
   const _ItemCard({
     required this.item,
@@ -1019,6 +1090,7 @@ class _ItemCard extends StatelessWidget {
     required this.onQtyIncrease,
     required this.onQtyEdit,
     required this.onSearch,
+    required this.onAcceptSuggestion,
   });
 
   @override
@@ -1115,6 +1187,44 @@ class _ItemCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
+
+                        // اقتراح الاسم من القاموس
+                        if (item.suggestedName != null) ...[
+                          GestureDetector(
+                            onTap: onAcceptSuggestion,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFA500).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: const Color(0xFFFFA500).withValues(alpha: 0.3),
+                                    width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.auto_fix_high_rounded,
+                                      color: Color(0xFFFFA500), size: 12),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'هل تقصد: ${item.suggestedName}؟',
+                                    style: const TextStyle(
+                                        color: Color(0xFFFFA500),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Cairo'),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.touch_app_rounded,
+                                      color: Color(0xFFFFA500), size: 11),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
 
                         // Prices row
                         Row(
