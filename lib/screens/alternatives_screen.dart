@@ -67,6 +67,20 @@ class _AlternativesScreenState extends State<AlternativesScreen> {
           }
         }
 
+        // After local search, if nothing found, fall back to FDA search automatically
+        if (data.isEmpty && query.isNotEmpty) {
+          // Switch to FDA mode and perform remote search
+          setState(() {
+            _isFdaMode = true;
+          });
+          final results = await OpenFdaService.instance.searchDrug(query);
+          setState(() {
+            _fdaResults = results;
+            _loading = false;
+          });
+          return; // skip setting local alternatives
+        }
+
         setState(() {
           _alternatives = data.map((e) => Alternative.fromMap(e)).toList();
           _loading = false;
