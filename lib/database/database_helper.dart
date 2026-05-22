@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -225,6 +225,16 @@ class DatabaseHelper {
             created_at TEXT NOT NULL
           )
         ''');
+      } catch (_) {}
+    }
+    if (oldVersion < 14) {
+      // إضافة عمود الدولة لجدول البدائل
+      try {
+        await db.execute("ALTER TABLE alternatives ADD COLUMN country_code TEXT DEFAULT 'EG'");
+      } catch (_) {}
+      // تحديث السجلات القديمة بالدولة الافتراضية
+      try {
+        await db.execute("UPDATE alternatives SET country_code = 'EG' WHERE country_code IS NULL");
       } catch (_) {}
     }
   }
@@ -481,6 +491,7 @@ class DatabaseHelper {
         medication_name TEXT NOT NULL,
         alternative_name TEXT NOT NULL,
         active_ingredient TEXT,
+        country_code TEXT DEFAULT 'EG',
         created_at TEXT NOT NULL
       )
     ''');
@@ -1250,24 +1261,45 @@ class DatabaseHelper {
   Future<int> insertAlternative(Map<String, dynamic> data) async {
     final db = await database;
     data['created_at'] = DateTime.now().toIso8601String();
+    // ▌ إضافة كود الدولة تلقائياً من إعدادات المستخدم
+    if (data['country_code'] == null) {
+      data['country_code'] = await getCountryCode();
+    }
     return await db.insert('alternatives', data);
   }
 
-  Future<List<Map<String, dynamic>>> getAlternativesFor(String medName) async {
+  /// البحث عن بدائل محلية حسب اسم الدواء + دولة المستخدم
+  Future<List<Map<String, dynamic>>> getAlternativesFor(String medName, {String? countryCode}) async {
     final db = await database;
+    final country = countryCode ?? await getCountryCode();
     return await db.query(
       'alternatives',
-      where: 'medication_name LIKE ? OR alternative_name LIKE ?',
-      whereArgs: ['%$medName%', '%$medName%'],
+      where: '(medication_name LIKE ? OR alternative_name LIKE ?) AND country_code = ?',
+      whereArgs: ['%$medName%', '%$medName%', country],
     );
   }
 
-  Future<List<Map<String, dynamic>>> getAlternativesByIngredient(String ingredient) async {
+  /// البحث عن بدائل محلية حسب المادة الفعالة + دولة المستخدم
+  Future<List<Map<String, dynamic>>> getAlternativesByIngredient(String ingredient, {String? countryCode}) async {
     final db = await database;
+    final country = countryCode ?? await getCountryCode();
     return await db.query(
       'alternatives',
-      where: 'active_ingredient LIKE ?',
-      whereArgs: ['%$ingredient%'],
+      where: 'active_ingredient LIKE ? AND country_code = ?',
+      whereArgs: ['%$ingredient%', country],
+    );
+  }
+
+  /// جلب كل البدائل المحلية لدولة المستخدم (بدون بحث)
+  Future<List<Map<String, dynamic>>> getAllAlternatives({String? countryCode}) async {
+    final db = await database;
+    final country = countryCode ?? await getCountryCode();
+    return await db.query(
+      'alternatives',
+      where: 'country_code = ?',
+      whereArgs: [country],
+      limit: 50,
+      orderBy: 'id DESC',
     );
   }
 

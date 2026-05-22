@@ -57,8 +57,7 @@ class _AlternativesScreenState extends State<AlternativesScreen> {
       } else {
         List<Map<String, dynamic>> data;
         if (query.isEmpty) {
-          final db = await DatabaseHelper.instance.database;
-          data = await db.query('alternatives', limit: 50, orderBy: 'id DESC');
+          data = await DatabaseHelper.instance.getAllAlternatives();
         } else {
           if (_searchByIngredient) {
             data = await DatabaseHelper.instance.getAlternativesByIngredient(query);
