@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -174,6 +174,15 @@ class DatabaseHelper {
       // إضافة الدولة المستهدفة للإعلانات
       try {
         await db.execute('ALTER TABLE ads ADD COLUMN target_country TEXT');
+      } catch (_) {}
+    }
+    if (oldVersion < 12) {
+      // إضافة أعمدة اشتراك المساعدين
+      try {
+        await db.execute('ALTER TABLE assistants ADD COLUMN subscription_expiry TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE assistants ADD COLUMN subscription_duration_days INTEGER DEFAULT 30');
       } catch (_) {}
     }
   }
@@ -374,6 +383,8 @@ class DatabaseHelper {
         can_manage_shortages INTEGER DEFAULT 1,
         can_manage_reps INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
+        subscription_expiry TEXT,
+        subscription_duration_days INTEGER DEFAULT 30,
         created_at TEXT NOT NULL
       )
     ''');
@@ -806,7 +817,16 @@ class DatabaseHelper {
   Future<int> insertAssistant(Map<String, dynamic> data) async {
     final db = await database;
     data['created_at'] = DateTime.now().toIso8601String();
+    data['subscription_duration_days'] ??= 30;
+    data['subscription_expiry'] ??= DateTime.now()
+        .add(Duration(days: data['subscription_duration_days'] as int))
+        .toIso8601String();
     return await db.insert('assistants', data);
+  }
+
+  Future<void> clearAssistantSession() async {
+    final db = await database;
+    await db.delete('settings', where: "key IN ('logged_in_assistant_id', 'assistant_session_token', 'assistant_session_expiry')");
   }
 
   Future<List<Map<String, dynamic>>> getAssistants() async {

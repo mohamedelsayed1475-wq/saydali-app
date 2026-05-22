@@ -13,6 +13,9 @@ import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/user_selection_screen.dart';
+import 'screens/assistant_pin_login_screen.dart';
+import 'widgets/subscription_guard.dart';
+import 'models/models.dart';
 import 'database/database_helper.dart';
 import 'utils/security_helper.dart';
 import 'services/sync_service.dart';
@@ -187,11 +190,53 @@ class _SplashScreenState extends State<SplashScreen>
 
   /// التحقق إذا كانت ميزة المساعدين مفعلة ثم التوجيه
   Future<void> _goToUserSelectionOrMain(BuildContext ctx) async {
-    final activated = await DatabaseHelper.instance.getSetting('assistants_activated');
-    final assistants = await DatabaseHelper.instance.getAssistants();
-    final hasActiveAssistants = assistants.any((a) => (a['is_active'] ?? 1) == 1);
+    final db = DatabaseHelper.instance;
+    final isAssistantDevice = await db.getSetting('is_assistant_device');
 
     if (!ctx.mounted) return;
+
+    if (isAssistantDevice == '1') {
+      // ── Assistant Device Flow ──
+      final assistantIdStr = await db.getSetting('logged_in_assistant_id');
+      final sessionToken = await db.getSetting('assistant_session_token');
+      final sessionExpiryStr = await db.getSetting('assistant_session_expiry');
+
+      if (assistantIdStr != null && sessionToken != null && sessionExpiryStr != null) {
+        final sessionExpiry = DateTime.tryParse(sessionExpiryStr);
+        if (sessionExpiry != null && DateTime.now().isBefore(sessionExpiry)) {
+          final assistantId = int.tryParse(assistantIdStr);
+          if (assistantId != null) {
+            final localDb = await db.database;
+            final result = await localDb.query('assistants', where: 'id = ?', whereArgs: [assistantId]);
+            if (result.isNotEmpty) {
+              final assistant = Assistant.fromMap(result.first);
+              if (assistant.isActive && !assistant.isSubscriptionExpired) {
+                // Auto login session matches and is valid!
+                ctx.read<CurrentUserProvider>().loginAsAssistant(assistant);
+                SyncService.instance.startPeriodicSync();
+                ScheduledSyncService.registerDevice();
+                Navigator.pushReplacement(
+                  ctx,
+                  MaterialPageRoute(builder: (_) => const MainScreen()),
+                );
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // If no valid session, redirect to the password/PIN entry screen
+      Navigator.pushReplacement(
+        ctx,
+        MaterialPageRoute(builder: (_) => const AssistantPinLoginScreen()),
+      );
+      return;
+    }
+
+    final activated = await db.getSetting('assistants_activated');
+    final assistants = await db.getAssistants();
+    final hasActiveAssistants = assistants.any((a) => (a['is_active'] ?? 1) == 1);
 
     if (activated == '1' && hasActiveAssistants) {
       // عرض شاشة اختيار المستخدم
@@ -344,10 +389,11 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.dark,
-      appBar: AppBar(
-        backgroundColor: AppColors.darkCard,
+    return SubscriptionGuard(
+      child: Scaffold(
+        backgroundColor: AppColors.dark,
+        appBar: AppBar(
+          backgroundColor: AppColors.darkCard,
         title: Row(
           children: [
             const Text('💊', style: TextStyle(fontSize: 22)),
@@ -480,8 +526,9 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// قائمة خيارات المستخدم
   void _showUserMenu(CurrentUserProvider userProvider) {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
 import '../database/database_helper.dart';
+import '../models/models.dart';
 
 /// خدمة المزامنة متعددة الأجهزة عبر Supabase
 /// تعمل بنظام Local-First: حفظ محلي أولاً ثم رفع للسحابة
@@ -215,6 +216,33 @@ class SyncService {
   /// مزامنة شاملة (رفع + سحب)
   Future<void> syncAll() async {
     if (_isSyncing || !isConfigured) return;
+
+    final isAssistantDevice = await DatabaseHelper.instance.getSetting('is_assistant_device');
+    if (isAssistantDevice == '1') {
+      final assistantIdStr = await DatabaseHelper.instance.getSetting('logged_in_assistant_id');
+      if (assistantIdStr != null && assistantIdStr.isNotEmpty) {
+        final assistantId = int.tryParse(assistantIdStr);
+        if (assistantId != null) {
+          final db = await DatabaseHelper.instance.database;
+          final result = await db.query('assistants', where: 'id = ?', whereArgs: [assistantId]);
+          if (result.isNotEmpty) {
+            final assistant = Assistant.fromMap(result.first);
+            if (assistant.isSubscriptionExpired || !assistant.isActive) {
+              debugPrint('🛑 Sync blocked: assistant is expired or inactive');
+              await DatabaseHelper.instance.clearAssistantSession();
+              stopSync();
+              return;
+            }
+          } else {
+            await DatabaseHelper.instance.clearAssistantSession();
+            stopSync();
+            return;
+          }
+        }
+      } else {
+        return;
+      }
+    }
 
     // تحميل pharmacy_cloud_id لو مش محمل
     if (_pharmacyCloudId == null) {
@@ -719,18 +747,33 @@ class SyncService {
             'can_manage_shortages': a['can_manage_shortages'] == 1,
             'can_manage_reps': a['can_manage_reps'] == 1,
             'is_active': a['is_active'] == 1,
+            'subscription_expiry': a['subscription_expiry'],
+            'subscription_duration_days': a['subscription_duration_days'],
           };
 
           if (existing.isEmpty) {
-            await http
+            final res = await http
                 .post(
                   Uri.parse('$_url/pharmacy_assistants'),
                   headers: _headers,
                   body: jsonEncode(data),
                 )
                 .timeout(const Duration(seconds: 10));
+            if (res.statusCode == 400) {
+              debugPrint('⚠️ Schema mismatch on post. Retrying assistant sync without subscription fields.');
+              final fallbackData = Map<String, dynamic>.from(data)
+                ..remove('subscription_expiry')
+                ..remove('subscription_duration_days');
+              await http
+                  .post(
+                    Uri.parse('$_url/pharmacy_assistants'),
+                    headers: _headers,
+                    body: jsonEncode(fallbackData),
+                  )
+                  .timeout(const Duration(seconds: 10));
+            }
           } else {
-            await http
+            final res = await http
                 .patch(
                   Uri.parse(
                       '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
@@ -738,6 +781,20 @@ class SyncService {
                   body: jsonEncode(data),
                 )
                 .timeout(const Duration(seconds: 10));
+            if (res.statusCode == 400) {
+              debugPrint('⚠️ Schema mismatch on patch. Retrying assistant sync without subscription fields.');
+              final fallbackData = Map<String, dynamic>.from(data)
+                ..remove('subscription_expiry')
+                ..remove('subscription_duration_days');
+              await http
+                  .patch(
+                    Uri.parse(
+                        '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
+                    headers: _headers,
+                    body: jsonEncode(fallbackData),
+                  )
+                  .timeout(const Duration(seconds: 10));
+            }
           }
         }
       } catch (e) {
@@ -764,7 +821,7 @@ class SyncService {
         for (final item in items) {
           final cloudName = item['name'];
           // تحديث الصلاحيات وحالة النشاط
-          await db.update('assistants', {
+          final updateData = {
             'pin': item['pin'],
             'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
             'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
@@ -774,7 +831,14 @@ class SyncService {
             'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
             'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
             'is_active': item['is_active'] == true ? 1 : 0,
-          }, where: 'name = ?', whereArgs: [cloudName]);
+          };
+          if (item.containsKey('subscription_expiry')) {
+            updateData['subscription_expiry'] = item['subscription_expiry'];
+          }
+          if (item.containsKey('subscription_duration_days')) {
+            updateData['subscription_duration_days'] = item['subscription_duration_days'];
+          }
+          await db.update('assistants', updateData, where: 'name = ?', whereArgs: [cloudName]);
         }
       }
     } catch (e) {

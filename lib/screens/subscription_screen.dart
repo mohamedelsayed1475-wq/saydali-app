@@ -8,7 +8,7 @@ import '../widgets/common_widgets.dart';
 import '../services/supabase_service.dart';
 import '../utils/security_helper.dart';
 import '../main.dart';
-import 'user_selection_screen.dart';
+import 'assistant_pin_login_screen.dart';
 import '../services/sync_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -193,6 +193,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                       'can_manage_shortages': a['can_manage_shortages'] == true ? 1 : 0,
                       'can_manage_reps': a['can_manage_reps'] == true ? 1 : 0,
                       'is_active': a['is_active'] == true ? 1 : 0,
+                      'subscription_expiry': a['subscription_expiry'] ?? DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+                      'subscription_duration_days': a['subscription_duration_days'] ?? 30,
                       'created_at': DateTime.now().toIso8601String(),
                     });
                   }
@@ -206,18 +208,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     Navigator.pushAndRemoveUntil(
                       context,
                       MaterialPageRoute(
-                        builder: (navCtx) => UserSelectionScreen(
-                          onOwnerSelected: () {
-                            SyncService.instance.registerPharmacy().then((_) {
-                              SyncService.instance.startPeriodicSync();
-                            });
-                            Navigator.pushReplacement(navCtx, MaterialPageRoute(builder: (_) => const MainScreen()));
-                          },
-                          onAssistantSelected: () {
-                            SyncService.instance.startPeriodicSync();
-                            Navigator.pushReplacement(navCtx, MaterialPageRoute(builder: (_) => const MainScreen()));
-                          },
-                        ),
+                        builder: (_) => const AssistantPinLoginScreen(),
                       ),
                       (route) => false,
                     );

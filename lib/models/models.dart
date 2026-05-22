@@ -239,6 +239,8 @@ class Assistant {
   final bool canManageShortages;
   final bool canManageReps;
   final bool isActive;
+  final DateTime? subscriptionExpiry;
+  final int subscriptionDurationDays;
   final DateTime createdAt;
 
   Assistant({
@@ -255,6 +257,8 @@ class Assistant {
     this.canManageShortages = true,
     this.canManageReps = false,
     this.isActive = true,
+    this.subscriptionExpiry,
+    this.subscriptionDurationDays = 30,
     required this.createdAt,
   });
 
@@ -272,6 +276,10 @@ class Assistant {
         canManageShortages: (map['can_manage_shortages'] ?? 1) == 1,
         canManageReps: (map['can_manage_reps'] ?? 0) == 1,
         isActive: (map['is_active'] ?? 1) == 1,
+        subscriptionExpiry: map['subscription_expiry'] != null
+            ? DateTime.tryParse(map['subscription_expiry'].toString())
+            : null,
+        subscriptionDurationDays: map['subscription_duration_days'] ?? 30,
         createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
 
@@ -289,7 +297,12 @@ class Assistant {
         'can_manage_shortages': canManageShortages ? 1 : 0,
         'can_manage_reps': canManageReps ? 1 : 0,
         'is_active': isActive ? 1 : 0,
+        'subscription_expiry': subscriptionExpiry?.toIso8601String(),
+        'subscription_duration_days': subscriptionDurationDays,
       };
+
+  bool get isSubscriptionExpired =>
+      subscriptionExpiry != null && DateTime.now().isAfter(subscriptionExpiry!);
 
   String get roleLabel => role == 'owner' ? 'المالك 👑' : 'مساعد 👤';
 

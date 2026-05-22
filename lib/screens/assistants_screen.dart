@@ -82,6 +82,10 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     bool canManageReps = existing?.canManageReps ?? false;
     bool isActive = existing?.isActive ?? true;
 
+    int subscriptionDurationDays = existing?.subscriptionDurationDays ?? 30;
+    DateTime subscriptionExpiry = existing?.subscriptionExpiry ??
+        DateTime.now().add(Duration(days: subscriptionDurationDays));
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -129,6 +133,163 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                   controller: pinCtrl,
                   keyboardType: TextInputType.number,
                   maxLength: 4,
+                ),
+                const SizedBox(height: 16),
+
+                // ── الاشتراك والصلاحية ──
+                const Text('📅 صلاحية الاشتراك والنشاط',
+                    style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.dark,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('تاريخ انتهاء الصلاحية:',
+                              style: TextStyle(color: AppColors.textLight, fontSize: 12)),
+                          Text(
+                            _formatDate(subscriptionExpiry),
+                            style: TextStyle(
+                              color: subscriptionExpiry.isBefore(DateTime.now())
+                                  ? AppColors.danger
+                                  : AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _durationBtn(30, '٣٠ يوم', subscriptionDurationDays, (val) {
+                            setBS(() {
+                              subscriptionDurationDays = val;
+                              subscriptionExpiry = DateTime.now().add(Duration(days: val));
+                            });
+                          }),
+                          _durationBtn(90, '٩٠ يوم', subscriptionDurationDays, (val) {
+                            setBS(() {
+                              subscriptionDurationDays = val;
+                              subscriptionExpiry = DateTime.now().add(Duration(days: val));
+                            });
+                          }),
+                          _durationBtn(365, 'سنة', subscriptionDurationDays, (val) {
+                            setBS(() {
+                              subscriptionDurationDays = val;
+                              subscriptionExpiry = DateTime.now().add(Duration(days: val));
+                            });
+                          }),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: subscriptionExpiry,
+                                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                                    lastDate: DateTime.now().add(const Duration(days: 3650)),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: const ColorScheme.dark(
+                                            primary: AppColors.primary,
+                                            onPrimary: Colors.white,
+                                            surface: AppColors.darkCard,
+                                            onSurface: AppColors.textColor,
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  if (picked != null) {
+                                    setBS(() {
+                                      subscriptionExpiry = picked;
+                                      subscriptionDurationDays = picked.difference(DateTime.now()).inDays;
+                                      if (subscriptionDurationDays < 0) {
+                                        subscriptionDurationDays = 0;
+                                      }
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: (subscriptionDurationDays != 30 &&
+                                            subscriptionDurationDays != 90 &&
+                                            subscriptionDurationDays != 365)
+                                        ? AppColors.primary.withValues(alpha: 0.15)
+                                        : AppColors.darkCard,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: (subscriptionDurationDays != 30 &&
+                                              subscriptionDurationDays != 90 &&
+                                              subscriptionDurationDays != 365)
+                                          ? AppColors.primary
+                                          : AppColors.darkBorder,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Text(
+                                      'تاريخ مخصص',
+                                      style: TextStyle(
+                                          color: AppColors.textColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (existing != null && subscriptionExpiry.isBefore(DateTime.now())) ...[
+                        const SizedBox(height: 12),
+                        const Divider(color: AppColors.darkBorder),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              setBS(() {
+                                subscriptionExpiry = DateTime.now().add(Duration(days: subscriptionDurationDays));
+                              });
+                              showSnack(ctx, 'تم تمديد صلاحية المساعد 📅');
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: const Icon(Icons.autorenew_rounded, color: Colors.white, size: 18),
+                            label: const Text(
+                              'تجديد الاشتراك والتفعيل',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -189,7 +350,16 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                     icon: isActive ? Icons.check_circle_rounded : Icons.block_rounded,
                     title: 'حساب نشط (يمكنه تسجيل الدخول)',
                     value: isActive,
-                    onChanged: (v) => setBS(() => isActive = v),
+                    onChanged: (v) {
+                      if (v) {
+                        bool isReactivated = !existing.isActive;
+                        if (isReactivated && _currentCount >= _maxSlots) {
+                          showSnack(ctx, '⚠️ لقد تجاوزت الحد الأقصى للمساعدين النشطين ($_maxSlots). يرجى ترقية الاشتراك أو تعطيل مساعد آخر أولاً.', isError: true);
+                          return;
+                        }
+                      }
+                      setBS(() => isActive = v);
+                    },
                     isDanger: !isActive,
                   ),
                 ],
@@ -221,6 +391,18 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       return;
                     }
 
+                    // فحص الحد الأقصى للمساعدين النشطين عند التفعيل أو الإضافة كنشط
+                    if (isActive) {
+                      bool isNewAndActive = (existing == null);
+                      bool isReactivated = (existing != null && !existing.isActive);
+                      if (isNewAndActive || isReactivated) {
+                        if (_currentCount >= _maxSlots) {
+                          showSnack(ctx, '⚠️ لقد تجاوزت الحد الأقصى للمساعدين النشطين ($_maxSlots). يرجى ترقية الاشتراك أو تعطيل مساعد آخر أولاً.', isError: true);
+                          return;
+                        }
+                      }
+                    }
+
                     final data = {
                       'name': name,
                       'phone': phoneCtrl.text.trim(),
@@ -234,6 +416,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       'can_manage_shortages': canManageShortages ? 1 : 0,
                       'can_manage_reps': canManageReps ? 1 : 0,
                       'is_active': isActive ? 1 : 0,
+                      'subscription_expiry': subscriptionExpiry.toIso8601String(),
+                      'subscription_duration_days': subscriptionDurationDays,
                     };
 
                     if (existing == null) {
@@ -307,6 +491,90 @@ class _AssistantsScreenState extends State<AssistantsScreen>
             value: value,
             onChanged: onChanged,
             activeThumbColor: isDanger ? AppColors.danger : AppColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _durationBtn(int val, String label, int currentVal, ValueChanged<int> onTap) {
+    final active = currentVal == val;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: InkWell(
+          onTap: () => onTap(val),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: active ? AppColors.primary.withValues(alpha: 0.15) : AppColors.darkCard,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: active ? AppColors.primary : AppColors.darkBorder,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: active ? AppColors.primary : AppColors.textColor,
+                  fontSize: 11,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildAssistantSubscriptionBanner(Assistant assistant) {
+    if (assistant.subscriptionExpiry == null) {
+      return const SizedBox.shrink();
+    }
+
+    final expiry = assistant.subscriptionExpiry!;
+    final isExpired = assistant.isSubscriptionExpired;
+    final dateStr = _formatDate(expiry);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isExpired
+            ? AppColors.danger.withValues(alpha: 0.1)
+            : AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isExpired
+              ? AppColors.danger.withValues(alpha: 0.3)
+              : AppColors.primary.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isExpired ? Icons.warning_amber_rounded : Icons.timer_outlined,
+            size: 14,
+            color: isExpired ? AppColors.danger : AppColors.primary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              isExpired
+                  ? '⚠️ انتهى الاشتراك في: $dateStr'
+                  : '📅 ينتهي الاشتراك في: $dateStr',
+              style: TextStyle(
+                color: isExpired ? AppColors.danger : AppColors.textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -1305,6 +1573,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                 Text('📱 ${assistant.phone}',
                     style: const TextStyle(
                         color: AppColors.textMuted, fontSize: 11)),
+              _buildAssistantSubscriptionBanner(assistant),
             ],
           ),
         ),
@@ -1315,6 +1584,12 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   Future<void> _toggleActive(Assistant assistant) async {
     if (assistant.id == null) return;
     final newState = assistant.isActive ? 0 : 1;
+    if (newState == 1) {
+      if (_currentCount >= _maxSlots) {
+        showSnack(context, '⚠️ لا توجد أماكن متاحة لتفعيل هذا المساعد. الحد الأقصى: $_maxSlots. يرجى ترقية الاشتراك أو تعطيل مساعد آخر أولاً.', isError: true);
+        return;
+      }
+    }
     await DatabaseHelper.instance
         .updateAssistant(assistant.id!, {'is_active': newState});
     await DatabaseHelper.instance.logActivity(
