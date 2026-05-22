@@ -342,34 +342,58 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                   children: [
                     Expanded(
                       child: Autocomplete<Map<String, dynamic>>(
-                        optionsBuilder: (v) {
+                        optionsBuilder: (v) async {
                           if (v.text.isEmpty)
                             return const Iterable<Map<String, dynamic>>.empty();
-                          
+
                           final query = v.text;
-                          
-                          // تقييم وتصفية العناصر
-                          final matches = _suggestions.map((s) {
+
+                          // ① اقتراحات القاموس المحلي
+                          final dictMatches = _suggestions.map((s) {
                             final en = s['enName']?.toString() ?? '';
                             final ar = s['arName']?.toString() ?? '';
                             final act = s['activeIngredient']?.toString() ?? '';
                             final bar = s['barcode']?.toString() ?? '';
-
-                            // نجيب أعلى تقييم بين الحقول المختلفة
                             final scoreEn = FuzzySearch.getScore(query, en);
                             final scoreAr = FuzzySearch.getScore(query, ar);
                             final scoreAct = FuzzySearch.getScore(query, act);
-                            final scoreBar = bar.contains(query.trim()) ? 1000 : 0; // الباركود لازم يتطابق
-
+                            final scoreBar = bar.contains(query.trim()) ? 1000 : 0;
                             final maxScore = [scoreEn, scoreAr, scoreAct, scoreBar].reduce((a, b) => a > b ? a : b);
-
                             return {'item': s, 'score': maxScore};
-                          }).where((element) => (element['score'] as int) > 0).toList();
+                          }).where((e) => (e['score'] as int) > 0).toList();
 
-                          // الترتيب حسب الأعلى تقييماً (الأكثر صلة)
-                          matches.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
+                          // ② اقتراحات البدائل المحلية حسب الدولة
+                          final altNames = await DatabaseHelper.instance
+                              .getAlternativeSuggestions(query);
+                          final existingEnNames = _suggestions
+                              .map((s) => (s['enName']?.toString() ?? '').toLowerCase())
+                              .toSet();
+                          for (final name in altNames) {
+                            if (!existingEnNames.contains(name.toLowerCase())) {
+                              final score = FuzzySearch.getScore(query, name);
+                              if (score > 0) {
+                                dictMatches.add({
+                                  'item': {
+                                    'enName': name,
+                                    'arName': '',
+                                    'activeIngredient': '',
+                                    'company': '🌍 بديل محلي',
+                                    'barcode': '',
+                                    'price': 0,
+                                  },
+                                  'score': score,
+                                });
+                              }
+                            }
+                          }
 
-                          return matches.map((e) => e['item'] as Map<String, dynamic>).take(15);
+                          // ③ الترتيب حسب الأعلى تقييماً
+                          dictMatches.sort((a, b) =>
+                              (b['score'] as int).compareTo(a['score'] as int));
+
+                          return dictMatches
+                              .map((e) => e['item'] as Map<String, dynamic>)
+                              .take(15);
                         },
                         displayStringForOption: (option) =>
                             option['enName']?.toString() ?? '',

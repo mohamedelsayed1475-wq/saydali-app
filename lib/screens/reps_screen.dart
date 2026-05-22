@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
@@ -95,6 +96,44 @@ class _RepsScreenState extends State<RepsScreen> {
                         fontWeight: FontWeight.w700,
                         fontSize: 16)),
                 const SizedBox(height: 16),
+                // ―― زر جهات الاتصال ――
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      try {
+                        if (await FlutterContacts.requestPermission(readonly: true)) {
+                          final contact = await FlutterContacts.openExternalPick();
+                          if (contact != null) {
+                            final fullContact = await FlutterContacts.getContact(contact.id);
+                            if (fullContact != null) {
+                              setBS(() {
+                                nameCtrl.text = fullContact.displayName;
+                                if (fullContact.phones.isNotEmpty) {
+                                  phoneCtrl.text = fullContact.phones.first.number;
+                                }
+                              });
+                            }
+                          }
+                        } else {
+                          showSnack(ctx, '⛔ تم رفض إذن جهات الاتصال', isError: true);
+                        }
+                      } catch (e) {
+                        showSnack(ctx, 'تعذر فتح جهات الاتصال', isError: true);
+                      }
+                    },
+                    icon: const Icon(Icons.contacts_rounded, size: 18),
+                    label: const Text('إضافة من جهات الاتصال'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 AppTextField(hint: 'اسم المندوب *', controller: nameCtrl),
                 const SizedBox(height: 10),
                 AppTextField(hint: 'الشركة', controller: companyCtrl),

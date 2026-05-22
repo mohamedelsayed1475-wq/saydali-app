@@ -215,6 +215,16 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
         for (final id in shortageMap[key]!) {
           await db.updateShortage(id, {'status': endDay ? 'stubborn' : 'pending'});
         }
+      } else {
+        // ▌ الدواء مش في قائمة النواقص → ضيفه تلقائياً كناقص جديد
+        await db.insertShortage({
+          'name': item.drugName.trim(),
+          'company': item.company.isNotEmpty ? item.company : 'غير محدد',
+          'quantity': item.quantity,
+          'status': 'pending',
+          'is_urgent': 0,
+          'notes': 'تم الإضافة تلقائياً - قال المندوب ${_response!.repName}: مش موجود',
+        });
       }
     }
 

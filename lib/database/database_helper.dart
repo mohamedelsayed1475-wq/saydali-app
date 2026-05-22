@@ -1303,6 +1303,34 @@ class DatabaseHelper {
     );
   }
 
+  /// بحث سريع في جدول البدائل لاقتراح أسماء الأدوية حسب الدولة (للاستخدام في شاشة النواقص)
+  Future<List<String>> getAlternativeSuggestions(String query, {String? countryCode}) async {
+    if (query.trim().isEmpty) return [];
+    final db = await database;
+    final country = countryCode ?? await getCountryCode();
+    final q = '%${query.trim()}%';
+    try {
+      final rows = await db.rawQuery(
+        '''SELECT DISTINCT medication_name, alternative_name FROM alternatives
+           WHERE (medication_name LIKE ? OR alternative_name LIKE ? OR active_ingredient LIKE ?)
+             AND country_code = ?
+           LIMIT 100''',
+        [q, q, q, country],
+      );
+      final names = <String>{};
+      for (final row in rows) {
+        final med = row['medication_name']?.toString() ?? '';
+        final alt = row['alternative_name']?.toString() ?? '';
+        if (med.isNotEmpty) names.add(med);
+        if (alt.isNotEmpty) names.add(alt);
+      }
+      return names.toList();
+    } catch (e) {
+      debugPrint('❌ getAlternativeSuggestions error: $e');
+      return [];
+    }
+  }
+
   Future<int> deleteAlternativeLink(int id) async {
     final db = await database;
     return await db.delete('alternatives', where: 'id = ?', whereArgs: [id]);
