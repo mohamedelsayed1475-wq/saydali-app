@@ -22,7 +22,6 @@ import 'package:flutter/services.dart';
 import 'scanner_screen.dart';
 import 'rep_message_parser_screen.dart';
 import 'alternatives_screen.dart';
-import '../services/open_fda_service.dart';
 
 class ShortagesScreen extends StatefulWidget {
   const ShortagesScreen({super.key});
@@ -39,7 +38,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   List<Map<String, dynamic>> _suggestions = [];
   final _searchController = TextEditingController();
   Timer? _refreshTimer;
-  TextEditingController? _autocompleteCtrl;
 
   final _filters = [
     ('all', 'الكل'),
@@ -246,92 +244,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
-  Future<void> _searchFdaAndSelect(
-    BuildContext context,
-    String query,
-    TextEditingController nameCtrl,
-    TextEditingController companyCtrl,
-    StateSetter setBS,
-    TextEditingController? autocompleteCtrl,
-  ) async {
-    if (query.trim().isEmpty) {
-      showSnack(context, 'الرجاء إدخال اسم الدواء للبحث', isError: true);
-      return;
-    }
-    showDialog(
-      context: context,
-      builder: (dialogCtx) {
-        return FutureBuilder<List<FdaDrugModel>>(
-          future: OpenFdaService.instance.searchDrug(query),
-          builder: (ctx, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return AlertDialog(
-                backgroundColor: AppColors.darkCard,
-                content: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: AppColors.primary),
-                    SizedBox(height: 16),
-                    Text('جاري البحث في منصة FDA العالمية...', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-                  ],
-                ),
-              );
-            }
-            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-              return AlertDialog(
-                backgroundColor: AppColors.darkCard,
-                title: const Text('البحث في المنصات العالمية', style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-                content: const Text('لم يتم العثور على نتائج في منصة FDA أو حدث خطأ في الاتصال.', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogCtx),
-                    child: const Text('إغلاق', style: TextStyle(color: AppColors.primary, fontFamily: 'Cairo')),
-                  ),
-                ],
-              );
-            }
 
-            final results = snapshot.data!;
-            return AlertDialog(
-              backgroundColor: AppColors.darkCard,
-              title: Text('نتائج البحث عن "$query"', style: const TextStyle(color: Colors.white, fontFamily: 'Cairo')),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: results.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppColors.darkBorder),
-                  itemBuilder: (context, index) {
-                    final drug = results[index];
-                    return ListTile(
-                      title: Text(drug.brandName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                      subtitle: Text(drug.genericName, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                      onTap: () {
-                        setBS(() {
-                          nameCtrl.text = drug.brandName;
-                          if (autocompleteCtrl != null) {
-                            autocompleteCtrl.text = drug.brandName;
-                          }
-                          companyCtrl.text = drug.genericName;
-                        });
-                        Navigator.pop(dialogCtx);
-                      },
-                    );
-                  },
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: const Text('إغلاق', style: TextStyle(color: AppColors.primary, fontFamily: 'Cairo')),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   /// ▌ حفظ دواء جديد في القاموس المحلي تلقائياً
   Future<void> _saveDrugToDictionary(String drugName, {String? company}) async {
@@ -431,9 +344,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                   children: [
                     Expanded(
                       child: Autocomplete<Map<String, dynamic>>(
-                        optionsBuilder: (v) async {
-                          if (v.text.isEmpty)
+                        optionsBuilder: (v) {
+                          if (v.text.isEmpty) {
                             return const Iterable<Map<String, dynamic>>.empty();
+                          }
 
                           final query = v.text;
 
@@ -451,72 +365,23 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                             return {'item': s, 'score': maxScore};
                           }).where((e) => (e['score'] as int) > 0).toList();
 
-                          // ② اقتراحات البدائل المحلية حسب الدولة
-                          final altNames = await DatabaseHelper.instance
-                              .getAlternativeSuggestions(query);
-                          final existingEnNames = _suggestions
-                              .map((s) => (s['enName']?.toString() ?? '').toLowerCase())
-                              .toSet();
-                          for (final name in altNames) {
-                            if (!existingEnNames.contains(name.toLowerCase())) {
-                              final score = FuzzySearch.getScore(query, name);
-                              if (score > 0) {
-                                dictMatches.add({
-                                  'item': {
-                                    'enName': name,
-                                    'arName': '',
-                                    'activeIngredient': '',
-                                    'company': '🌍 بديل محلي',
-                                    'barcode': '',
-                                    'price': 0,
-                                  },
-                                  'score': score,
-                                });
-                              }
-                            }
-                          }
-
-                          // ③ الترتيب حسب الأعلى تقييماً
+                          // الترتيب حسب الأعلى تقييماً
                           dictMatches.sort((a, b) =>
                               (b['score'] as int).compareTo(a['score'] as int));
 
-                          final resultsList = dictMatches
+                          return dictMatches
                               .map((e) => e['item'] as Map<String, dynamic>)
-                              .take(14)
-                              .toList();
-
-                          if (query.trim().isNotEmpty) {
-                            resultsList.add({
-                              'enName': '🔍 ابحث عن "$query" في المنصات العالمية (FDA)',
-                              'arName': '',
-                              'activeIngredient': 'اضغط للبحث عبر الإنترنت في FDA',
-                              'company': 'البحث السريع',
-                              'isFdaSearchAction': true,
-                              'searchQuery': query,
-                            });
-                          }
-
-                          return resultsList;
+                              .take(14);
                         },
                         displayStringForOption: (option) =>
                             option['enName']?.toString() ?? '',
                         onSelected: (s) {
-                          if (s['isFdaSearchAction'] == true) {
-                            final q = s['searchQuery']?.toString() ?? '';
-                            if (_autocompleteCtrl != null) {
-                              _autocompleteCtrl!.text = q;
-                            }
-                            nameCtrl.text = q;
-                            _searchFdaAndSelect(context, q, nameCtrl, companyCtrl, setBS, _autocompleteCtrl);
-                          } else {
-                            nameCtrl.text = s['enName']?.toString() ?? '';
-                            if (s['company'] != null && s['company'].toString() != 'غير محدد' && !s['company'].toString().contains('بديل') && !s['company'].toString().contains('منصة') && !s['company'].toString().contains('البحث')) {
-                              companyCtrl.text = s['company'].toString();
-                            }
+                          nameCtrl.text = s['enName']?.toString() ?? '';
+                          if (s['company'] != null && s['company'].toString() != 'غير محدد') {
+                            companyCtrl.text = s['company'].toString();
                           }
                         },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                          _autocompleteCtrl = ctrl;
                           if (existing != null &&
                               ctrl.text.isEmpty &&
                               existing.name.isNotEmpty)
@@ -555,7 +420,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                     final en = option['enName']?.toString() ?? '';
                                     final ar = option['arName']?.toString() ?? '';
                                     final act = option['activeIngredient']?.toString() ?? '';
-                                    final isAction = option['isFdaSearchAction'] == true;
 
                                     return InkWell(
                                       onTap: () {
@@ -572,19 +436,15 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                               children: [
                                                 Expanded(
                                                   child: Text(en,
-                                                      style: TextStyle(
-                                                          color: isAction ? AppColors.primary : Colors.white,
+                                                      style: const TextStyle(
+                                                          color: Colors.white,
                                                           fontWeight: FontWeight.bold,
-                                                          fontSize: isAction ? 13 : 14)),
+                                                          fontSize: 14)),
                                                 ),
-                                                if (option['company'] != null && option['company'].toString().isNotEmpty)
+                                                if (option['company'] != null && option['company'].toString().isNotEmpty && option['company'].toString() != 'غير محدد')
                                                   Text(option['company'].toString(),
-                                                      style: TextStyle(
-                                                          color: isAction 
-                                                              ? AppColors.primary 
-                                                              : option['company'].toString().contains('بديل') 
-                                                                  ? Colors.orangeAccent
-                                                                  : AppColors.textMuted,
+                                                      style: const TextStyle(
+                                                          color: AppColors.textMuted,
                                                           fontSize: 10,
                                                           fontWeight: FontWeight.bold)),
                                               ],
@@ -596,10 +456,9 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                                                       fontSize: 12)),
                                             if (act.isNotEmpty)
                                               Text(act,
-                                                  style: TextStyle(
-                                                      color: isAction ? AppColors.primary.withValues(alpha: 0.7) : AppColors.textMuted,
-                                                      fontSize: 11,
-                                                      fontStyle: isAction ? FontStyle.italic : FontStyle.normal)),
+                                                  style: const TextStyle(
+                                                      color: AppColors.textMuted,
+                                                      fontSize: 11)),
                                           ],
                                         ),
                                       ),
@@ -641,63 +500,10 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.darkBorder),
                       ),
-                      child: Builder(
-                        builder: (buttonCtx) => IconButton(
-                          icon: const Icon(Icons.search, color: Colors.blue),
-                          onPressed: () async {
-                            final query = nameCtrl.text.trim();
-                            if (query.isEmpty) {
-                              showSnack(context, 'الرجاء إدخال اسم الدواء للبحث', isError: true);
-                              return;
-                            }
-                            
-                            final RenderBox button = buttonCtx.findRenderObject() as RenderBox;
-                            final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-                            final RelativeRect position = RelativeRect.fromRect(
-                              Rect.fromPoints(
-                                button.localToGlobal(Offset.zero, ancestor: overlay),
-                                button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
-                              ),
-                              Offset.zero & overlay.size,
-                            );
-
-                            final choice = await showMenu<String>(
-                              context: context,
-                              position: position,
-                              color: AppColors.darkCard,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              items: const [
-                                PopupMenuItem(
-                                  value: 'fda',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.public, color: AppColors.primary, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('البحث في المنصات العالمية (FDA)', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'google',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.image, color: Colors.blue, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('بحث عن صور في جوجل', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            );
-
-                            if (choice == 'fda') {
-                              _searchFdaAndSelect(context, query, nameCtrl, companyCtrl, setBS, _autocompleteCtrl);
-                            } else if (choice == 'google') {
-                              _searchGoogleImages(query);
-                            }
-                          },
-                          tooltip: 'خيارات البحث',
-                        ),
+                      child: IconButton(
+                        icon: const Icon(Icons.search, color: Colors.blue),
+                        onPressed: () => _searchGoogleImages(nameCtrl.text),
+                        tooltip: 'بحث في جوجل (صور)',
                       ),
                     ),
                   ],
