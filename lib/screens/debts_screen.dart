@@ -917,8 +917,54 @@ class _DebtsScreenState extends State<DebtsScreen> {
       ),
     );
 
-    await Printing.sharePdf(
-        bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('خيارات إيصال الديون 🧾', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+        content: const Text(
+          'اختر طريقة تصدير أو طباعة إيصال الديون:',
+          style: TextStyle(color: AppColors.textLight, fontFamily: 'Cairo', fontSize: 13),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Printing.layoutPdf(
+                  onLayout: (format) async => pdf.save(),
+                  name: 'receipt_${customer.name}.pdf');
+            },
+            icon: const Icon(Icons.print_rounded, size: 18),
+            label: const Text('طباعة حرارية 🖨️', style: TextStyle(fontFamily: 'Cairo')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              minimumSize: const Size(200, 42),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Printing.sharePdf(
+                  bytes: await pdf.save(), filename: 'receipt_${customer.name}.pdf');
+            },
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: const Text('مشاركة الإيصال 📄', style: TextStyle(fontFamily: 'Cairo')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              minimumSize: const Size(200, 42),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إغلاق', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _launchWhatsApp(String? phone, double debt, String name) async {

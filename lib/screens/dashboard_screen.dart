@@ -13,6 +13,8 @@ import 'invoice_screen.dart';
 import 'documents_screen.dart';
 import 'statistics_screen.dart';
 import 'rep_message_parser_screen.dart';
+import 'medication_expiry_screen.dart';
+import 'alternatives_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -77,14 +79,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         DatabaseHelper.instance.getShortageStats(),
         DatabaseHelper.instance.getTotalDebt(),
         DatabaseHelper.instance.getCurrency(),
+        DatabaseHelper.instance.getExpiringCount(3),
       ]);
 
       final stats = results[0] as Map<String, int>;
       final debt = results[1] as double;
       final currency = results[2] as String;
+      final expiringCount = results[3] as int;
 
       // بناء التنبيهات الذكية
       final alerts = <Map<String, dynamic>>[];
+
+      // صلاحية الأدوية
+      if (expiringCount > 0) {
+        alerts.add({
+          'icon': '⚠️',
+          'title': 'يوجد $expiringCount صنف قارب على انتهاء الصلاحية!',
+          'subtitle': 'خلال 3 أشهر - يرجى مراجعة مرتجعات الشركات.',
+          'color': AppColors.danger,
+        });
+      }
 
       // 1. نواقص معلقة > 12 ساعة
       final db = await DatabaseHelper.instance.database;
@@ -437,6 +451,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _quickAction('🪄', 'تحليل رسائل', AppColors.accent, () {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const RepMessageParserScreen()));
+              }),
+              _quickAction('📅', 'صلاحية الأدوية', const Color(0xFFEC4899), () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const MedicationExpiryScreen()));
+              }),
+              _quickAction('🔄', 'بدائل الأدوية', Colors.teal, () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AlternativesScreen()));
               }),
             ],
           ),

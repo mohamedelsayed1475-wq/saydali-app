@@ -21,6 +21,7 @@ import '../providers/current_user_provider.dart';
 import 'package:flutter/services.dart';
 import 'scanner_screen.dart';
 import 'rep_message_parser_screen.dart';
+import 'alternatives_screen.dart';
 
 class ShortagesScreen extends StatefulWidget {
   const ShortagesScreen({super.key});
@@ -1095,6 +1096,24 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     style: const TextStyle(
                         color: AppColors.textMuted, fontSize: 12)),
               ],
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AlternativesScreen(initialSearch: item.name),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.accent),
+                    label: const Text('البحث عن بديل 🔄', style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

@@ -358,3 +358,115 @@ class ActivityLogEntry {
     return 'منذ ${diff.inDays} يوم';
   }
 }
+
+// ── نموذج صلاحية الدواء ──────────────────────────────────────────────────
+class MedicationExpiry {
+  final int? id;
+  final String name;
+  final int quantity;
+  final DateTime expiryDate;
+  final String? supplierName;
+  final String? notes;
+  final DateTime createdAt;
+
+  MedicationExpiry({
+    this.id,
+    required this.name,
+    this.quantity = 1,
+    required this.expiryDate,
+    this.supplierName,
+    this.notes,
+    required this.createdAt,
+  });
+
+  factory MedicationExpiry.fromMap(Map<String, dynamic> map) => MedicationExpiry(
+        id: map['id'],
+        name: map['name'] ?? '',
+        quantity: map['quantity'] ?? 1,
+        expiryDate: DateTime.tryParse(map['expiry_date']?.toString() ?? '') ?? DateTime.now(),
+        supplierName: map['supplier_name'],
+        notes: map['notes'],
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'name': name,
+        'quantity': quantity,
+        'expiry_date': expiryDate.toIso8601String().substring(0, 10), // حفظ التاريخ بصيغة YYYY-MM-DD
+        'supplier_name': supplierName,
+        'notes': notes,
+      };
+
+  bool isNearExpiry(int months) {
+    final limit = DateTime.now().add(Duration(days: months * 30));
+    return expiryDate.isBefore(limit) && expiryDate.isAfter(DateTime.now());
+  }
+
+  bool get isExpired => expiryDate.isBefore(DateTime.now());
+}
+
+// ── نموذج المصروفات ──────────────────────────────────────────────────
+class Expense {
+  final int? id;
+  final String category;
+  final double amount;
+  final String? description;
+  final DateTime expenseDate;
+  final DateTime createdAt;
+
+  Expense({
+    this.id,
+    required this.category,
+    required this.amount,
+    this.description,
+    required this.expenseDate,
+    required this.createdAt,
+  });
+
+  factory Expense.fromMap(Map<String, dynamic> map) => Expense(
+        id: map['id'],
+        category: map['category'] ?? '',
+        amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
+        description: map['description'],
+        expenseDate: DateTime.tryParse(map['expense_date']?.toString() ?? '') ?? DateTime.now(),
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'category': category,
+        'amount': amount,
+        'description': description,
+        'expense_date': expenseDate.toIso8601String().substring(0, 10),
+      };
+}
+
+// ── نموذج بدائل الأدوية ──────────────────────────────────────────────────
+class Alternative {
+  final int? id;
+  final String medicationName;
+  final String alternativeName;
+  final String? activeIngredient;
+
+  Alternative({
+    this.id,
+    required this.medicationName,
+    required this.alternativeName,
+    this.activeIngredient,
+  });
+
+  factory Alternative.fromMap(Map<String, dynamic> map) => Alternative(
+        id: map['id'],
+        medicationName: map['medication_name'] ?? '',
+        alternativeName: map['alternative_name'] ?? '',
+        activeIngredient: map['active_ingredient'],
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'medication_name': medicationName,
+        'alternative_name': alternativeName,
+        'active_ingredient': activeIngredient,
+      };
+}

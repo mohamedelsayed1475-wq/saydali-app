@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -183,6 +183,48 @@ class DatabaseHelper {
       } catch (_) {}
       try {
         await db.execute('ALTER TABLE assistants ADD COLUMN subscription_duration_days INTEGER DEFAULT 30');
+      } catch (_) {}
+    }
+    if (oldVersion < 13) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS medication_expiries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            expiry_date TEXT NOT NULL,
+            supplier_name TEXT,
+            notes TEXT,
+            cloud_id TEXT,
+            is_synced INTEGER DEFAULT 0,
+            created_by TEXT,
+            created_at TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT,
+            expense_date TEXT NOT NULL,
+            created_by TEXT,
+            created_at TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS alternatives (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            medication_name TEXT NOT NULL,
+            alternative_name TEXT NOT NULL,
+            active_ingredient TEXT,
+            created_at TEXT NOT NULL
+          )
+        ''');
       } catch (_) {}
     }
   }
@@ -400,6 +442,46 @@ class DatabaseHelper {
         screen TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (assistant_id) REFERENCES assistants(id)
+      )
+    ''');
+
+    // ── جدول تواريخ انتهاء الصلاحية ──
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS medication_expiries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        expiry_date TEXT NOT NULL,
+        supplier_name TEXT,
+        notes TEXT,
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // ── جدول المصروفات ──
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL,
+        amount REAL NOT NULL,
+        description TEXT,
+        expense_date TEXT NOT NULL,
+        created_by TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // ── جدول بدائل الأدوية ──
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS alternatives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        medication_name TEXT NOT NULL,
+        alternative_name TEXT NOT NULL,
+        active_ingredient TEXT,
+        created_at TEXT NOT NULL
       )
     ''');
 
@@ -1005,6 +1087,8 @@ class DatabaseHelper {
     double totalDebts = 0;
     int pendingShortagesCount = 0;
     List<Map<String, dynamic>> topSellingItems = [];
+    double totalExpenses = 0;
+    List<Map<String, dynamic>> expensesByCategory = [];
 
     try {
       // 1. إجمالي المبيعات
@@ -1049,6 +1133,21 @@ class DatabaseHelper {
       
       topSellingItems = sortedItems.take(5).map((e) => {'name': e.key, 'qty': e.value}).toList();
 
+      // 5. إجمالي المصروفات
+      final expensesResult = await db.rawQuery('SELECT SUM(amount) as sum_amount FROM expenses');
+      if (expensesResult.isNotEmpty && expensesResult.first['sum_amount'] != null) {
+        totalExpenses = (expensesResult.first['sum_amount'] as num).toDouble();
+      }
+
+      // 6. المصروفات حسب الفئة
+      final expensesByCategoryRaw = await db.rawQuery(
+        'SELECT category, SUM(amount) as total FROM expenses GROUP BY category ORDER BY total DESC'
+      );
+      expensesByCategory = expensesByCategoryRaw.map((e) => {
+        'category': e['category'] as String,
+        'total': (e['total'] as num).toDouble(),
+      }).toList();
+
     } catch (e) {
       debugPrint('Error generating statistics: $e');
     }
@@ -1058,6 +1157,122 @@ class DatabaseHelper {
       'total_debts': totalDebts,
       'pending_shortages_count': pendingShortagesCount,
       'top_selling_items': topSellingItems,
+      'total_expenses': totalExpenses,
+      'expenses_by_category': expensesByCategory,
     };
+  }
+
+  // ─── ميزات صلاحية الأدوية ───
+  Future<int> insertMedicationExpiry(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = DateTime.now().toIso8601String();
+    return await db.insert('medication_expiries', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getMedicationExpiries() async {
+    final db = await database;
+    return await db.query('medication_expiries', orderBy: 'expiry_date ASC');
+  }
+
+  Future<int> updateMedicationExpiry(int id, Map<String, dynamic> data) async {
+    final db = await database;
+    return await db.update('medication_expiries', data, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> deleteMedicationExpiry(int id) async {
+    final db = await database;
+    return await db.delete('medication_expiries', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<int> getExpiringCount(int months) async {
+    final db = await database;
+    final limitDate = DateTime.now().add(Duration(days: months * 30)).toIso8601String();
+    final now = DateTime.now().toIso8601String();
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM medication_expiries WHERE expiry_date <= ? AND expiry_date >= ?',
+      [limitDate, now]
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // ─── ميزات المصروفات ───
+  Future<int> insertExpense(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = DateTime.now().toIso8601String();
+    return await db.insert('expenses', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getExpenses({String? category, String? startDate, String? endDate}) async {
+    final db = await database;
+    String whereClause = '';
+    List<dynamic> whereArgs = [];
+
+    if (category != null && category.isNotEmpty) {
+      whereClause += 'category = ?';
+      whereArgs.add(category);
+    }
+
+    if (startDate != null && startDate.isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'expense_date >= ?';
+      whereArgs.add(startDate);
+    }
+
+    if (endDate != null && endDate.isNotEmpty) {
+      if (whereClause.isNotEmpty) whereClause += ' AND ';
+      whereClause += 'expense_date <= ?';
+      whereArgs.add(endDate);
+    }
+
+    return await db.query(
+      'expenses',
+      where: whereClause.isEmpty ? null : whereClause,
+      whereArgs: whereClause.isEmpty ? null : whereArgs,
+      orderBy: 'expense_date DESC',
+    );
+  }
+
+  Future<int> deleteExpense(int id) async {
+    final db = await database;
+    return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<double> getTotalExpenses() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT SUM(amount) as sum_amount FROM expenses');
+    if (result.isNotEmpty && result.first['sum_amount'] != null) {
+      return (result.first['sum_amount'] as num).toDouble();
+    }
+    return 0.0;
+  }
+
+  // ─── بدائل الأدوية ───
+  Future<int> insertAlternative(Map<String, dynamic> data) async {
+    final db = await database;
+    data['created_at'] = DateTime.now().toIso8601String();
+    return await db.insert('alternatives', data);
+  }
+
+  Future<List<Map<String, dynamic>>> getAlternativesFor(String medName) async {
+    final db = await database;
+    return await db.query(
+      'alternatives',
+      where: 'medication_name LIKE ? OR alternative_name LIKE ?',
+      whereArgs: ['%$medName%', '%$medName%'],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getAlternativesByIngredient(String ingredient) async {
+    final db = await database;
+    return await db.query(
+      'alternatives',
+      where: 'active_ingredient LIKE ?',
+      whereArgs: ['%$ingredient%'],
+    );
+  }
+
+  Future<int> deleteAlternativeLink(int id) async {
+    final db = await database;
+    return await db.delete('alternatives', where: 'id = ?', whereArgs: [id]);
   }
 }

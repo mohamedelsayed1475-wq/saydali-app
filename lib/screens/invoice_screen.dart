@@ -633,9 +633,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 }
                               }
 
-                              await _generatePDF(
-                                  nameCtrl.text.trim(), items, subtotal,
-                                  discount, total);
                               // تسجيل النشاط
                               final userProvider = context.read<CurrentUserProvider>();
                               await DatabaseHelper.instance.logActivity(
@@ -647,8 +644,18 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               );
                               if (ctx.mounted) Navigator.pop(ctx);
                               await _load();
-                              if (mounted)
+                              if (mounted) {
                                 showSnack(context, 'تم حفظ الفاتورة ✅');
+                                _showPrintOptionsDialog(
+                                  customerName: nameCtrl.text.trim(),
+                                  items: items,
+                                  subtotal: subtotal,
+                                  discount: discount,
+                                  total: total,
+                                  paidAmount: paidAmount,
+                                  remaining: remaining,
+                                );
+                              }
                             },
                           ),
                         ],
@@ -1067,6 +1074,200 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         bytes: await pdf.save(), filename: 'invoice_$customerName.pdf');
   }
 
+  Future<void> _generateThermalPDF(String customerName,
+      List<Map<String, dynamic>> items, double subtotal, double discount,
+      double total, {double paidAmount = 0.0, double remaining = 0.0}) async {
+    final pdf = pw.Document();
+    final pharmacyName =
+        await DatabaseHelper.instance.getSetting('pharmacy_name') ??
+            'صيدلي PRO';
+    final arabicFont = await PdfGoogleFonts.cairoRegular();
+    final arabicBold = await PdfGoogleFonts.cairoBold();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: const PdfPageFormat(80 * PdfPageFormat.mm, double.infinity, marginAll: 5 * PdfPageFormat.mm),
+        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
+        textDirection: pw.TextDirection.rtl,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Center(
+                child: pw.Text(pharmacyName,
+                    style: pw.TextStyle(
+                        fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              ),
+              pw.Center(
+                child: pw.Text('فاتورة بيع مبسطة',
+                    style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Divider(thickness: 1, color: PdfColors.grey400),
+              pw.SizedBox(height: 4),
+              pw.Text('العميل: $customerName', style: const pw.TextStyle(fontSize: 9)),
+              pw.Text('التاريخ: ${DateFormat('yyyy/MM/dd HH:mm').format(DateTime.now())}',
+                  style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+              pw.SizedBox(height: 8),
+              pw.Divider(thickness: 1, color: PdfColors.grey400),
+              pw.SizedBox(height: 4),
+              
+              // قائمة الأصناف بشكل مدمج
+              ...items.asMap().entries.map((e) {
+                final item = e.value;
+                final qtyVal = item['qty'] ?? 1;
+                final qtyText = item['qty_text'] ?? '$qtyVal علبة';
+                final lineTotal = item['line_total'] ?? (item['price'] * qtyVal);
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                    children: [
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(item['name'], style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                          ),
+                          pw.Text('${lineTotal.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('$qtyText × ${item['price'].toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                          if (item['item_discount'] != null && item['item_discount'] > 0)
+                            pw.Text('خصم ${item['item_discount']}%', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700)),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              
+              pw.SizedBox(height: 6),
+              pw.Divider(thickness: 1, color: PdfColors.grey400),
+              pw.SizedBox(height: 4),
+              
+              // ملخص الحساب
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('المجموع الفرعي:', style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text('${subtotal.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              if (discount > 0) ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('الخصم (${discount.toStringAsFixed(0)}%):', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('-${(subtotal * discount / 100).toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+              ],
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('الإجمالي:', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('${total.toStringAsFixed(2)} $_currency', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('المدفوع:', style: const pw.TextStyle(fontSize: 9)),
+                  pw.Text('${paidAmount.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              if (remaining > 0) ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('المتبقي (آجل):', style: pw.TextStyle(fontSize: 9, color: PdfColors.red700)),
+                    pw.Text('${remaining.toStringAsFixed(2)} $_currency', style: pw.TextStyle(fontSize: 9, color: PdfColors.red700)),
+                  ],
+                ),
+              ],
+              
+              pw.SizedBox(height: 12),
+              pw.Center(
+                child: pw.Text('شكرًا لتعاملكم معنا 💖', style: const pw.TextStyle(fontSize: 9)),
+              ),
+              pw.Center(
+                child: pw.Text('تم إنشاء الإيصال بواسطة صيدلي PRO', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey500)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'receipt_$customerName.pdf');
+  }
+
+  Future<void> _showPrintOptionsDialog({
+    required String customerName,
+    required List<Map<String, dynamic>> items,
+    required double subtotal,
+    required double discount,
+    required double total,
+    double paidAmount = 0.0,
+    double remaining = 0.0,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('خيارات الفاتورة 📄', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+        content: const Text(
+          'تم حفظ الفاتورة بنجاح! اختر كيفية تصدير أو طباعة الفاتورة:',
+          style: TextStyle(color: AppColors.textLight, fontFamily: 'Cairo', fontSize: 13),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _generateThermalPDF(customerName, items, subtotal, discount, total, paidAmount: paidAmount, remaining: remaining);
+            },
+            icon: const Icon(Icons.print_rounded, size: 18),
+            label: const Text('طباعة إيصال حراري (80 مم) 🖨️', style: TextStyle(fontFamily: 'Cairo')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              minimumSize: const Size(220, 42),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _generatePDF(customerName, items, subtotal, discount, total);
+            },
+            icon: const Icon(Icons.share_rounded, size: 18),
+            label: const Text('مشاركة ملف PDF قياسي (A4) 📄', style: TextStyle(fontFamily: 'Cairo')),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              minimumSize: const Size(220, 42),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إغلاق', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ▌ تعديل فاتورة
   Future<void> _editInvoice(Map<String, dynamic> invoice) async {
     final invoiceId = invoice['id'] as int;
@@ -1325,17 +1526,41 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               );
             }(),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _generatePDF(invoice['customer_name'], items, (invoice['subtotal'] as num).toDouble(),
-                      (invoice['discount'] as num).toDouble(), (invoice['total'] as num).toDouble());
-                },
-                icon: const Icon(Icons.share), label: const Text('مشاركة PDF'),
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _generatePDF(invoice['customer_name'], items, (invoice['subtotal'] as num).toDouble(),
+                          (invoice['discount'] as num).toDouble(), (invoice['total'] as num).toDouble());
+                    },
+                    icon: const Icon(Icons.share_rounded, size: 16),
+                    label: const Text('مشاركة A4 📄', style: TextStyle(fontSize: 12, fontFamily: 'Cairo')),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _generateThermalPDF(
+                        invoice['customer_name'],
+                        items,
+                        (invoice['subtotal'] as num).toDouble(),
+                        (invoice['discount'] as num).toDouble(),
+                        (invoice['total'] as num).toDouble(),
+                        paidAmount: (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
+                        remaining: (invoice['remaining'] as num?)?.toDouble() ?? 0.0,
+                      );
+                    },
+                    icon: const Icon(Icons.print_rounded, size: 16),
+                    label: const Text('طباعة حرارية 🖨️', style: TextStyle(fontSize: 12, fontFamily: 'Cairo')),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
