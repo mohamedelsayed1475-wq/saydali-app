@@ -1107,6 +1107,53 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                     style: const TextStyle(
                         color: AppColors.textMuted, fontSize: 12)),
               ],
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: DatabaseHelper.instance.getAlternativesFor(item.name),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  final alts = snapshot.data!.map((row) {
+                    final med = row['medication_name']?.toString() ?? '';
+                    final alt = row['alternative_name']?.toString() ?? '';
+                    if (med.toLowerCase() == item.name.toLowerCase()) {
+                      return alt;
+                    }
+                    return med;
+                  }).where((name) => name.isNotEmpty).toSet().toList();
+
+                  if (alts.isEmpty) return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.swap_horiz_rounded, color: AppColors.primary, size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '💡 بدائل محلية مقترحة: ${alts.join(" ، ")}',
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 11,
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,

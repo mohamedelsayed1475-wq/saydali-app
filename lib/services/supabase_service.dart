@@ -684,6 +684,8 @@ class ResponseItem {
   final double price;
   final double discount;
   final String? notes;
+  /// البديل المقترح من المندوب لاستشارة الدكتور (اختياري)
+  final String? repAlternative;
 
   ResponseItem({
     required this.id,
@@ -693,6 +695,7 @@ class ResponseItem {
     required this.price,
     required this.discount,
     this.notes,
+    this.repAlternative,
   });
 
   factory ResponseItem.fromMap(Map<String, dynamic> map) => ResponseItem(
@@ -703,6 +706,7 @@ class ResponseItem {
         price: (map['price'] as num?)?.toDouble() ?? 0,
         discount: (map['discount'] as num?)?.toDouble() ?? 0,
         notes: map['rep_notes']?.toString(),
+        repAlternative: map['rep_alternative']?.toString(),
       );
 
   double get finalPrice => price * (1 - discount / 100);

@@ -1268,6 +1268,32 @@ class DatabaseHelper {
     return await db.insert('alternatives', data);
   }
 
+  /// حفظ بديل محلياً إذا لم يكن موجوداً مسبقاً (سواء بالاتجاهين) لتجنب التكرار
+  Future<void> addAlternativeIfNotExists(String medName, String altName, {String? activeIngredient}) async {
+    final db = await database;
+    final country = await getCountryCode();
+    
+    final med = medName.trim();
+    final alt = altName.trim();
+    if (med.isEmpty || alt.isEmpty) return;
+
+    // التحقق من وجود العلاقة مسبقاً بالاتجاهين
+    final existing = await db.query(
+      'alternatives',
+      where: '((medication_name = ? AND alternative_name = ?) OR (medication_name = ? AND alternative_name = ?)) AND country_code = ?',
+      whereArgs: [med, alt, alt, med, country],
+    );
+
+    if (existing.isEmpty) {
+      await insertAlternative({
+        'medication_name': med,
+        'alternative_name': alt,
+        'active_ingredient': activeIngredient,
+      });
+      debugPrint('💾 Saved rep alternative locally: $med -> $alt');
+    }
+  }
+
   /// البحث عن بدائل محلية حسب اسم الدواء + دولة المستخدم
   Future<List<Map<String, dynamic>>> getAlternativesFor(String medName, {String? countryCode}) async {
     final db = await database;

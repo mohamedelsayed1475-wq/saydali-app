@@ -211,6 +211,16 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
 
     for (final item in _response!.unavailableItems) {
       final key = item.drugName.trim().toLowerCase();
+      
+      // حفظ البديل المقترح محلياً لمساعدته في المستقبل
+      if (item.repAlternative != null && item.repAlternative!.trim().isNotEmpty) {
+        try {
+          await db.addAlternativeIfNotExists(item.drugName, item.repAlternative!);
+        } catch (e) {
+          debugPrint('⚠️ خطأ في حفظ البديل محلياً: $e');
+        }
+      }
+
       if (shortageMap.containsKey(key)) {
         for (final id in shortageMap[key]!) {
           await db.updateShortage(id, {'status': endDay ? 'stubborn' : 'pending'});
@@ -936,9 +946,19 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
             pw.SizedBox(height: 8),
             ..._response!.unavailableItems.map((item) => pw.Padding(
                   padding: const pw.EdgeInsets.symmetric(vertical: 3),
-                  child: pw.Text(
-                      '• ${item.drugName} (${item.company}) - ${item.quantity} علبة',
-                      style: const pw.TextStyle(fontSize: 11)),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                          '• ${item.drugName} (${item.company}) - ${item.quantity} علبة',
+                          style: const pw.TextStyle(fontSize: 11)),
+                      if (item.repAlternative != null && item.repAlternative!.isNotEmpty)
+                        pw.Text(
+                            '  💡 بديل المندوب: ${item.repAlternative}',
+                            style: const pw.TextStyle(
+                                fontSize: 10, color: PdfColors.blue700)),
+                    ],
+                  ),
                 )),
           ],
           pw.Spacer(),
@@ -978,7 +998,11 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     if (r.unavailableItems.isNotEmpty) {
       msg += '\n❌ غير متاحة (تحتاج مندوب آخر):\n';
       for (var item in r.unavailableItems) {
-        msg += '- ${item.drugName}\n';
+        msg += '- ${item.drugName}';
+        if (item.repAlternative != null && item.repAlternative!.isNotEmpty) {
+          msg += ' (بديل مقترح من المندوب: ${item.repAlternative})';
+        }
+        msg += '\n';
       }
     }
 
@@ -1400,47 +1424,131 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
           color: AppColors.darkCard,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.danger.withValues(alpha: 0.2))),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.cancel_rounded, color: AppColors.danger, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              const Icon(Icons.cancel_rounded, color: AppColors.danger, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(item.drugName,
-                          style: const TextStyle(
-                              color: AppColors.textLight,
-                              fontWeight: FontWeight.w600)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(item.drugName,
+                              style: const TextStyle(
+                                  color: AppColors.textLight,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                          onPressed: () => _searchGoogleImages(item.drugName),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          constraints: const BoxConstraints(),
+                          tooltip: 'بحث في جوجل (صور)',
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
-                      onPressed: () => _searchGoogleImages(item.drugName),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      constraints: const BoxConstraints(),
-                      tooltip: 'بحث في جوجل (صور)',
+                    Text('${item.company} · ${item.quantity} علبة',
+                        style: const TextStyle(
+                            color: AppColors.textMuted, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: const Text('⏳ لديها فرصة',
+                    style: TextStyle(
+                        color: AppColors.warning,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          // ─── بديل مقترح من المندوب ──────────────────────────────
+          if (item.repAlternative != null && item.repAlternative!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, right: 28),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF60A5FA).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: const Color(0xFF60A5FA).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lightbulb_rounded,
+                        color: Color(0xFF60A5FA), size: 14),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '💊 بديل مقترح من المندوب: ${item.repAlternative}',
+                        style: const TextStyle(
+                          color: Color(0xFF93C5FD),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                Text('${item.company} · ${item.quantity} علبة',
-                    style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12)),
-              ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20)),
-            child: const Text('⏳ لديها فرصة',
-                style: TextStyle(
-                    color: AppColors.warning,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700)),
+          // ─── بدائل محلية من قاعدة البيانات ──────────────────────
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: DatabaseHelper.instance.getAlternativesFor(item.drugName),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              final alts = snapshot.data!.map((row) {
+                final med = row['medication_name']?.toString() ?? '';
+                final alt = row['alternative_name']?.toString() ?? '';
+                if (med.toLowerCase() == item.drugName.toLowerCase()) {
+                  return alt;
+                }
+                return med;
+              }).where((name) => name.isNotEmpty).toSet().toList();
+
+              if (alts.isEmpty) return const SizedBox.shrink();
+
+              return Padding(
+                padding: const EdgeInsets.only(top: 8, right: 28),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.swap_horiz_rounded, color: AppColors.primary, size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '💡 بدائل محلية مقترحة: ${alts.join(" ، ")}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 11,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
