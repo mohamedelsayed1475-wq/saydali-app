@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
 import '../services/scheduled_sync_service.dart';
 import '../widgets/common_widgets.dart';
+import '../providers/current_user_provider.dart';
 
 class SyncScheduleScreen extends StatefulWidget {
   const SyncScheduleScreen({super.key});
@@ -41,15 +43,7 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
     final lastSync = await DatabaseHelper.instance.getSetting('last_sync_at');
     if (mounted) {
       setState(() {
-        _times = times.isEmpty
-            ? [
-                const TimeOfDay(hour: 8, minute: 0),
-                const TimeOfDay(hour: 12, minute: 0),
-                const TimeOfDay(hour: 16, minute: 0),
-                const TimeOfDay(hour: 20, minute: 0),
-                const TimeOfDay(hour: 23, minute: 0),
-              ]
-            : times;
+        _times = times; // لا توجد مواعيد افتراضية — المالك يحددها بنفسه
         _lastSyncAt = lastSync;
         _loading = false;
       });
@@ -57,8 +51,8 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
   }
 
   Future<void> _addTime() async {
-    if (_times.length >= 7) {
-      showSnack(context, 'الحد الأقصى 7 مواعيد', isError: true);
+    if (_times.length >= 3) {
+      showSnack(context, 'الحد الأقصى 3 مواعيد للحفاظ على تكاليف السحابة', isError: true);
       return;
     }
     final picked = await showTimePicker(
@@ -99,16 +93,18 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
   }
 
   void _removeTime(int index) {
-    if (_times.length <= 1) {
-      showSnack(context, 'لازم موعد واحد على الأقل', isError: true);
-      return;
-    }
     setState(() => _times.removeAt(index));
   }
 
+
   Future<void> _save() async {
+    // لا تحفظ إذا لم يُضف المالك أي موعد
+    if (_times.isEmpty) {
+      showSnack(context, 'أضف موعداً واحداً على الأقل قبل الحفظ', isError: true);
+      return;
+    }
     setState(() => _saving = true);
-    // ترتيب المواعيد
+    // ترتيب المواعيد تصاعدياً
     _times.sort((a, b) {
       final aMin = a.hour * 60 + a.minute;
       final bMin = b.hour * 60 + b.minute;
@@ -163,6 +159,41 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = context.watch<CurrentUserProvider>();
+
+    // شاشة المواعيد متاحة للمالك فقط
+    if (!userProvider.isOwner) {
+      return Scaffold(
+        backgroundColor: AppColors.dark,
+        appBar: AppBar(
+          backgroundColor: AppColors.darkCard,
+          title: const Text('مواعيد المزامنة',
+              style: TextStyle(
+                  color: AppColors.textColor,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Cairo')),
+          iconTheme: const IconThemeData(color: AppColors.textColor),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('🔒', style: TextStyle(fontSize: 50)),
+              SizedBox(height: 12),
+              Text('غير مصرح لك',
+                  style: TextStyle(
+                      color: AppColors.textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
+              SizedBox(height: 6),
+              Text('مواعيد المزامنة متاحة للمالك فقط',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.dark,
       appBar: AppBar(
@@ -205,8 +236,8 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
                                 fontSize: 16)),
                         const SizedBox(height: 6),
                         Text(
-                          'حدد مواعيد المزامنة وكل الأجهزة هتتزامن تلقائياً بدون ما تفتح التطبيق. '
-                          'البيانات بتترفع للسحابة مؤقتاً وبتتمسح بعد ما كل الأجهزة تسحبها.',
+                          'حدد مواعيد المزامنة (حتى 3 مواعيد) وكل الأجهزة هتتزامن تلقائياً. '
+                          'الحد الأقصى 3 مواعيد للحفاظ على تكاليف السحابة منخفضة.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                               color: AppColors.textMuted.withValues(alpha: 0.8),
@@ -287,9 +318,9 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15)),
                       ),
-                      Text('${_times.length}/7',
+                      Text('${_times.length}/3',
                           style: TextStyle(
-                              color: _times.length >= 7
+                              color: _times.length >= 3
                                   ? AppColors.warning
                                   : AppColors.textMuted,
                               fontSize: 12,
@@ -353,7 +384,7 @@ class _SyncScheduleScreenState extends State<SyncScheduleScreen>
                   }),
 
                   // ── زر إضافة موعد ──
-                  if (_times.length < 7) ...[
+                  if (_times.length < 3) ...[
                     const SizedBox(height: 4),
                     OutlinedButton.icon(
                       onPressed: _addTime,
