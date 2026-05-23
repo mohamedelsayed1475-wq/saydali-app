@@ -543,8 +543,8 @@ class SupabaseService {
     String queryParams = 'code=$sessionCode';
     if (EnvConfig.supabaseUrl.isNotEmpty && EnvConfig.supabaseKey.isNotEmpty) {
       try {
-        final encodedUrl = base64Url.encode(utf8.encode(EnvConfig.supabaseUrl));
-        final encodedKey = base64Url.encode(utf8.encode(EnvConfig.supabaseKey));
+        final encodedUrl = Uri.encodeComponent(base64.encode(utf8.encode(EnvConfig.supabaseUrl)));
+        final encodedKey = Uri.encodeComponent(base64.encode(utf8.encode(EnvConfig.supabaseKey)));
         queryParams += '&u=$encodedUrl&k=$encodedKey';
       } catch (e) {
         debugPrint('⚠️ Error encoding supabase credentials for web link: $e');
