@@ -538,8 +538,21 @@ class SupabaseService {
         ? EnvConfig.webPortalBaseUrl
         : fallback;
     final separator = baseUrl.endsWith('/') ? '' : '/';
-    final link = '$baseUrl$separator?code=$sessionCode';
-    debugPrint('🔗 رابط المندوب: $link');
+    
+    // تأمين المفاتيح للاستخدام التجاري عبر تمريرها مشفرة Base64 في الرابط
+    String queryParams = 'code=$sessionCode';
+    if (EnvConfig.supabaseUrl.isNotEmpty && EnvConfig.supabaseKey.isNotEmpty) {
+      try {
+        final encodedUrl = base64Url.encode(utf8.encode(EnvConfig.supabaseUrl));
+        final encodedKey = base64Url.encode(utf8.encode(EnvConfig.supabaseKey));
+        queryParams += '&u=$encodedUrl&k=$encodedKey';
+      } catch (e) {
+        debugPrint('⚠️ Error encoding supabase credentials for web link: $e');
+      }
+    }
+    
+    final link = '$baseUrl$separator?$queryParams';
+    debugPrint('🔗 رابط المندوب الآمن: $link');
     return link;
   }
 
