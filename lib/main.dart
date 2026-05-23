@@ -12,7 +12,6 @@ import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/pin_lock_screen.dart';
-import 'screens/user_selection_screen.dart';
 import 'screens/assistant_pin_login_screen.dart';
 import 'widgets/subscription_guard.dart';
 import 'models/models.dart';
@@ -234,52 +233,18 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final activated = await db.getSetting('assistants_activated');
-    final assistants = await db.getAssistants();
-    final hasActiveAssistants = assistants.any((a) => (a['is_active'] ?? 1) == 1);
-
-    if (activated == '1' && hasActiveAssistants) {
-      // عرض شاشة اختيار المستخدم
+    // دخول مباشر كمالك
+    if (ctx.mounted) {
+      ctx.read<CurrentUserProvider>().loginAsOwner();
+      // تسجيل الصيدلية وبدء المزامنة
+      SyncService.instance.registerPharmacy().then((_) {
+        SyncService.instance.startPeriodicSync();
+        ScheduledSyncService.registerDevice();
+      });
       Navigator.pushReplacement(
         ctx,
-        MaterialPageRoute(
-          builder: (navCtx) => UserSelectionScreen(
-            onOwnerSelected: () {
-              // تسجيل الصيدلية وبدء المزامنة
-              SyncService.instance.registerPharmacy().then((_) {
-                SyncService.instance.startPeriodicSync();
-                ScheduledSyncService.registerDevice();
-              });
-              Navigator.pushReplacement(
-                navCtx,
-                MaterialPageRoute(builder: (_) => const MainScreen()),
-              );
-            },
-            onAssistantSelected: () {
-              // بدء المزامنة للمساعد
-              SyncService.instance.startPeriodicSync();
-              Navigator.pushReplacement(
-                navCtx,
-                MaterialPageRoute(builder: (_) => const MainScreen()),
-              );
-            },
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => const MainScreen()),
       );
-    } else {
-      // دخول مباشر كمالك
-      if (ctx.mounted) {
-        ctx.read<CurrentUserProvider>().loginAsOwner();
-        // تسجيل الصيدلية وبدء المزامنة
-        SyncService.instance.registerPharmacy().then((_) {
-          SyncService.instance.startPeriodicSync();
-          ScheduledSyncService.registerDevice();
-        });
-        Navigator.pushReplacement(
-          ctx,
-          MaterialPageRoute(builder: (_) => const MainScreen()),
-        );
-      }
     }
   }
 
@@ -531,7 +496,10 @@ class _MainScreenState extends State<MainScreen> {
 }
 
   /// قائمة خيارات المستخدم
-  void _showUserMenu(CurrentUserProvider userProvider) {
+  void _showUserMenu(CurrentUserProvider userProvider) async {
+    final isAssistantDevice = await DatabaseHelper.instance.getSetting('is_assistant_device') == '1';
+    if (!mounted) return;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.darkCard,
@@ -598,49 +566,36 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-
-            // تبديل المستخدم
-            ListTile(
-              leading: const Icon(Icons.swap_horiz_rounded,
-                  color: AppColors.primary),
-              title: const Text('تبديل المستخدم',
-                  style: TextStyle(color: AppColors.textColor)),
-              subtitle: const Text('الدخول بحساب آخر',
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              tileColor: AppColors.dark,
-              onTap: () {
-                Navigator.pop(ctx);
-                userProvider.logout();
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (navCtx) => UserSelectionScreen(
-                      onOwnerSelected: () {
-                        SyncService.instance.registerPharmacy().then((_) {
-                          SyncService.instance.startPeriodicSync();
-                          ScheduledSyncService.registerDevice();
-                        });
-                        Navigator.pushReplacement(
-                          navCtx,
-                          MaterialPageRoute(builder: (_) => const MainScreen()),
-                        );
-                      },
-                      onAssistantSelected: () {
-                        SyncService.instance.startPeriodicSync();
-                        Navigator.pushReplacement(
-                          navCtx,
-                          MaterialPageRoute(builder: (_) => const MainScreen()),
-                        );
-                      },
-                    ),
-                  ),
-                  (route) => false,
-                );
-              },
-            ),
+            if (isAssistantDevice) ...[
+              const SizedBox(height: 16),
+              // تبديل المستخدم
+              ListTile(
+                leading: const Icon(Icons.swap_horiz_rounded,
+                    color: AppColors.primary),
+                title: const Text('تبديل المستخدم',
+                    style: TextStyle(color: AppColors.textColor)),
+                subtitle: const Text('الدخول بحساب مساعد آخر',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                tileColor: AppColors.dark,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  userProvider.logout();
+                  await DatabaseHelper.instance.clearAssistantSession();
+                  SyncService.instance.stopSync();
+                  if (mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AssistantPinLoginScreen(),
+                      ),
+                      (route) => false,
+                    );
+                  }
+                },
+              ),
+            ],
             const SizedBox(height: 10),
           ],
         ),

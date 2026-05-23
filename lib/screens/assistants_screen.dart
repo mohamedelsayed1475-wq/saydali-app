@@ -10,6 +10,7 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/security_helper.dart';
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});
@@ -82,9 +83,24 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     bool canManageReps = existing?.canManageReps ?? false;
     bool isActive = existing?.isActive ?? true;
 
+    final expiryStr = await SecurityHelper.readSignedSetting('subscription_expiry');
+    final pharmacyExpiry = expiryStr != null ? DateTime.tryParse(expiryStr) : null;
+    final limitDate = (pharmacyExpiry != null && pharmacyExpiry.isAfter(DateTime.now()))
+        ? pharmacyExpiry
+        : DateTime.now().add(const Duration(days: 3650));
+    final pharmacyRemainingDays = limitDate.difference(DateTime.now()).inDays;
+
     int subscriptionDurationDays = existing?.subscriptionDurationDays ?? 30;
     DateTime subscriptionExpiry = existing?.subscriptionExpiry ??
         DateTime.now().add(Duration(days: subscriptionDurationDays));
+
+    if (subscriptionExpiry.isAfter(limitDate)) {
+      subscriptionExpiry = limitDate;
+      subscriptionDurationDays = limitDate.difference(DateTime.now()).inDays;
+      if (subscriptionDurationDays < 0) {
+        subscriptionDurationDays = 0;
+      }
+    }
 
     await showModalBottomSheet(
       context: context,
@@ -173,19 +189,19 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          _durationBtn(30, '٣٠ يوم', subscriptionDurationDays, (val) {
+                          _durationBtn(30, '٣٠ يوم', subscriptionDurationDays, pharmacyRemainingDays >= 30, (val) {
                             setBS(() {
                               subscriptionDurationDays = val;
                               subscriptionExpiry = DateTime.now().add(Duration(days: val));
                             });
                           }),
-                          _durationBtn(90, '٩٠ يوم', subscriptionDurationDays, (val) {
+                          _durationBtn(90, '٩٠ يوم', subscriptionDurationDays, pharmacyRemainingDays >= 90, (val) {
                             setBS(() {
                               subscriptionDurationDays = val;
                               subscriptionExpiry = DateTime.now().add(Duration(days: val));
                             });
                           }),
-                          _durationBtn(365, 'سنة', subscriptionDurationDays, (val) {
+                          _durationBtn(365, 'سنة', subscriptionDurationDays, pharmacyRemainingDays >= 365, (val) {
                             setBS(() {
                               subscriptionDurationDays = val;
                               subscriptionExpiry = DateTime.now().add(Duration(days: val));
@@ -198,9 +214,11 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                                 onTap: () async {
                                   final picked = await showDatePicker(
                                     context: context,
-                                    initialDate: subscriptionExpiry,
+                                    initialDate: subscriptionExpiry.isBefore(DateTime.now().subtract(const Duration(days: 365)))
+                                        ? DateTime.now()
+                                        : (subscriptionExpiry.isAfter(limitDate) ? limitDate : subscriptionExpiry),
                                     firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                                    lastDate: DateTime.now().add(const Duration(days: 3650)),
+                                    lastDate: limitDate,
                                     builder: (context, child) {
                                       return Theme(
                                         data: Theme.of(context).copyWith(
@@ -266,9 +284,17 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                           child: ElevatedButton.icon(
                             onPressed: () {
                               setBS(() {
-                                subscriptionExpiry = DateTime.now().add(Duration(days: subscriptionDurationDays));
+                                var targetExpiry = DateTime.now().add(Duration(days: subscriptionDurationDays));
+                                if (targetExpiry.isAfter(limitDate)) {
+                                  targetExpiry = limitDate;
+                                  subscriptionDurationDays = limitDate.difference(DateTime.now()).inDays;
+                                  if (subscriptionDurationDays < 0) subscriptionDurationDays = 0;
+                                  showSnack(ctx, '⚠️ تم التمديد للحد الأقصى المتاح (انتهاء اشتراك الصيدلية)');
+                                } else {
+                                  showSnack(ctx, 'تم تمديد صلاحية المساعد 📅');
+                                }
+                                subscriptionExpiry = targetExpiry;
                               });
-                              showSnack(ctx, 'تم تمديد صلاحية المساعد 📅');
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.accent,
@@ -497,27 +523,33 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     );
   }
 
-  Widget _durationBtn(int val, String label, int currentVal, ValueChanged<int> onTap) {
-    final active = currentVal == val;
+  Widget _durationBtn(int val, String label, int currentVal, bool enabled, ValueChanged<int> onTap) {
+    final active = currentVal == val && enabled;
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
         child: InkWell(
-          onTap: () => onTap(val),
+          onTap: enabled ? () => onTap(val) : null,
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: active ? AppColors.primary.withValues(alpha: 0.15) : AppColors.darkCard,
+              color: active
+                  ? AppColors.primary.withValues(alpha: 0.15)
+                  : (enabled ? AppColors.darkCard : AppColors.darkCard.withValues(alpha: 0.4)),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: active ? AppColors.primary : AppColors.darkBorder,
+                color: active
+                    ? AppColors.primary
+                    : (enabled ? AppColors.darkBorder : AppColors.darkBorder.withValues(alpha: 0.2)),
               ),
             ),
             child: Center(
               child: Text(
                 label,
                 style: TextStyle(
-                  color: active ? AppColors.primary : AppColors.textColor,
+                  color: active
+                      ? AppColors.primary
+                      : (enabled ? AppColors.textColor : AppColors.textMuted.withValues(alpha: 0.4)),
                   fontSize: 11,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 ),
