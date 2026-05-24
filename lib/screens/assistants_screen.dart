@@ -10,7 +10,7 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
 import '../services/supabase_service.dart';
-import '../utils/security_helper.dart';
+
 
 class AssistantsScreen extends StatefulWidget {
   const AssistantsScreen({super.key});
@@ -83,12 +83,10 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     bool canManageReps = existing?.canManageReps ?? false;
     bool isActive = existing?.isActive ?? true;
 
-    final expiryStr = await SecurityHelper.readSignedSetting('subscription_expiry');
-    final pharmacyExpiry = expiryStr != null ? DateTime.tryParse(expiryStr) : null;
-    final limitDate = (pharmacyExpiry != null && pharmacyExpiry.isAfter(DateTime.now()))
-        ? pharmacyExpiry
-        : DateTime.now().add(const Duration(days: 3650));
-    final pharmacyRemainingDays = limitDate.difference(DateTime.now()).inDays;
+    // تم إلغاء تقييد مدة اشتراك المساعد بصلاحية اشتراك الصيدلية بناء على طلب المستخدم
+    final limitDate = DateTime.now().add(const Duration(days: 3650));
+    const pharmacyRemainingDays = 3650;
+
 
     int subscriptionDurationDays = existing?.subscriptionDurationDays ?? 30;
     DateTime subscriptionExpiry = existing?.subscriptionExpiry ??
