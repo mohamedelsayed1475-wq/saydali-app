@@ -5,10 +5,14 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/supabase_service.dart';
+import '../services/sync_service.dart';
 import '../database/database_helper.dart';
+import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'send_to_rep_screen.dart';
+
 
 class RepResponseScreen extends StatefulWidget {
   final String? initialCode;
@@ -1151,6 +1155,311 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     );
   }
 
+  Future<void> _handleAlternativeTap(ResponseItem item) async {
+    if (item.repAlternative == null || item.repAlternative!.isEmpty) return;
+
+    final qtyCtrl = TextEditingController(text: item.quantity.toString());
+    int chosenQty = item.quantity;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.darkCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.darkBorder,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '💡 معالجة البديل المقترح',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'الصنف الأصلي الناقص: ${item.drugName}',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'البديل المقترح من المندوب: ${item.repAlternative}',
+                  style: const TextStyle(
+                    color: Color(0xFF93C5FD),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'حدد الكمية المطلوبة:',
+                  style: TextStyle(color: AppColors.textLight, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: AppColors.primary, size: 28),
+                      onPressed: () {
+                        if (chosenQty > 1) {
+                          setBS(() {
+                            chosenQty--;
+                            qtyCtrl.text = chosenQty.toString();
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: qtyCtrl,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        decoration: InputDecoration(
+                          hintText: 'الكمية',
+                          filled: true,
+                          fillColor: AppColors.dark,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: AppColors.darkBorder),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          final parsed = int.tryParse(val);
+                          if (parsed != null && parsed > 0) {
+                            chosenQty = parsed;
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 28),
+                      onPressed: () {
+                        setBS(() {
+                          chosenQty++;
+                          qtyCtrl.text = chosenQty.toString();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'اختر الإجراء المطلوب:',
+                  style: TextStyle(color: AppColors.textLight, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _processAlternativeAction(item, chosenQty, replaceOld: true);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.swap_horiz_rounded, color: Colors.white),
+                    label: Text(
+                      'استبدال القديم بـ "${item.repAlternative}"',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _processAlternativeAction(item, chosenQty, replaceOld: false);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF60A5FA),
+                      side: const BorderSide(color: Color(0xFF60A5FA)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    label: Text(
+                      'إضافة "${item.repAlternative}" كصنف جديد',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processAlternativeAction(ResponseItem item, int quantity, {required bool replaceOld}) async {
+    final db = DatabaseHelper.instance;
+    final nowStr = DateTime.now().toIso8601String();
+
+    try {
+      if (replaceOld) {
+        final shortages = await db.getShortages(status: 'pending');
+        final originalShortage = shortages.firstWhere(
+          (s) => s['name'].toString().toLowerCase() == item.drugName.toLowerCase(),
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (originalShortage.isNotEmpty) {
+          final originalId = originalShortage['id'] as int;
+          await db.updateShortage(originalId, {
+            'name': item.repAlternative!,
+            'company': item.company,
+            'quantity': quantity,
+            'is_synced': 0,
+            'updated_at': nowStr,
+          });
+        } else {
+          await db.insertShortage({
+            'name': item.repAlternative!,
+            'company': item.company,
+            'quantity': quantity,
+            'status': 'pending',
+            'is_urgent': 0,
+            'created_at': nowStr,
+            'updated_at': nowStr,
+            'is_synced': 0,
+            'created_by': 'المالك',
+          });
+        }
+      } else {
+        await db.insertShortage({
+          'name': item.repAlternative!,
+          'company': item.company,
+          'quantity': quantity,
+          'status': 'pending',
+          'is_urgent': 0,
+          'created_at': nowStr,
+          'updated_at': nowStr,
+          'is_synced': 0,
+          'created_by': 'المالك',
+        });
+      }
+
+      await SyncService.instance.syncAll();
+
+      if (mounted) {
+        showSnack(context, 'تم حفظ التعديل والمزامنة بنجاح! ✅');
+      }
+
+      if (mounted) {
+        await _promptToSendUpdatedShortages();
+      }
+    } catch (e) {
+      debugPrint('Error processing alternative action: $e');
+      if (mounted) {
+        showSnack(context, '❌ حدث خطأ أثناء المعالجة: $e', isError: true);
+      }
+    }
+  }
+
+  Future<void> _promptToSendUpdatedShortages() async {
+    if (_response == null) return;
+    final r = _response!;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('📲', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 8),
+            Text('تحديث الطلب مع المندوب',
+                style: TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: Text(
+          'تم تحديث النواقص بنجاح. هل تريد الانتقال إلى شاشة الإرسال لإرسال الرابط المحدث للمندوب (${r.repName}) الآن؟',
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ليس الآن', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('نعم، أرسل الرابط المحدث', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final db = DatabaseHelper.instance;
+      final reps = await db.getReps();
+      Representative? targetRep;
+
+      for (final rMap in reps) {
+        final rep = Representative.fromMap(rMap);
+        if (rep.name.trim() == r.repName.trim() ||
+            (rep.phone != null &&
+                rep.phone!.isNotEmpty &&
+                r.repPhone.isNotEmpty &&
+                rep.phone!.replaceAll(' ', '') == r.repPhone.replaceAll(' ', ''))) {
+          targetRep = rep;
+          break;
+        }
+      }
+
+      if (targetRep == null) {
+        targetRep = Representative(
+          name: r.repName,
+          phone: r.repPhone,
+          createdAt: DateTime.now(),
+        );
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SendToRepScreen(rep: targetRep!),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildCodeEntry() {
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -1475,30 +1784,36 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
           if (item.repAlternative != null && item.repAlternative!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8, right: 28),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF60A5FA).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: const Color(0xFF60A5FA).withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.lightbulb_rounded,
-                        color: Color(0xFF60A5FA), size: 14),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '💊 بديل مقترح من المندوب: ${item.repAlternative}',
-                        style: const TextStyle(
-                          color: Color(0xFF93C5FD),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+              child: InkWell(
+                onTap: () => _handleAlternativeTap(item),
+                borderRadius: BorderRadius.circular(8),
+                splashColor: const Color(0xFF60A5FA).withValues(alpha: 0.2),
+                highlightColor: const Color(0xFF60A5FA).withValues(alpha: 0.1),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF60A5FA).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFF60A5FA).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lightbulb_rounded,
+                          color: Color(0xFF60A5FA), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '💊 بديل مقترح من المندوب: ${item.repAlternative}',
+                          style: const TextStyle(
+                            color: Color(0xFF93C5FD),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
