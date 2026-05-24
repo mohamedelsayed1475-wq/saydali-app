@@ -59,7 +59,17 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
 
     try {
       final db = DatabaseHelper.instance;
-      final assistantMap = await db.getAssistantByPin(pin);
+      
+      // محاولة التحقق من تسجيل الدخول مباشرة من Supabase أولاً
+      Map<String, dynamic>? assistantMap;
+      try {
+        assistantMap = await SyncService.instance.checkAssistantLoginByPin(pin);
+      } catch (e) {
+        debugPrint('⚠️ Supabase login check failed: $e');
+      }
+
+      // إذا لم ينجح التحقق من السحابة (مثلاً لعدم وجود إنترنت)، نلجأ لقاعدة البيانات المحلية
+      assistantMap ??= await db.getAssistantByPin(pin);
 
       if (assistantMap == null) {
         setState(() {

@@ -806,6 +806,15 @@ class SyncService {
   Future<void> _pullAssistants() async {
     final isAssistantDevice = await DatabaseHelper.instance.getSetting('is_assistant_device');
     if (isAssistantDevice != '1') return; // المالك لا يسحب المساعدين لأنهم عنده الأصل
+    await pullAssistantsFromServer();
+  }
+
+  Future<void> pullAssistantsFromServer() async {
+    if (!isConfigured) return;
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return;
+    }
 
     final db = await DatabaseHelper.instance.database;
     try {
@@ -821,7 +830,7 @@ class SyncService {
         for (final item in items) {
           final cloudName = item['name'];
           // تحديث الصلاحيات وحالة النشاط
-          final updateData = {
+          final Map<String, dynamic> updateData = {
             'pin': item['pin'],
             'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
             'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
@@ -838,11 +847,90 @@ class SyncService {
           if (item.containsKey('subscription_duration_days')) {
             updateData['subscription_duration_days'] = item['subscription_duration_days'];
           }
-          await db.update('assistants', updateData, where: 'name = ?', whereArgs: [cloudName]);
+
+          final existing = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
+          if (existing.isEmpty) {
+            // إضافة مساعد جديد من السحابة لو مش موجود محلياً
+            final insertData = {
+              'name': cloudName,
+              'phone': item['phone'] ?? '',
+              'role': item['role'] ?? 'assistant',
+              'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
+              ...updateData,
+            };
+            insertData['subscription_expiry'] ??= DateTime.now().add(const Duration(days: 30)).toIso8601String();
+            insertData['subscription_duration_days'] ??= 30;
+            await db.insert('assistants', insertData);
+          } else {
+            await db.update('assistants', updateData, where: 'name = ?', whereArgs: [cloudName]);
+          }
         }
       }
     } catch (e) {
-      debugPrint('⚠️ pull assistants error: $e');
+      debugPrint('⚠️ pullAssistantsFromServer error: $e');
     }
+  }
+
+  Future<Map<String, dynamic>?> checkAssistantLoginByPin(String pin) async {
+    if (!isConfigured) return null;
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return null;
+    }
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&pin=eq.$pin&is_active=eq.true&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final items = jsonDecode(res.body) as List;
+        if (items.isNotEmpty) {
+          final item = items.first;
+          final cloudName = item['name'];
+          
+          // حفظ/تحديث المساعد محلياً
+          final db = await DatabaseHelper.instance.database;
+          final Map<String, dynamic> localData = {
+            'pin': item['pin'],
+            'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
+            'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
+            'can_delete': item['can_delete'] == true ? 1 : 0,
+            'can_view_reports': item['can_view_reports'] == true ? 1 : 0,
+            'can_manage_invoices': item['can_manage_invoices'] == true ? 1 : 0,
+            'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
+            'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
+            'is_active': item['is_active'] == true ? 1 : 0,
+            'subscription_expiry': item['subscription_expiry'] ?? DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+            'subscription_duration_days': item['subscription_duration_days'] ?? 30,
+          };
+          
+          final existing = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
+          if (existing.isEmpty) {
+            final insertData = {
+              'name': cloudName,
+              'phone': item['phone'] ?? '',
+              'role': item['role'] ?? 'assistant',
+              'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
+              ...localData,
+            };
+            final id = await db.insert('assistants', insertData);
+            final Map<String, dynamic> result = Map<String, dynamic>.from(insertData);
+            result['id'] = id;
+            return result;
+          } else {
+            await db.update('assistants', localData, where: 'name = ?', whereArgs: [cloudName]);
+            final Map<String, dynamic> result = Map<String, dynamic>.from(existing.first);
+            result.addAll(localData);
+            return result;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ checkAssistantLoginByPin error: $e');
+    }
+    return null;
   }
 }

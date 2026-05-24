@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../providers/current_user_provider.dart';
 import '../utils/app_theme.dart';
+import '../services/sync_service.dart';
 
 /// شاشة اختيار المستخدم (المالك أو المساعد)
 /// تظهر بعد شاشة PIN أو مباشرة عند الدخول
@@ -45,6 +46,10 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
   }
 
   Future<void> _load() async {
+    try {
+      await SyncService.instance.pullAssistantsFromServer().timeout(const Duration(seconds: 4));
+    } catch (_) {}
+
     final data = await DatabaseHelper.instance.getAssistants();
     if (mounted) {
       setState(() {
@@ -164,10 +169,21 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
                     borderSide: const BorderSide(color: AppColors.primary),
                   ),
                 ),
-                onChanged: (val) {
+                onChanged: (val) async {
                   if (error.isNotEmpty) setDlg(() => error = '');
                   if (val.length == 4) {
-                    if (val == assistant.pin) {
+                    setDlg(() => error = 'جاري التحقق... ⏳');
+                    Map<String, dynamic>? verifiedMap;
+                    try {
+                      verifiedMap = await SyncService.instance.checkAssistantLoginByPin(val);
+                    } catch (_) {}
+                    
+                    if (!ctx.mounted) return;
+                    
+                    if (verifiedMap != null && verifiedMap['name'] == assistant.name) {
+                      Navigator.pop(ctx);
+                      _loginAsAssistant(Assistant.fromMap(verifiedMap));
+                    } else if (val == assistant.pin) {
                       Navigator.pop(ctx);
                       _loginAsAssistant(assistant);
                     } else {
@@ -195,8 +211,21 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
               child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
             ),
             ElevatedButton(
-              onPressed: () {
-                if (pinCtrl.text == assistant.pin) {
+              onPressed: () async {
+                final val = pinCtrl.text.trim();
+                if (val.length != 4) return;
+                setDlg(() => error = 'جاري التحقق... ⏳');
+                Map<String, dynamic>? verifiedMap;
+                try {
+                  verifiedMap = await SyncService.instance.checkAssistantLoginByPin(val);
+                } catch (_) {}
+                
+                if (!ctx.mounted) return;
+                
+                if (verifiedMap != null && verifiedMap['name'] == assistant.name) {
+                  Navigator.pop(ctx);
+                  _loginAsAssistant(Assistant.fromMap(verifiedMap));
+                } else if (val == assistant.pin) {
                   Navigator.pop(ctx);
                   _loginAsAssistant(assistant);
                 } else {

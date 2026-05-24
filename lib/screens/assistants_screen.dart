@@ -468,9 +468,18 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _load();
                     if (mounted) {
-                      showSnack(context,
-                          existing == null ? 'تم إضافة المساعد ✅' : 'تم التعديل ✅');
+                      showSnack(context, 'جاري مزامنة المساعد سحابياً... 🔄', isError: false);
                     }
+                    SyncService.instance.syncAll().then((_) {
+                      if (mounted) {
+                        showSnack(context, existing == null ? 'تم إضافة المساعد ومزامنته بنجاح! ✅' : 'تم تعديل المساعد ومزامنته بنجاح! ✅');
+                        _load();
+                      }
+                    }).catchError((e) {
+                      if (mounted) {
+                        showSnack(context, '⚠️ فشل مزامنة التغييرات سحابياً، سيتم المحاولة لاحقاً تلقائياً.');
+                      }
+                    });
                   },
                 ),
                 const SizedBox(height: 20),
@@ -1515,7 +1524,19 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                     screen: 'assistants',
                   );
                   await _load();
-                  if (mounted) showSnack(context, 'تم الحذف');
+                  if (mounted) {
+                    showSnack(context, 'جاري مزامنة حذف المساعد سحابياً... 🔄', isError: false);
+                  }
+                  SyncService.instance.syncAll().then((_) {
+                    if (mounted) {
+                      showSnack(context, 'تم الحذف والمزامنة بنجاح! ✅');
+                      _load();
+                    }
+                  }).catchError((e) {
+                    if (mounted) {
+                      showSnack(context, '⚠️ فشل مزامنة الحذف سحابياً، سيتم المحاولة لاحقاً تلقائياً.');
+                    }
+                  });
                 }
               },
               backgroundColor: AppColors.danger,
@@ -1633,9 +1654,18 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     );
     await _load();
     if (mounted) {
-      showSnack(context,
-          newState == 1 ? 'تم تفعيل ${assistant.name} ✅' : 'تم تعطيل ${assistant.name} ❌');
+      showSnack(context, 'جاري مزامنة تعديل النشاط سحابياً... 🔄', isError: false);
     }
+    SyncService.instance.syncAll().then((_) {
+      if (mounted) {
+        showSnack(context, newState == 1 ? 'تم تفعيل ${assistant.name} ومزامنته بنجاح! ✅' : 'تم تعطيل ${assistant.name} ومزامنته بنجاح! ✅');
+        _load();
+      }
+    }).catchError((e) {
+      if (mounted) {
+        showSnack(context, '⚠️ فشل مزامنة تعديل النشاط سحابياً، سيتم المحاولة لاحقاً تلقائياً.');
+      }
+    });
   }
 
   String _logFilter = 'all'; // فلتر سجل النشاط
