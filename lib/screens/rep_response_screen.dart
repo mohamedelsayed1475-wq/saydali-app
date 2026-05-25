@@ -30,16 +30,48 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   String _searchQuery = '';
   bool _showSearch = false;
   String _currency = 'ج.م';
+  String _pharmacyName = '';
+  List<Map<String, dynamic>> _sentSessions = [];
+  bool _loadingSessions = true;
 
   @override
   void initState() {
     super.initState();
     _codeCtrl = TextEditingController(text: widget.initialCode ?? '');
     _loadCurrency();
+    _loadPharmacyNameAndSessions();
     if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _fetchResponse();
       });
+    }
+  }
+
+  Future<void> _loadPharmacyNameAndSessions() async {
+    final name = await DatabaseHelper.instance.getSetting('pharmacy_name') ?? 'صيدليتي';
+    if (mounted) {
+      setState(() {
+        _pharmacyName = name;
+      });
+      await _fetchSentSessions();
+    }
+  }
+
+  Future<void> _fetchSentSessions() async {
+    if (_pharmacyName.isEmpty) return;
+    if (mounted) setState(() => _loadingSessions = true);
+    try {
+      final sessions = await SupabaseService.instance.fetchPharmacySessions(_pharmacyName);
+      if (mounted) {
+        setState(() {
+          _sentSessions = sessions;
+          _loadingSessions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingSessions = false);
+      }
     }
   }
 
@@ -1461,50 +1493,197 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
   }
 
   Widget _buildCodeEntry() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return RefreshIndicator(
+      onRefresh: _fetchSentSessions,
+      color: AppColors.primary,
+      child: ListView(
+        padding: const EdgeInsets.all(24),
         children: [
-          const Text('📲', style: TextStyle(fontSize: 60)),
-          const SizedBox(height: 16),
-          const Text('أدخل كود الرد',
+          const Center(child: Text('📲', style: TextStyle(fontSize: 50))),
+          const SizedBox(height: 12),
+          const Center(
+            child: Text(
+              'أدخل كود الرد يدوياً',
               style: TextStyle(
-                  color: AppColors.textColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          const Text('أدخل الكود المكوّن من 8 أحرف الذي أرسله المندوب',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-          const SizedBox(height: 32),
+                color: AppColors.textColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           TextField(
             controller: _codeCtrl,
             textCapitalization: TextCapitalization.characters,
             textAlign: TextAlign.center,
             style: const TextStyle(
                 color: AppColors.primary,
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 8),
             maxLength: 8,
             decoration: InputDecoration(
               hintText: '--------',
               hintStyle: const TextStyle(
-                  color: AppColors.darkBorder, letterSpacing: 8, fontSize: 28),
+                  color: AppColors.darkBorder, letterSpacing: 8, fontSize: 24),
               errorText: _error,
               counterText: '',
-              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
             onSubmitted: (_) => _fetchResponse(),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           PrimaryButton(
             text: 'جلب الرد',
             isLoading: _loading,
             icon: Icons.search_rounded,
             onTap: _fetchResponse,
           ),
+          const SizedBox(height: 24),
+          const Divider(color: AppColors.darkBorder),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'الطلبات المرسلة للمندوبين 📨',
+                style: TextStyle(
+                  color: AppColors.textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              if (_loadingSessions)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                    strokeWidth: 2,
+                  ),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
+                  onPressed: _fetchSentSessions,
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!_loadingSessions && _sentSessions.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.darkCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: const Center(
+                child: Text(
+                  'لا توجد طلبات مرسلة نشطة حالياً.',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              ),
+            )
+          else
+            ..._sentSessions.map((session) {
+              final isResponded = session['responded_at'] != null || session['status'] == 'responded';
+              final repName = session['rep_name'] ?? 'مندوب';
+              final code = session['session_code'] ?? '';
+              
+              return Card(
+                color: AppColors.darkCard,
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: isResponded 
+                        ? AppColors.primary.withValues(alpha: 0.4) 
+                        : AppColors.darkBorder
+                  ),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    _codeCtrl.text = code;
+                    _fetchResponse();
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: isResponded 
+                                ? AppColors.primary.withValues(alpha: 0.15) 
+                                : AppColors.darkBorder,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Center(child: Text('👤', style: TextStyle(fontSize: 18))),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                repName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'كود الطلب: $code',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isResponded 
+                                ? AppColors.primary.withValues(alpha: 0.1) 
+                                : AppColors.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isResponded ? Icons.check_circle : Icons.hourglass_empty_rounded,
+                                size: 12,
+                                color: isResponded ? AppColors.primary : AppColors.warning,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                isResponded ? 'تم الرد! اضغط للاستلام' : 'قيد الانتظار',
+                                style: TextStyle(
+                                  color: isResponded ? AppColors.primary : AppColors.warning,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
         ],
       ),
     );

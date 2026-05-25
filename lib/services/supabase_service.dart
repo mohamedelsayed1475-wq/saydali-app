@@ -208,6 +208,26 @@ class SupabaseService {
     }
   }
 
+  // ── جلب كل الجلسات النشطة للصيدلية ──────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> fetchPharmacySessions(String pharmacyName) async {
+    if (!isConfigured) return [];
+    try {
+      final res = await http.get(
+        Uri.parse('$_url/rep_sessions?pharmacy_name=eq.${Uri.encodeComponent(pharmacyName)}&select=*'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List;
+        return data.cast<Map<String, dynamic>>();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('❌ fetchPharmacySessions error: $e');
+      return [];
+    }
+  }
+
   // ── تجديد جلسة منتهية ──────────────────────────────────────────────────
   Future<String?> renewSession(String oldSessionCode, {
     required String repName,
