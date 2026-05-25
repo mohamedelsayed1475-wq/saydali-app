@@ -54,12 +54,13 @@ class SupabaseService {
     try {
       final sessionCode = _generateCode(8);
 
+      // 1. إنشاء الجلسة
       final sessionRes = await http
           .post(
             Uri.parse('$_url/rep_sessions'),
             headers: _headers,
             body: jsonEncode({
-              'session_code': sessionCode.toUpperCase(),
+              'session_code': sessionCode,
               'rep_name': repName,
               'rep_phone': repPhone,
               'pharmacy_name': pharmacyName,
@@ -77,10 +78,12 @@ class SupabaseService {
         debugPrint('❌ $lastError');
         return null;
       }
+
       final sessionData = jsonDecode(sessionRes.body);
       final sessionId =
           sessionData is List ? sessionData[0]['id'] : sessionData['id'];
 
+      // 2. إضافة الأصناف
       for (final item in items) {
         final itemRes = await http
             .post(
@@ -89,10 +92,12 @@ class SupabaseService {
               body: jsonEncode({
                 'session_id': sessionId,
                 'drug_name': item['name'],
-                'company': item['company']?.toString().isEmpty ?? true ? '' : item['company'],
+                'company': item['company']?.toString().isEmpty ?? true
+                    ? ''
+                    : item['company'],
                 'quantity': item['quantity'] ?? 1,
                 'is_private': item['is_private'] ?? 0,
-                'is_available': 0, // القيمة الافتراضية عند الإنشاء (ناقص)
+                'is_available': 0,
               }),
             )
             .timeout(const Duration(seconds: 10));
@@ -102,16 +107,24 @@ class SupabaseService {
         }
       }
 
-      // إضافة الكود في جدول الربط response_codes لحماية العلاقات
-      await http.post(
-        Uri.parse('$_url/response_codes'),
-        headers: _headers,
-        body: jsonEncode({
-          'response_code': sessionCode.toUpperCase(),
-          'session_id': sessionId,
-        }),
-      ).timeout(const Duration(seconds: 5));
+      // 3. تسجيل الكود في جدول response_codes
+      // العمود اسمه response_code والـ session_id من نوع bigint
+      final codeRes = await http
+          .post(
+            Uri.parse('$_url/response_codes'),
+            headers: _headers,
+            body: jsonEncode({
+              'response_code': sessionCode,
+              'session_id': sessionId,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
 
+      if (codeRes.statusCode != 201) {
+        debugPrint('⚠️ تحذير: فشل تسجيل كود الرد في response_codes: ${codeRes.body}');
+      }
+
+      debugPrint('✅ تم إنشاء الجلسة: $sessionCode (id: $sessionId)');
       return sessionCode;
     } catch (e) {
       lastError = 'خطأ اتصال بالشبكة: $e';
@@ -134,10 +147,26 @@ class SupabaseService {
             pharmacyName: 'صيدليتي',
             respondedAt: DateTime.now(),
             availableItems: [
-              ResponseItem(id: '1', drugName: 'Congestal', company: 'Sigma', quantity: 5, price: 20.0, discount: 5.0, notes: 'متوفر'),
+              ResponseItem(
+                id: '1',
+                drugName: 'Congestal',
+                company: 'Sigma',
+                quantity: 5,
+                price: 20.0,
+                discount: 5.0,
+                notes: 'متوفر',
+              ),
             ],
             unavailableItems: [
-              ResponseItem(id: '2', drugName: 'Panadol', company: 'GSK', quantity: 2, price: 0, discount: 0, notes: 'ناقص'),
+              ResponseItem(
+                id: '2',
+                drugName: 'Panadol',
+                company: 'GSK',
+                quantity: 2,
+                price: 0,
+                discount: 0,
+                notes: 'ناقص',
+              ),
             ],
           ),
           error: null
@@ -146,27 +175,35 @@ class SupabaseService {
       debugPrint('❌ Supabase key غير مضبوط');
       return (response: null, error: 'إعدادات الاتصال غير مكتملة');
     }
+
     try {
       final formattedCode = responseCode.trim().toUpperCase();
-      
-      // 1. جلب الجلسة المعنية من جدول الأكواد
+
+      // 1. جلب الجلسة من جدول response_codes باستخدام العمود الصحيح response_code
       final codeRes = await http
           .get(
-            Uri.parse('$_url/response_codes?response_code=eq.$formattedCode&select=*'),
+            Uri.parse(
+                '$_url/response_codes?response_code=eq.$formattedCode&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
 
       if (codeRes.statusCode != 200) {
         debugPrint('❌ خطأ في جلب الكود: ${codeRes.statusCode}');
-        return (response: null, error: 'خطأ من السيرفر (${codeRes.statusCode})');
+        return (
+          response: null,
+          error: 'خطأ من السيرفر (${codeRes.statusCode})'
+        );
       }
+
       final codes = jsonDecode(codeRes.body) as List;
-      if (codes.isEmpty) return (response: null, error: 'الكود غير صحيح أو منتهي');
+      if (codes.isEmpty) {
+        return (response: null, error: 'كود غير صحيح أو منتهي الصلاحية');
+      }
 
       final sessionId = codes[0]['session_id'];
 
-      // 2. جلب بيانات الجلسة من السيرفر
+      // 2. جلب بيانات الجلسة
       final sessionRes = await http
           .get(
             Uri.parse('$_url/rep_sessions?id=eq.$sessionId&select=*'),
@@ -174,13 +211,26 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      if (sessionRes.statusCode != 200)
+      if (sessionRes.statusCode != 200) {
         return (response: null, error: 'خطأ في جلب بيانات الجلسة');
+      }
+
       final sessions = jsonDecode(sessionRes.body) as List;
-      if (sessions.isEmpty) return (response: null, error: 'لم يتم العثور على الجلسة');
+      if (sessions.isEmpty) {
+        return (response: null, error: 'لم يتم العثور على الجلسة');
+      }
+
       final session = sessions[0];
 
-      // 3. جلب الأصناف المرتبطة بالجلسة
+      // التحقق من انتهاء صلاحية الجلسة
+      if (session['expires_at'] != null) {
+        final expiresAt = DateTime.parse(session['expires_at']);
+        if (DateTime.now().isAfter(expiresAt)) {
+          return (response: null, error: 'كود غير صحيح أو منتهي الصلاحية');
+        }
+      }
+
+      // 3. جلب الأصناف
       final itemsRes = await http
           .get(
             Uri.parse('$_url/session_items?session_id=eq.$sessionId&select=*'),
@@ -188,11 +238,13 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      if (itemsRes.statusCode != 200)
+      if (itemsRes.statusCode != 200) {
         return (response: null, error: 'خطأ في جلب الأصناف');
+      }
+
       final items = jsonDecode(itemsRes.body) as List;
 
-      // تصفية مرنة تدعم الـ Integer (0 و 1) أو الـ Boolean لحالة التوفر
+      // تصفية مرنة تدعم Integer وBoolean
       final availableList = items.where((i) {
         final val = i['is_available'];
         return val == 1 || val == true || val == '1' || val == 'true';
@@ -200,7 +252,11 @@ class SupabaseService {
 
       final unavailableList = items.where((i) {
         final val = i['is_available'];
-        return val == 0 || val == false || val == '0' || val == 'false' || val == null;
+        return val == 0 ||
+            val == false ||
+            val == '0' ||
+            val == 'false' ||
+            val == null;
       }).map((i) => ResponseItem.fromMap(i)).toList();
 
       return (
@@ -230,13 +286,17 @@ class SupabaseService {
   }
 
   // ── جلب كل الجلسات النشطة للصيدلية ──────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> fetchPharmacySessions(String pharmacyName) async {
+  Future<List<Map<String, dynamic>>> fetchPharmacySessions(
+      String pharmacyName) async {
     if (!isConfigured) return [];
     try {
-      final res = await http.get(
-        Uri.parse('$_url/rep_sessions?pharmacy_name=eq.${Uri.encodeComponent(pharmacyName)}&select=*'),
-        headers: _headers,
-      ).timeout(const Duration(seconds: 10));
+      final res = await http
+          .get(
+            Uri.parse(
+                '$_url/rep_sessions?pharmacy_name=eq.${Uri.encodeComponent(pharmacyName)}&select=*'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as List;
@@ -250,7 +310,8 @@ class SupabaseService {
   }
 
   // ── تجديد جلسة منتهية ──────────────────────────────────────────────────
-  Future<String?> renewSession(String oldSessionCode, {
+  Future<String?> renewSession(
+    String oldSessionCode, {
     required String repName,
     required String repPhone,
     required String pharmacyName,
@@ -264,7 +325,8 @@ class SupabaseService {
     try {
       final sessionRes = await http
           .get(
-            Uri.parse('$_url/rep_sessions?session_code=eq.${oldSessionCode.toUpperCase()}&select=*'),
+            Uri.parse(
+                '$_url/rep_sessions?session_code=eq.${oldSessionCode.toUpperCase()}&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -334,7 +396,7 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 10));
 
-      debugPrint('✅ تم حذف الجلسة وبياناتها من السحابة');
+      debugPrint('✅ تم حذف الجلسة وبياناتها: $sessionId');
     } catch (e) {
       debugPrint('❌ deleteSession error: $e');
     }
@@ -354,7 +416,8 @@ class SupabaseService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/subscription_codes?code=eq.${code.toUpperCase()}&select=*'),
+            Uri.parse(
+                '$_url/subscription_codes?code=eq.${code.toUpperCase()}&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -370,17 +433,19 @@ class SupabaseService {
   }
 
   // ── إضافة كود اشتراك ──────────────────────────────────────────────────
-  Future<({bool ok, String error})> insertSubscriptionCode(Map<String, dynamic> data) async {
+  Future<({bool ok, String error})> insertSubscriptionCode(
+      Map<String, dynamic> data) async {
     if (!isConfigured) {
       return (ok: false, error: 'إعدادات السحابة غير مكتملة:\n$configDiagnostic');
     }
-    
+
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
-        payload['is_active'] = payload['is_active'] == 1 || payload['is_active'] == true;
+        payload['is_active'] =
+            payload['is_active'] == 1 || payload['is_active'] == true;
       }
-      
+
       final res = await http
           .post(
             Uri.parse('$_url/rpc/add_subscription_code_rpc'),
@@ -396,7 +461,7 @@ class SupabaseService {
             }),
           )
           .timeout(const Duration(seconds: 10));
-          
+
       if (res.statusCode == 200 || res.statusCode == 201) {
         return (ok: true, error: '');
       } else {
@@ -407,7 +472,8 @@ class SupabaseService {
             errorMsg = '${parsed['message']} (${res.statusCode})';
           }
         } catch (_) {}
-        debugPrint('❌ insertSubscriptionCode failed: ${res.statusCode} - ${res.body}');
+        debugPrint(
+            '❌ insertSubscriptionCode failed: ${res.statusCode} - ${res.body}');
         return (ok: false, error: errorMsg);
       }
     } catch (e) {
@@ -422,7 +488,8 @@ class SupabaseService {
     try {
       final res = await http
           .patch(
-            Uri.parse('$_url/subscription_codes?code=eq.${code.toUpperCase()}'),
+            Uri.parse(
+                '$_url/subscription_codes?code=eq.${code.toUpperCase()}'),
             headers: _headers,
             body: jsonEncode({'is_used': usedCount > 0}),
           )
@@ -435,14 +502,16 @@ class SupabaseService {
   }
 
   // ── إضافة إعلان ──────────────────────────────────────────────────
-  Future<({bool ok, String error})> insertAd(Map<String, dynamic> data) async {
+  Future<({bool ok, String error})> insertAd(
+      Map<String, dynamic> data) async {
     if (!isConfigured) {
       return (ok: false, error: 'إعدادات السحابة غير مكتملة:\n$configDiagnostic');
     }
     try {
       final payload = Map<String, dynamic>.from(data);
       if (payload.containsKey('is_active')) {
-        payload['is_active'] = payload['is_active'] == 1 || payload['is_active'] == true;
+        payload['is_active'] =
+            payload['is_active'] == 1 || payload['is_active'] == true;
       }
 
       final res = await http
@@ -465,7 +534,7 @@ class SupabaseService {
             }),
           )
           .timeout(const Duration(seconds: 10));
-          
+
       if (res.statusCode == 200 || res.statusCode == 201) {
         return (ok: true, error: '');
       } else {
@@ -493,15 +562,18 @@ class SupabaseService {
       final fileName = 'ad_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final bytes = await file.readAsBytes();
 
-      final res = await http.post(
-        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/ads-images/$fileName'),
-        headers: {
-          'apikey': EnvConfig.supabaseKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-          'Content-Type': 'image/jpeg',
-        },
-        body: bytes,
-      ).timeout(const Duration(seconds: 30));
+      final res = await http
+          .post(
+            Uri.parse(
+                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/ads-images/$fileName'),
+            headers: {
+              'apikey': EnvConfig.supabaseKey,
+              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
+              'Content-Type': 'image/jpeg',
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/ads-images/$fileName';
@@ -515,27 +587,33 @@ class SupabaseService {
   }
 
   // ── رفع صورة العميل ──────────────────────────────────────────────────
-  Future<String?> uploadCustomerPhoto(String filePath, String customerId) async {
+  Future<String?> uploadCustomerPhoto(
+      String filePath, String customerId) async {
     if (!isConfigured) return null;
     try {
       final file = File(filePath);
-      final fileName = 'customer_${customerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName =
+          'customer_${customerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final bytes = await file.readAsBytes();
 
-      final res = await http.post(
-        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/customer-photos/$fileName'),
-        headers: {
-          'apikey': EnvConfig.supabaseKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-          'Content-Type': 'image/jpeg',
-        },
-        body: bytes,
-      ).timeout(const Duration(seconds: 30));
+      final res = await http
+          .post(
+            Uri.parse(
+                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/customer-photos/$fileName'),
+            headers: {
+              'apikey': EnvConfig.supabaseKey,
+              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
+              'Content-Type': 'image/jpeg',
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/customer-photos/$fileName';
       }
-      debugPrint('❌ uploadCustomerPhoto failed: ${res.statusCode} - ${res.body}');
+      debugPrint(
+          '❌ uploadCustomerPhoto failed: ${res.statusCode} - ${res.body}');
       return null;
     } catch (e) {
       debugPrint('❌ uploadCustomerPhoto error: $e');
@@ -544,27 +622,33 @@ class SupabaseService {
   }
 
   // ── رفع إيصال الدين ──────────────────────────────────────────────────
-  Future<String?> uploadReceiptPhoto(String filePath, String transactionId) async {
+  Future<String?> uploadReceiptPhoto(
+      String filePath, String transactionId) async {
     if (!isConfigured) return null;
     try {
       final file = File(filePath);
-      final fileName = 'receipt_${transactionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName =
+          'receipt_${transactionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final bytes = await file.readAsBytes();
 
-      final res = await http.post(
-        Uri.parse('${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/debt-receipts/$fileName'),
-        headers: {
-          'apikey': EnvConfig.supabaseKey,
-          'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-          'Content-Type': 'image/jpeg',
-        },
-        body: bytes,
-      ).timeout(const Duration(seconds: 30));
+      final res = await http
+          .post(
+            Uri.parse(
+                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/debt-receipts/$fileName'),
+            headers: {
+              'apikey': EnvConfig.supabaseKey,
+              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
+              'Content-Type': 'image/jpeg',
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/debt-receipts/$fileName';
       }
-      debugPrint('❌ uploadReceiptPhoto failed: ${res.statusCode} - ${res.body}');
+      debugPrint(
+          '❌ uploadReceiptPhoto failed: ${res.statusCode} - ${res.body}');
       return null;
     } catch (e) {
       debugPrint('❌ uploadReceiptPhoto error: $e');
@@ -572,31 +656,20 @@ class SupabaseService {
     }
   }
 
-  // ── رابط الصفحة الويب ──────────────────────────────────────────────────
+  // ── رابط الصفحة الويب (الكود فقط — بدون تمرير المفاتيح) ──────────────
   String buildRepLink(String sessionCode) {
     const fallback = 'https://mohamedelsayed1475-wq.github.io/saydali-app1';
     final baseUrl = EnvConfig.webPortalBaseUrl.isNotEmpty
         ? EnvConfig.webPortalBaseUrl
         : fallback;
     final separator = baseUrl.endsWith('/') ? '' : '/';
-    
-    String queryParams = 'code=$sessionCode';
-    if (EnvConfig.supabaseUrl.isNotEmpty && EnvConfig.supabaseKey.isNotEmpty) {
-      try {
-        final encodedUrl = Uri.encodeComponent(base64.encode(utf8.encode(EnvConfig.supabaseUrl)));
-        final encodedKey = Uri.encodeComponent(base64.encode(utf8.encode(EnvConfig.supabaseKey)));
-        queryParams += '&u=$encodedUrl&k=$encodedKey';
-      } catch (e) {
-        debugPrint('⚠️ Error encoding supabase credentials for web link: $e');
-      }
-    }
-    
-    final link = '$baseUrl$separator?$queryParams';
-    debugPrint('🔗 رابط المندوب الآمن: $link');
+    final link = '$baseUrl$separator?code=$sessionCode';
+    debugPrint('🔗 رابط المندوب: $link');
     return link;
   }
 
   // ── حذف الجلسات المنتهية تلقائياً (تنظيف) ──────────────────────────────
+  // يحذف الجلسات التي انتهى وقتها منذ أكثر من 24 ساعة
   Future<int> cleanupExpiredSessions() async {
     if (!isConfigured) return 0;
     try {
@@ -604,7 +677,8 @@ class SupabaseService {
 
       final sessionsRes = await http
           .get(
-            Uri.parse('$_url/rep_sessions?expires_at=lt.${cutoff.toIso8601String()}&select=id'),
+            Uri.parse(
+                '$_url/rep_sessions?expires_at=lt.${cutoff.toIso8601String()}&select=id'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 30));
@@ -747,4 +821,3 @@ class ResponseItem {
   double get finalPrice => price * (1 - discount / 100);
   double get totalPrice => finalPrice * quantity;
 }
-
