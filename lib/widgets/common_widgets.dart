@@ -273,15 +273,35 @@ Future<bool?> showDeleteDialog(BuildContext context, String itemName) {
   );
 }
 
-// ── Snackbar ──────────────────────────────────────────────────
-void showSnack(BuildContext context, String message, {bool isError = false, int durationMs = 1000}) {
+void showSnack(BuildContext context, String message, {bool isError = false, int durationMs = 500}) {
   ScaffoldMessenger.of(context).clearSnackBars();
+  final screenWidth = MediaQuery.of(context).size.width;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(message, style: const TextStyle(fontFamily: 'Cairo')),
+    content: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+          color: Colors.white,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
     backgroundColor: isError ? AppColors.danger : AppColors.primary,
     behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    margin: const EdgeInsets.all(16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    width: screenWidth > 500 ? 340 : screenWidth - 32,
     duration: Duration(milliseconds: durationMs),
   ));
 }
