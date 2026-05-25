@@ -107,22 +107,9 @@ class SupabaseService {
         }
       }
 
-      // 3. تسجيل الكود في جدول response_codes
-      // العمود اسمه response_code والـ session_id من نوع bigint
-      final codeRes = await http
-          .post(
-            Uri.parse('$_url/response_codes'),
-            headers: _headers,
-            body: jsonEncode({
-              'response_code': sessionCode,
-              'session_id': sessionId,
-            }),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (codeRes.statusCode != 201) {
-        debugPrint('⚠️ تحذير: فشل تسجيل كود الرد في response_codes: ${codeRes.body}');
-      }
+      // ✅ تم حذف حفظ response_code هنا عمداً
+      // الكود الصحيح يتولد فقط من الموقع عند رد المندوب
+      // ويُحفظ في جدول response_codes تلقائياً عبر الموقع
 
       debugPrint('✅ تم إنشاء الجلسة: $sessionCode (id: $sessionId)');
       return sessionCode;
@@ -179,7 +166,7 @@ class SupabaseService {
     try {
       final formattedCode = responseCode.trim().toUpperCase();
 
-      // 1. جلب الجلسة من جدول response_codes باستخدام العمود الصحيح response_code
+      // 1. جلب الجلسة من جدول response_codes
       final codeRes = await http
           .get(
             Uri.parse(
@@ -222,12 +209,9 @@ class SupabaseService {
 
       final session = sessions[0];
 
-      // التحقق من انتهاء صلاحية الجلسة
-      if (session['expires_at'] != null) {
-        final expiresAt = DateTime.parse(session['expires_at']);
-        if (DateTime.now().isAfter(expiresAt)) {
-          return (response: null, error: 'كود غير صحيح أو منتهي الصلاحية');
-        }
+      // التحقق من أن الجلسة تم الرد عليها فعلاً
+      if (session['status'] != 'responded') {
+        return (response: null, error: 'لم يرد المندوب بعد على هذا الطلب');
       }
 
       // 3. جلب الأصناف
@@ -669,7 +653,6 @@ class SupabaseService {
   }
 
   // ── حذف الجلسات المنتهية تلقائياً (تنظيف) ──────────────────────────────
-  // يحذف الجلسات التي انتهى وقتها منذ أكثر من 24 ساعة
   Future<int> cleanupExpiredSessions() async {
     if (!isConfigured) return 0;
     try {
@@ -765,7 +748,7 @@ class SupabaseService {
   }
 }
 
-// ── نماذج البيانات ومحولات الـ Maps المؤمنة ضد الـ Casting Errors ─────────────────
+// ── نماذج البيانات ─────────────────────────────────────────────────────────
 class RepResponse {
   final String sessionId;
   final String repName;
