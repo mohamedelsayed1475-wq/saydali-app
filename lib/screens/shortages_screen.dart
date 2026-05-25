@@ -57,11 +57,11 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadShortages();
+    _loadShortages(silent: false);
     _loadSuggestions();
     // تحديث تلقائي كل 30 ثانية
     _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      _loadShortages();
+      _loadShortages(silent: true);
     });
   }
 
@@ -88,8 +88,8 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
-  Future<void> _loadShortages() async {
-    await context.read<ShortagesProvider>().load();
+  Future<void> _loadShortages({bool silent = false}) async {
+    await context.read<ShortagesProvider>().load(silent: silent);
   }
 
   /// ▌ حساب درجة التطابق (كلما زادت كلما كان أفضل)

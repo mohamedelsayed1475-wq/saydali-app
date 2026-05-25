@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
+import '../utils/fuzzy_search.dart';
 import '../widgets/common_widgets.dart';
 import 'scanner_screen.dart';
 
@@ -20,6 +22,7 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
   List<MedicationExpiry> _filteredExpiries = [];
   bool _loading = true;
   String _searchQuery = '';
+  List<Map<String, dynamic>> _suggestions = [];
 
   @override
   void initState() {
@@ -27,6 +30,32 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_handleTabChange);
     _loadExpiries();
+    _loadSuggestions();
+  }
+
+  Future<void> _loadSuggestions() async {
+    final dictStr =
+        await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    if (dictStr != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(dictStr);
+        if (mounted) {
+          setState(() => _suggestions = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        }
+      } catch (e) {}
+    } else {
+      final oldDictStr =
+          await DatabaseHelper.instance.getSetting('drug_dictionary');
+      if (oldDictStr != null) {
+        try {
+          final List<dynamic> decoded = jsonDecode(oldDictStr);
+          if (mounted) {
+            setState(() => _suggestions =
+                decoded.map((s) => {'enName': s.toString()}).toList());
+          }
+        } catch (e) {}
+      }
+    }
   }
 
   @override
@@ -96,8 +125,8 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
     });
   }
 
-  Future<void> _showAddEditModal({MedicationExpiry? existing}) async {
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+  Future<void> _showAddEditModal({MedicationExpiry? existing, String? initialName}) async {
+    final nameCtrl = TextEditingController(text: initialName ?? existing?.name ?? '');
     final qtyCtrl = TextEditingController(text: existing?.quantity.toString() ?? '1');
     final supplierCtrl = TextEditingController(text: existing?.supplierName ?? '');
     final notesCtrl = TextEditingController(text: existing?.notes ?? '');
@@ -145,27 +174,155 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: nameCtrl,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          labelText: 'اسم الدواء أو الباركود *',
-                          prefixIcon: Icon(Icons.medication, color: AppColors.primary),
-                        ),
+                      child: Autocomplete<Map<String, dynamic>>(
+                        optionsBuilder: (v) {
+                          if (v.text.isEmpty) {
+                            return const Iterable<Map<String, dynamic>>.empty();
+                          }
+
+                          final query = v.text;
+
+                          // ① اقتراحات القاموس المحلي
+                          final dictMatches = _suggestions.map((s) {
+                            final en = s['enName']?.toString() ?? '';
+                            final ar = s['arName']?.toString() ?? '';
+                            final act = s['activeIngredient']?.toString() ?? '';
+                            final bar = s['barcode']?.toString() ?? '';
+                            final scoreEn = FuzzySearch.getScore(query, en);
+                            final scoreAr = FuzzySearch.getScore(query, ar);
+                            final scoreAct = FuzzySearch.getScore(query, act);
+                            final scoreBar = bar.contains(query.trim()) ? 1000 : 0;
+                            final maxScore = [scoreEn, scoreAr, scoreAct, scoreBar].reduce((a, b) => a > b ? a : b);
+                            return {'item': s, 'score': maxScore};
+                          }).where((e) => (e['score'] as int) > 0).toList();
+
+                          // الترتيب حسب الأعلى تقييماً
+                          dictMatches.sort((a, b) =>
+                              (b['score'] as int).compareTo(a['score'] as int));
+
+                          return dictMatches
+                              .map((e) => e['item'] as Map<String, dynamic>)
+                              .take(14);
+                        },
+                        displayStringForOption: (option) =>
+                            option['enName']?.toString() ?? '',
+                        onSelected: (s) {
+                          nameCtrl.text = s['enName']?.toString() ?? '';
+                          if (s['company'] != null && s['company'].toString() != 'غير محدد') {
+                            supplierCtrl.text = s['company'].toString();
+                          }
+                        },
+                        fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                          if (existing != null &&
+                              ctrl.text.isEmpty &&
+                              existing.name.isNotEmpty) {
+                            ctrl.text = existing.name;
+                          }
+                          if (initialName != null &&
+                              ctrl.text.isEmpty &&
+                              initialName.isNotEmpty) {
+                            ctrl.text = initialName;
+                          }
+                          return TextField(
+                            controller: ctrl,
+                            focusNode: fn,
+                            onSubmitted: (_) => onSubmit(),
+                            onChanged: (val) {
+                              nameCtrl.text = val;
+                            },
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(
+                              labelText: 'اسم الدواء أو الباركود *',
+                              prefixIcon: Icon(Icons.medication, color: AppColors.primary),
+                            ),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              color: AppColors.darkCard,
+                              elevation: 4.0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: const BorderSide(
+                                    color: AppColors.darkBorder),
+                              ),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                    maxHeight: 250, maxWidth: 300),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder:
+                                      (BuildContext context, int index) {
+                                    final option = options.elementAt(index);
+                                    final en = option['enName']?.toString() ?? '';
+                                    final ar = option['arName']?.toString() ?? '';
+                                    final act = option['activeIngredient']?.toString() ?? '';
+
+                                    return InkWell(
+                                      onTap: () {
+                                        onSelected(option);
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Text(en,
+                                                      style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: 14)),
+                                                ),
+                                                if (option['company'] != null && option['company'].toString().isNotEmpty && option['company'].toString() != 'غير محدد')
+                                                  Text(option['company'].toString(),
+                                                      style: const TextStyle(
+                                                          color: AppColors.textMuted,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
+                                            if (ar.isNotEmpty)
+                                              Text(ar,
+                                                  style: const TextStyle(
+                                                      color: AppColors.primary,
+                                                      fontSize: 12)),
+                                            if (act.isNotEmpty)
+                                              Text(act,
+                                                  style: const TextStyle(
+                                                      color: AppColors.textMuted,
+                                                      fontSize: 11)),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
                     // زر مسح الباركود
                     InkWell(
                       onTap: () async {
+                        Navigator.pop(ctx);
                         final code = await Navigator.push<String>(
                           context,
                           MaterialPageRoute(builder: (_) => const ScannerScreen()),
                         );
                         if (code != null && code.isNotEmpty) {
-                          setBS(() {
-                            nameCtrl.text = code;
-                          });
+                          _showAddEditModal(existing: existing, initialName: code);
                         }
                       },
                       child: Container(

@@ -72,13 +72,17 @@ class ShortagesProvider extends ChangeNotifier {
         'stubborn': _shortages.where((s) => s.status == 'stubborn').length,
       };
 
-  Future<void> load() async {
-    _loading = true;
-    notifyListeners();
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
     await DatabaseHelper.instance.autoCloseOldPendingShortages();
     final data = await DatabaseHelper.instance.getShortages();
     _shortages = data.map(Shortage.fromMap).toList();
-    _loading = false;
+    if (!silent) {
+      _loading = false;
+    }
     notifyListeners();
   }
 
