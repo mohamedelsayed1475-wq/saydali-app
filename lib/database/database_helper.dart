@@ -1176,8 +1176,10 @@ class DatabaseHelper {
   // ─── ميزات صلاحية الأدوية ───
   Future<int> insertMedicationExpiry(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = DateTime.now().toIso8601String();
-    return await db.insert('medication_expiries', data);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_at'] = DateTime.now().toIso8601String();
+    map['is_synced'] = 0;
+    return await db.insert('medication_expiries', map);
   }
 
   Future<List<Map<String, dynamic>>> getMedicationExpiries() async {
@@ -1187,7 +1189,9 @@ class DatabaseHelper {
 
   Future<int> updateMedicationExpiry(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return await db.update('medication_expiries', data, where: 'id = ?', whereArgs: [id]);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['is_synced'] = 0;
+    return await db.update('medication_expiries', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteMedicationExpiry(int id) async {

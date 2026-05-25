@@ -7,6 +7,7 @@ import '../utils/app_theme.dart';
 import '../utils/fuzzy_search.dart';
 import '../widgets/common_widgets.dart';
 import 'scanner_screen.dart';
+import '../services/sync_service.dart';
 
 class MedicationExpiryScreen extends StatefulWidget {
   const MedicationExpiryScreen({super.key});
@@ -456,6 +457,10 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
                       if (mounted) {
                         showSnack(context, isEdit ? 'تم تحديث تاريخ الصلاحية ✅' : 'تمت الإضافة بنجاح ✅');
                       }
+                      // Trigger background sync immediately
+                      SyncService.instance.syncAll().then((_) {
+                        if (mounted) _loadExpiries();
+                      });
                     } catch (e) {
                       showSnack(ctx, '⚠️ فشل الحفظ: $e', isError: true);
                     }
@@ -470,7 +475,7 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
     );
   }
 
-  Future<void> _deleteItem(int id) async {
+  Future<void> _deleteItem(MedicationExpiry item) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -493,14 +498,101 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
 
     if (confirm == true) {
       try {
-        await DatabaseHelper.instance.deleteMedicationExpiry(id);
+        await DatabaseHelper.instance.deleteMedicationExpiry(item.id!);
+        
+        // Delete from cloud if present
+        if (item.cloudId != null && item.cloudId!.isNotEmpty) {
+          SyncService.instance.deleteMedicationExpiryFromCloud(item.cloudId!);
+        }
+
         _loadExpiries();
         if (mounted) {
           showSnack(context, 'تم حذف الصنف بنجاح 🗑️');
         }
+        
+        // Trigger background sync immediately
+        SyncService.instance.syncAll().then((_) {
+          if (mounted) _loadExpiries();
+        });
       } catch (e) {
         if (mounted) {
           showSnack(context, '⚠️ فشل الحذف: $e', isError: true);
+        }
+      }
+    }
+  }
+
+  Future<void> _markAsSold(MedicationExpiry item) async {
+    if (item.quantity > 1) {
+      final updatedData = {
+        'name': item.name,
+        'quantity': item.quantity - 1,
+        'expiry_date': item.expiryDate.toIso8601String().substring(0, 10),
+        'supplier_name': item.supplierName,
+        'notes': item.notes,
+        'cloud_id': item.cloudId,
+        'created_by': item.createdBy,
+        'created_at': item.createdAt.toIso8601String(),
+      };
+      
+      try {
+        await DatabaseHelper.instance.updateMedicationExpiry(item.id!, updatedData);
+        if (mounted) {
+          showSnack(context, 'تم تسجيل بيع علبة واحدة من (${item.name}) 🛒');
+        }
+        _loadExpiries();
+        
+        // Trigger background sync immediately
+        SyncService.instance.syncAll().then((_) {
+          if (mounted) _loadExpiries();
+        });
+      } catch (e) {
+        if (mounted) {
+          showSnack(context, '⚠️ فشل تحديث البيانات: $e', isError: true);
+        }
+      }
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.darkCard,
+          title: const Text('تسجيل البيع', style: TextStyle(color: Colors.white)),
+          content: Text('هل تم بيع آخر علبة من دواء (${item.name}) بالكامل؟ سيتم إزالته من القائمة.', style: const TextStyle(color: AppColors.textLight)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('نعم، تم البيع'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        try {
+          await DatabaseHelper.instance.deleteMedicationExpiry(item.id!);
+          
+          if (item.cloudId != null && item.cloudId!.isNotEmpty) {
+            SyncService.instance.deleteMedicationExpiryFromCloud(item.cloudId!);
+          }
+          
+          if (mounted) {
+            showSnack(context, 'تم تسجيل بيع الدواء وإزالته بنجاح 🗑️🛒');
+          }
+          _loadExpiries();
+          
+          // Trigger background sync immediately
+          SyncService.instance.syncAll().then((_) {
+            if (mounted) _loadExpiries();
+          });
+        } catch (e) {
+          if (mounted) {
+            showSnack(context, '⚠️ فشل تسجيل البيع: $e', isError: true);
+          }
         }
       }
     }
@@ -518,6 +610,18 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_sync_rounded, color: AppColors.primary),
+            tooltip: 'مزامنة سحابية',
+            onPressed: () async {
+              showSnack(context, 'جاري المزامنة السحابية...', isError: false);
+              await SyncService.instance.syncAll();
+              if (mounted) {
+                showSnack(context, '✅ تمت المزامنة بنجاح!');
+                _loadExpiries();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 28),
             onPressed: () => _showAddEditModal(),
@@ -729,13 +833,19 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton.icon(
+                  onPressed: () => _markAsSold(item),
+                  icon: const Icon(Icons.shopping_cart_checkout_rounded, size: 16, color: Colors.greenAccent),
+                  label: const Text('تم البيع', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
                   onPressed: () => _showAddEditModal(existing: item),
                   icon: const Icon(Icons.edit, size: 16, color: AppColors.primary),
                   label: const Text('تعديل', style: TextStyle(color: AppColors.primary, fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
                 TextButton.icon(
-                  onPressed: () => _deleteItem(item.id!),
+                  onPressed: () => _deleteItem(item),
                   icon: const Icon(Icons.delete, size: 16, color: AppColors.danger),
                   label: const Text('حذف', style: TextStyle(color: AppColors.danger, fontSize: 12)),
                 ),

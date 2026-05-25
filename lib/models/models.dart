@@ -367,6 +367,9 @@ class MedicationExpiry {
   final DateTime expiryDate;
   final String? supplierName;
   final String? notes;
+  final String? cloudId;
+  final bool isSynced;
+  final String? createdBy;
   final DateTime createdAt;
 
   MedicationExpiry({
@@ -376,6 +379,9 @@ class MedicationExpiry {
     required this.expiryDate,
     this.supplierName,
     this.notes,
+    this.cloudId,
+    this.isSynced = false,
+    this.createdBy,
     required this.createdAt,
   });
 
@@ -386,6 +392,9 @@ class MedicationExpiry {
         expiryDate: DateTime.tryParse(map['expiry_date']?.toString() ?? '') ?? DateTime.now(),
         supplierName: map['supplier_name'],
         notes: map['notes'],
+        cloudId: map['cloud_id'],
+        isSynced: (map['is_synced'] ?? 0) == 1,
+        createdBy: map['created_by'],
         createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
 
@@ -396,6 +405,9 @@ class MedicationExpiry {
         'expiry_date': expiryDate.toIso8601String().substring(0, 10), // حفظ التاريخ بصيغة YYYY-MM-DD
         'supplier_name': supplierName,
         'notes': notes,
+        'cloud_id': cloudId,
+        'is_synced': isSynced ? 1 : 0,
+        'created_by': createdBy,
       };
 
   bool isNearExpiry(int months) {

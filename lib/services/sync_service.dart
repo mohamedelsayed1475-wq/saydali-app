@@ -263,6 +263,8 @@ class SyncService {
       await _pullInvoices();
       await _syncAssistants();
       await _pullAssistants();
+      await _pushMedicationExpiries();
+      await _pullMedicationExpiries();
 
       // تحديث وقت آخر مزامنة
       await DatabaseHelper.instance.setSetting(
@@ -932,5 +934,135 @@ class SyncService {
       debugPrint('⚠️ checkAssistantLoginByPin error: $e');
     }
     return null;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // مزامنة صلاحيات الأدوية
+  // ══════════════════════════════════════════════════════════════
+
+  Future<void> _pushMedicationExpiries() async {
+    final db = await DatabaseHelper.instance.database;
+    final unsynced = await db.query('medication_expiries',
+        where: 'is_synced = 0 OR is_synced IS NULL');
+
+    for (final item in unsynced) {
+      try {
+        final cloudId = item['cloud_id']?.toString();
+        final data = {
+          'pharmacy_id': _pharmacyCloudId,
+          'local_id': item['id'],
+          'name': item['name'],
+          'quantity': item['quantity'],
+          'expiry_date': item['expiry_date'],
+          'supplier_name': item['supplier_name'],
+          'notes': item['notes'],
+          'created_by': item['created_by'] ?? 'المالك',
+          'created_at': item['created_at'],
+        };
+
+        http.Response res;
+        if (cloudId != null && cloudId.isNotEmpty) {
+          res = await http
+              .patch(
+                Uri.parse('$_url/pharmacy_medication_expiries?id=eq.$cloudId'),
+                headers: _headers,
+                body: jsonEncode(data),
+              )
+              .timeout(const Duration(seconds: 10));
+        } else {
+          res = await http
+              .post(
+                Uri.parse('$_url/pharmacy_medication_expiries'),
+                headers: _headers,
+                body: jsonEncode(data),
+              )
+              .timeout(const Duration(seconds: 10));
+        }
+
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          final resData = jsonDecode(res.body);
+          final newCloudId =
+              resData is List ? resData[0]['id'] : resData['id'];
+          await db.update(
+              'medication_expiries', {'cloud_id': newCloudId, 'is_synced': 1},
+              where: 'id = ?', whereArgs: [item['id']]);
+        }
+      } catch (e) {
+        debugPrint('⚠️ push medication expiry error: $e');
+      }
+    }
+  }
+
+  Future<void> _pullMedicationExpiries() async {
+    final db = await DatabaseHelper.instance.database;
+    final lastSync =
+        await DatabaseHelper.instance.getSetting('last_sync_at') ?? '';
+
+    try {
+      String url =
+          '$_url/pharmacy_medication_expiries?pharmacy_id=eq.$_pharmacyCloudId&select=*';
+      if (lastSync.isNotEmpty) {
+        url += '&created_at=gt.$lastSync';
+      }
+
+      final res = await http
+          .get(Uri.parse(url), headers: _headers)
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode != 200) return;
+      final items = jsonDecode(res.body) as List;
+
+      for (final item in items) {
+        final cloudId = item['id'];
+        final local = await db.query('medication_expiries',
+            where: 'cloud_id = ?', whereArgs: [cloudId]);
+
+        if (local.isEmpty) {
+          await db.insert('medication_expiries', {
+            'cloud_id': cloudId,
+            'name': item['name'],
+            'quantity': item['quantity'] ?? 1,
+            'expiry_date': item['expiry_date'],
+            'supplier_name': item['supplier_name'],
+            'notes': item['notes'],
+            'created_by': item['created_by'],
+            'created_at': item['created_at'],
+            'is_synced': 1,
+          });
+        } else {
+          await db.update(
+              'medication_expiries',
+              {
+                'name': item['name'],
+                'quantity': item['quantity'],
+                'expiry_date': item['expiry_date'],
+                'supplier_name': item['supplier_name'],
+                'notes': item['notes'],
+                'is_synced': 1,
+              },
+              where: 'cloud_id = ?',
+              whereArgs: [cloudId]);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ pull medication expiries error: $e');
+    }
+  }
+
+  Future<void> deleteMedicationExpiryFromCloud(String cloudId) async {
+    if (!isConfigured) return;
+    try {
+      final res = await http.delete(
+        Uri.parse('$_url/pharmacy_medication_expiries?id=eq.$cloudId'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        debugPrint('✅ تم حذف تاريخ الصلاحية من السحابة: $cloudId');
+      } else {
+        debugPrint('⚠️ فشل حذف تاريخ الصلاحية من السحابة (${res.statusCode}): ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ فشل حذف تاريخ الصلاحية من السحابة: $e');
+    }
   }
 }
