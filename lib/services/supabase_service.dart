@@ -44,7 +44,7 @@ class SupabaseService {
   }) async {
     lastError = null;
     if (!isConfigured) {
-      debugPrint('⚠️ Supabase مش مضبوط: ${configDiagnostic}. سيتم استخدام وضع المحاكاة (Mock Mode)');
+      debugPrint('⚠️ Supabase مش مضبوط: $configDiagnostic. سيتم استخدام وضع المحاكاة (Mock Mode)');
       await Future.delayed(const Duration(seconds: 1));
       return 'MOCK${Random().nextInt(9000) + 1000}';
     }
@@ -59,7 +59,7 @@ class SupabaseService {
             Uri.parse('$_url/rep_sessions'),
             headers: _headers,
             body: jsonEncode({
-              'session_code': sessionCode,
+              'session_code': sessionCode.toUpperCase(),
               'rep_name': repName,
               'rep_phone': repPhone,
               'pharmacy_name': pharmacyName,
@@ -92,6 +92,7 @@ class SupabaseService {
                 'company': item['company']?.toString().isEmpty ?? true ? '' : item['company'],
                 'quantity': item['quantity'] ?? 1,
                 'is_private': item['is_private'] ?? 0,
+                'is_available': 0, // القيمة الافتراضية عند الإنشاء (ناقص)
               }),
             )
             .timeout(const Duration(seconds: 10));
@@ -100,6 +101,16 @@ class SupabaseService {
           debugPrint('⚠️ خطأ في إضافة صنف: ${item['name']} - ${itemRes.body}');
         }
       }
+
+      // إضافة الكود في جدول الربط response_codes لحماية العلاقات
+      await http.post(
+        Uri.parse('$_url/response_codes'),
+        headers: _headers,
+        body: jsonEncode({
+          'response_code': sessionCode.toUpperCase(),
+          'session_id': sessionId,
+        }),
+      ).timeout(const Duration(seconds: 5));
 
       return sessionCode;
     } catch (e) {
@@ -136,9 +147,12 @@ class SupabaseService {
       return (response: null, error: 'إعدادات الاتصال غير مكتملة');
     }
     try {
+      final formattedCode = responseCode.trim().toUpperCase();
+      
+      // 1. جلب الجلسة المعنية من جدول الأكواد
       final codeRes = await http
           .get(
-            Uri.parse('$_url/response_codes?response_code=eq.${responseCode.toUpperCase()}&select=*'),
+            Uri.parse('$_url/response_codes?response_code=eq.$formattedCode&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -148,10 +162,11 @@ class SupabaseService {
         return (response: null, error: 'خطأ من السيرفر (${codeRes.statusCode})');
       }
       final codes = jsonDecode(codeRes.body) as List;
-      if (codes.isEmpty) return (response: null, error: null);
+      if (codes.isEmpty) return (response: null, error: 'الكود غير صحيح أو منتهي');
 
       final sessionId = codes[0]['session_id'];
 
+      // 2. جلب بيانات الجلسة من السيرفر
       final sessionRes = await http
           .get(
             Uri.parse('$_url/rep_sessions?id=eq.$sessionId&select=*'),
@@ -162,9 +177,10 @@ class SupabaseService {
       if (sessionRes.statusCode != 200)
         return (response: null, error: 'خطأ في جلب بيانات الجلسة');
       final sessions = jsonDecode(sessionRes.body) as List;
-      if (sessions.isEmpty) return (response: null, error: null);
+      if (sessions.isEmpty) return (response: null, error: 'لم يتم العثور على الجلسة');
       final session = sessions[0];
 
+      // 3. جلب الأصناف المرتبطة بالجلسة
       final itemsRes = await http
           .get(
             Uri.parse('$_url/session_items?session_id=eq.$sessionId&select=*'),
@@ -176,23 +192,28 @@ class SupabaseService {
         return (response: null, error: 'خطأ في جلب الأصناف');
       final items = jsonDecode(itemsRes.body) as List;
 
+      // تصفية مرنة تدعم الـ Integer (0 و 1) أو الـ Boolean لحالة التوفر
+      final availableList = items.where((i) {
+        final val = i['is_available'];
+        return val == 1 || val == true || val == '1' || val == 'true';
+      }).map((i) => ResponseItem.fromMap(i)).toList();
+
+      final unavailableList = items.where((i) {
+        final val = i['is_available'];
+        return val == 0 || val == false || val == '0' || val == 'false' || val == null;
+      }).map((i) => ResponseItem.fromMap(i)).toList();
+
       return (
         response: RepResponse(
           sessionId: session['id'].toString(),
-          repName: session['rep_name']?.toString() ?? '',
+          repName: session['rep_name']?.toString() ?? 'غير معروف',
           repPhone: session['rep_phone']?.toString() ?? '',
           pharmacyName: session['pharmacy_name']?.toString() ?? '',
           respondedAt: session['responded_at'] != null
               ? DateTime.parse(session['responded_at'])
               : DateTime.now(),
-          availableItems: items
-              .where((i) => i['is_available'] == 1)
-              .map((i) => ResponseItem.fromMap(i))
-              .toList(),
-          unavailableItems: items
-              .where((i) => i['is_available'] == 0)
-              .map((i) => ResponseItem.fromMap(i))
-              .toList(),
+          availableItems: availableList,
+          unavailableItems: unavailableList,
         ),
         error: null
       );
@@ -204,7 +225,7 @@ class SupabaseService {
       return (response: null, error: 'لا يوجد اتصال بالإنترنت');
     } catch (e) {
       debugPrint('❌ fetchResponseByCode error: $e');
-      return (response: null, error: 'خطأ في الاتصال: $e');
+      return (response: null, error: 'حدث خطأ غير متوقع: $e');
     }
   }
 
@@ -403,7 +424,7 @@ class SupabaseService {
           .patch(
             Uri.parse('$_url/subscription_codes?code=eq.${code.toUpperCase()}'),
             headers: _headers,
-            body: jsonEncode({'is_used': usedCount > 0}),  // ✅ تم التصحيح
+            body: jsonEncode({'is_used': usedCount > 0}),
           )
           .timeout(const Duration(seconds: 10));
       return res.statusCode == 200 || res.statusCode == 204;
@@ -559,7 +580,6 @@ class SupabaseService {
         : fallback;
     final separator = baseUrl.endsWith('/') ? '' : '/';
     
-    // تأمين المفاتيح للاستخدام التجاري عبر تمريرها مشفرة Base64 في الرابط
     String queryParams = 'code=$sessionCode';
     if (EnvConfig.supabaseUrl.isNotEmpty && EnvConfig.supabaseKey.isNotEmpty) {
       try {
@@ -600,24 +620,7 @@ class SupabaseService {
       int deletedCount = 0;
       for (final session in sessions) {
         final sessionId = session['id'];
-        await http
-            .delete(
-              Uri.parse('$_url/session_items?session_id=eq.$sessionId'),
-              headers: _headers,
-            )
-            .timeout(const Duration(seconds: 10));
-        await http
-            .delete(
-              Uri.parse('$_url/response_codes?session_id=eq.$sessionId'),
-              headers: _headers,
-            )
-            .timeout(const Duration(seconds: 10));
-        await http
-            .delete(
-              Uri.parse('$_url/rep_sessions?id=eq.$sessionId'),
-              headers: _headers,
-            )
-            .timeout(const Duration(seconds: 10));
+        await deleteSession(sessionId.toString());
         deletedCount++;
       }
 
@@ -688,7 +691,7 @@ class SupabaseService {
   }
 }
 
-// ── نماذج البيانات ──────────────────────────────────────────────────
+// ── نماذج البيانات ومحولات الـ Maps المؤمنة ضد الـ Casting Errors ─────────────────
 class RepResponse {
   final String sessionId;
   final String repName;
@@ -717,7 +720,6 @@ class ResponseItem {
   final double price;
   final double discount;
   final String? notes;
-  /// البديل المقترح من المندوب لاستشارة الدكتور (اختياري)
   final String? repAlternative;
 
   ResponseItem({
@@ -735,9 +737,9 @@ class ResponseItem {
         id: map['id']?.toString() ?? '',
         drugName: map['drug_name']?.toString() ?? '',
         company: map['company']?.toString() ?? '',
-        quantity: map['quantity'] as int? ?? 1,
-        price: (map['price'] as num?)?.toDouble() ?? 0,
-        discount: (map['discount'] as num?)?.toDouble() ?? 0,
+        quantity: (map['quantity'] as num?)?.toInt() ?? 1,
+        price: (map['price'] as num?)?.toDouble() ?? 0.0,
+        discount: (map['discount'] as num?)?.toDouble() ?? 0.0,
         notes: map['rep_notes']?.toString(),
         repAlternative: map['rep_alternative']?.toString(),
       );
@@ -745,3 +747,4 @@ class ResponseItem {
   double get finalPrice => price * (1 - discount / 100);
   double get totalPrice => finalPrice * quantity;
 }
+
