@@ -184,11 +184,31 @@ class SupabaseService {
       }
 
       final codes = jsonDecode(codeRes.body) as List;
-      if (codes.isEmpty) {
-        return (response: null, error: 'كود غير صحيح أو منتهي الصلاحية');
+      String? sessionId;
+
+      if (codes.isNotEmpty) {
+        sessionId = codes[0]['session_id']?.toString();
+      } else {
+        // Fallback: البحث في rep_sessions عن session_code مباشرة (لدعم الجلسات القديمة أيضاً)
+        final sessionByCodeRes = await http
+            .get(
+              Uri.parse(
+                  '$_url/rep_sessions?session_code=eq.$formattedCode&select=id'),
+              headers: _headers,
+            )
+            .timeout(const Duration(seconds: 10));
+
+        if (sessionByCodeRes.statusCode == 200) {
+          final sessions = jsonDecode(sessionByCodeRes.body) as List;
+          if (sessions.isNotEmpty) {
+            sessionId = sessions[0]['id']?.toString();
+          }
+        }
       }
 
-      final sessionId = codes[0]['session_id'];
+      if (sessionId == null) {
+        return (response: null, error: 'كود غير صحيح أو منتهي الصلاحية');
+      }
 
       // 2. جلب بيانات الجلسة
       final sessionRes = await http
