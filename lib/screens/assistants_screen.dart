@@ -1513,19 +1513,22 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                 final confirm =
                     await showDeleteDialog(context, assistant.name);
                 if (confirm == true && assistant.id != null) {
+                  final nameToDelete = assistant.name;
                   await DatabaseHelper.instance
                       .deleteAssistant(assistant.id!);
                   await DatabaseHelper.instance.logActivity(
                     assistantName: 'المالك',
                     action: 'حذف مساعد',
-                    details: 'تم حذف المساعد: ${assistant.name}',
+                    details: 'تم حذف المساعد: $nameToDelete',
                     screen: 'assistants',
                   );
                   await _load();
                   if (mounted) {
                     showSnack(context, 'جاري مزامنة حذف المساعد سحابياً... 🔄', isError: false);
                   }
-                  SyncService.instance.syncAll().then((_) {
+                  SyncService.instance.deleteAssistantFromCloud(nameToDelete).then((_) {
+                    return SyncService.instance.syncAll();
+                  }).then((_) {
                     if (mounted) {
                       showSnack(context, 'تم الحذف والمزامنة بنجاح! ✅');
                       _load();

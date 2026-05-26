@@ -34,25 +34,27 @@ DROP POLICY IF EXISTS "secure_insert_pharmacy_assistants" ON pharmacy_assistants
 DROP POLICY IF EXISTS "secure_update_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_delete_pharmacy_assistants" ON pharmacy_assistants;
 
--- القراءة: يُسمح بالقراءة فقط إذا كان الاستعلام يحتوي على فلتر الـ PIN لمنع سحب كامل المساعدين والأرقام السرية دفعة واحدة.
+-- القراءة: يُسمح بالقراءة إذا كان الاستعلام يحتوي على معرّف الصيدلية (UUID الآمن والغير قابل للتخمين).
 CREATE POLICY "secure_read_pharmacy_assistants" ON pharmacy_assistants
 FOR SELECT USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pin=eq.%'
+  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
 );
 
--- الإضافة: يُسمح للمالك فقط (التطبيق الرئيسي) بإضافة مساعدين جدد.
+-- الإضافة: يُسمح للمالك والمساعدين بالإضافة.
 CREATE POLICY "secure_insert_pharmacy_assistants" ON pharmacy_assistants
 FOR INSERT WITH CHECK (true);
 
--- التعديل والحذف: يُسمح بالتعديل والحذف فقط لمساعد محدد باستخدام معرّف الصيدلية والـ PIN المطابقين.
+-- التعديل والحذف: يُسمح بالتعديل والحذف إذا كان الاستعلام يحتوي على معرّف الصيدلية أو معرّف الصف.
 CREATE POLICY "secure_update_pharmacy_assistants" ON pharmacy_assistants
 FOR UPDATE USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pin=eq.%'
+  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%' OR
+  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%id=eq.%'
 );
 
 CREATE POLICY "secure_delete_pharmacy_assistants" ON pharmacy_assistants
 FOR DELETE USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pin=eq.%'
+  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%' OR
+  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%id=eq.%'
 );
 
 

@@ -766,13 +766,18 @@ class SyncService {
               final fallbackData = Map<String, dynamic>.from(data)
                 ..remove('subscription_expiry')
                 ..remove('subscription_duration_days');
-              await http
+              final resFallback = await http
                   .post(
                     Uri.parse('$_url/pharmacy_assistants'),
                     headers: _headers,
                     body: jsonEncode(fallbackData),
                   )
                   .timeout(const Duration(seconds: 10));
+              if (resFallback.statusCode != 200 && resFallback.statusCode != 201) {
+                debugPrint('❌ Fallback assistant post failed: ${resFallback.statusCode} ${resFallback.body}');
+              }
+            } else if (res.statusCode != 200 && res.statusCode != 201) {
+              debugPrint('❌ Assistant post failed: ${res.statusCode} ${res.body}');
             }
           } else {
             final res = await http
@@ -788,7 +793,7 @@ class SyncService {
               final fallbackData = Map<String, dynamic>.from(data)
                 ..remove('subscription_expiry')
                 ..remove('subscription_duration_days');
-              await http
+              final resFallback = await http
                   .patch(
                     Uri.parse(
                         '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
@@ -796,12 +801,40 @@ class SyncService {
                     body: jsonEncode(fallbackData),
                   )
                   .timeout(const Duration(seconds: 10));
+              if (resFallback.statusCode != 200 && resFallback.statusCode != 204) {
+                debugPrint('❌ Fallback assistant patch failed: ${resFallback.statusCode} ${resFallback.body}');
+              }
+            } else if (res.statusCode != 200 && res.statusCode != 204) {
+              debugPrint('❌ Assistant patch failed: ${res.statusCode} ${res.body}');
             }
           }
+        } else {
+          debugPrint('❌ Assistant check failed: ${checkRes.statusCode} ${checkRes.body}');
         }
       } catch (e) {
         debugPrint('⚠️ sync assistant error: $e');
       }
+    }
+  }
+
+  Future<void> deleteAssistantFromCloud(String name) async {
+    if (!isConfigured) return;
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return;
+    }
+    try {
+      final res = await http.delete(
+        Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&name=eq.${Uri.encodeComponent(name)}'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        debugPrint('✅ تم حذف المساعد من السحابة: $name');
+      } else {
+        debugPrint('⚠️ فشل حذف المساعد من السحابة (${res.statusCode}): ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ فشل حذف المساعد من السحابة: $e');
     }
   }
 
