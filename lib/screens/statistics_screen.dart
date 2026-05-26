@@ -58,11 +58,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
           final data = snapshot.data!;
           final totalSales = data['total_sales'] as double;
+          final totalCost = (data['total_cost'] as num?)?.toDouble() ?? 0.0;
+          final grossProfit = (data['gross_profit'] as num?)?.toDouble() ?? 0.0;
+          final netProfit = (data['net_profit'] as num?)?.toDouble() ?? 0.0;
           final totalDebts = data['total_debts'] as double;
           final pendingShortages = data['pending_shortages_count'] as int;
           final topSelling = data['top_selling_items'] as List<Map<String, dynamic>>;
           final totalExpenses = (data['total_expenses'] as num?)?.toDouble() ?? 0.0;
-          final netProfit = totalSales - totalExpenses;
           final expensesByCategory = data['expenses_by_category'] as List<Map<String, dynamic>>? ?? [];
 
           return SingleChildScrollView(
@@ -99,7 +101,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                               style: TextStyle(
                                 color: AppColors.primary,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                                  fontSize: 14,
                               ),
                             ),
                           ],
@@ -123,10 +125,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _buildMiniStatCard(
-                        title: 'إجمالي المصروفات',
-                        value: '${totalExpenses.toStringAsFixed(0)} ج.م',
-                        icon: Icons.payments_rounded,
-                        color: AppColors.danger,
+                        title: 'تكلفة المشتريات',
+                        value: '${totalCost.toStringAsFixed(0)} ج.م',
+                        icon: Icons.shopping_bag_rounded,
+                        color: AppColors.warning,
                       ),
                     ),
                   ],
@@ -134,7 +136,23 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 const SizedBox(height: 12),
 
                 _buildStatCard(
-                  title: 'صافي الأرباح (المبيعات - المصروفات)',
+                  title: 'المكسب الإجمالي (المبيعات - التكلفة)',
+                  value: '${grossProfit.toStringAsFixed(2)} ج.م',
+                  icon: Icons.monetization_on_rounded,
+                  color: grossProfit >= 0 ? AppColors.primary : AppColors.danger,
+                ),
+                const SizedBox(height: 12),
+
+                _buildStatCard(
+                  title: 'المصروفات التشغيلية',
+                  value: '${totalExpenses.toStringAsFixed(2)} ج.م',
+                  icon: Icons.payments_rounded,
+                  color: AppColors.danger,
+                ),
+                const SizedBox(height: 12),
+
+                _buildStatCard(
+                  title: 'صافي الأرباح (المكسب - المصروفات)',
                   value: '${netProfit.toStringAsFixed(2)} ج.م',
                   icon: Icons.trending_up_rounded,
                   color: netProfit >= 0 ? AppColors.primary : AppColors.danger,

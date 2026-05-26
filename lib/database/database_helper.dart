@@ -1095,6 +1095,7 @@ class DatabaseHelper {
   Future<Map<String, dynamic>> getStatisticsSummary() async {
     final db = await database;
     double totalSales = 0;
+    double totalCost = 0;
     double totalDebts = 0;
     int pendingShortagesCount = 0;
     List<Map<String, dynamic>> topSellingItems = [];
@@ -1120,7 +1121,7 @@ class DatabaseHelper {
         pendingShortagesCount = (shortagesResult.first['count'] as num).toInt();
       }
 
-      // 4. الأصناف الأكثر مبيعاً
+      // 4. الأصناف الأكثر مبيعاً وحساب التكلفة الإجمالية للمنتجات المبيعة
       final invoices = await db.query('invoices', columns: ['items']);
       Map<String, int> itemCounts = {};
       for (var invoice in invoices) {
@@ -1132,6 +1133,13 @@ class DatabaseHelper {
               final String name = item['name']?.toString() ?? 'غير معروف';
               final int qty = (item['qty'] as num?)?.toInt() ?? 1;
               itemCounts[name] = (itemCounts[name] ?? 0) + qty;
+
+              // حساب التكلفة لهذا الصنف
+              final int boxes = (item['boxes'] as num?)?.toInt() ?? 0;
+              final int strips = (item['strips'] as num?)?.toInt() ?? 0;
+              final double costPrice = (item['cost_price'] as num?)?.toDouble() ?? 0.0;
+              final double stripCostPrice = (item['strip_cost_price'] as num?)?.toDouble() ?? 0.0;
+              totalCost += (boxes * costPrice) + (strips * stripCostPrice);
             }
           }
         } catch (e) {
@@ -1163,8 +1171,14 @@ class DatabaseHelper {
       debugPrint('Error generating statistics: $e');
     }
 
+    final double grossProfit = totalSales - totalCost;
+    final double netProfit = grossProfit - totalExpenses;
+
     return {
       'total_sales': totalSales,
+      'total_cost': totalCost,
+      'gross_profit': grossProfit,
+      'net_profit': netProfit,
       'total_debts': totalDebts,
       'pending_shortages_count': pendingShortagesCount,
       'top_selling_items': topSellingItems,

@@ -799,6 +799,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'activeIngredient': getCol('activeIngredient'),
           'barcode': getCol('barcode'),
           'price': getCol('price'),
+          'cost_price': getCol('cost_price'),
         });
       }
 
@@ -832,7 +833,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         TextCellValue('Arabic Name'),
         TextCellValue('Active Ingredient'),
         TextCellValue('Barcode'),
-        TextCellValue('Price')
+        TextCellValue('Price'),
+        TextCellValue('Cost Price')
       ]);
       
       for (var item in decoded) {
@@ -841,7 +843,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextCellValue(item['arName']?.toString() ?? ''),
           TextCellValue(item['activeIngredient']?.toString() ?? ''),
           TextCellValue(item['barcode']?.toString() ?? ''),
-          TextCellValue(item['price']?.toString() ?? '')
+          TextCellValue(item['price']?.toString() ?? ''),
+          TextCellValue(item['cost_price']?.toString() ?? '')
         ]);
       }
       
@@ -961,6 +964,7 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
     'activeIngredient': -1,
     'barcode': -1,
     'price': -1,
+    'cost_price': -1,
   };
 
   @override
@@ -976,7 +980,8 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
             _buildDropdown('الاسم العربي', 'arName'),
             _buildDropdown('المادة الفعالة', 'activeIngredient'),
             _buildDropdown('الباركود', 'barcode'),
-            _buildDropdown('السعر', 'price'),
+            _buildDropdown('السعر (سعر البيع)', 'price'),
+            _buildDropdown('سعر الشراء (التكلفة)', 'cost_price'),
           ],
         ),
       ),

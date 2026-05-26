@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -28,6 +29,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String _currency = 'ج.م';
   Timer? _refreshTimer;
 
+  // أرقام الأرباح والتكلفة
+  double _totalSales = 0;
+  double _totalCost = 0;
+  double _grossProfit = 0;
+  double _netProfit = 0;
+  double _totalExpenses = 0;
+
   @override
   void initState() {
     super.initState();
@@ -49,12 +57,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final debt = await DatabaseHelper.instance.getTotalDebt();
     final currency = await DatabaseHelper.instance.getCurrency();
     final weeklyData = await DatabaseHelper.instance.getWeeklyShortages();
+    final summary = await DatabaseHelper.instance.getStatisticsSummary();
     if (mounted) {
       setState(() {
         _stats = stats;
         _totalDebt = debt;
         _currency = currency;
         _weeklyData = weeklyData;
+        _totalSales = (summary['total_sales'] as num?)?.toDouble() ?? 0.0;
+        _totalCost = (summary['total_cost'] as num?)?.toDouble() ?? 0.0;
+        _grossProfit = (summary['gross_profit'] as num?)?.toDouble() ?? 0.0;
+        _netProfit = (summary['net_profit'] as num?)?.toDouble() ?? 0.0;
+        _totalExpenses = (summary['total_expenses'] as num?)?.toDouble() ?? 0.0;
         _loading = false;
       });
     }
@@ -127,13 +141,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 12),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _summaryItem('$rate%', 'معدل التغطية'),
-                    const SizedBox(width: 24),
-                    _summaryItem('${_totalDebt.toStringAsFixed(0)} $_currency',
-                        'إجمالي الديون'),
-                    const SizedBox(width: 24),
-                    _summaryItem('$covered صنف', 'تمت تغطيته'),
+                    _summaryItem('${_netProfit.toStringAsFixed(0)} $_currency', 'صافي الربح 💵'),
+                    _summaryItem('${_totalCost.toStringAsFixed(0)} $_currency', 'التكلفة 📦'),
+                    _summaryItem('${_totalDebt.toStringAsFixed(0)} $_currency', 'الديون 💰'),
                   ],
                 ),
               ],
@@ -348,7 +361,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           pw.SizedBox(height: 8),
           pw.Text('إجمالي النواقص: ${_stats['total'] ?? 0}'),
           pw.Text('تمت التغطية: ${_stats['covered'] ?? 0}'),
-          pw.Text('إجمالي الديون: $_totalDebt $_currency'),
+          pw.Text('إجمالي المبيعات: ${_totalSales.toStringAsFixed(2)} $_currency'),
+          pw.Text('إجمالي تكلفة المشتريات: ${_totalCost.toStringAsFixed(2)} $_currency'),
+          pw.Text('المكسب الإجمالي: ${_grossProfit.toStringAsFixed(2)} $_currency'),
+          pw.Text('المصروفات التشغيلية: ${_totalExpenses.toStringAsFixed(2)} $_currency'),
+          pw.Text('صافي الأرباح الحقيقي: ${_netProfit.toStringAsFixed(2)} $_currency'),
+          pw.Text('إجمالي الديون المستحقة للعامة: $_totalDebt $_currency'),
           pw.SizedBox(height: 20),
           pw.Text('سجل النواقص',
               style:
@@ -421,7 +439,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ]);
       }
 
-      // Sheet 2: الديون
+      // Sheet 2: الأرباح والمبيعات تفصيلياً
+      var salesSheet = excel['الأرباح والمبيعات'];
+      salesSheet.appendRow([
+        TextCellValue('ID الفاتورة'),
+        TextCellValue('العميل'),
+        TextCellValue('الإجمالي (بيع)'),
+        TextCellValue('المدفوع'),
+        TextCellValue('المتبقي'),
+        TextCellValue('إجمالي التكلفة'),
+        TextCellValue('صافي الربح'),
+        TextCellValue('التاريخ')
+      ]);
+
+      final invoices = await DatabaseHelper.instance.getInvoices();
+      for (var inv in invoices) {
+        double cost = 0.0;
+        try {
+          final itemsJson = inv['items'] as String?;
+          if (itemsJson != null && itemsJson.isNotEmpty) {
+            final List<dynamic> itemsList = jsonDecode(itemsJson);
+            for (var item in itemsList) {
+              final int boxes = (item['boxes'] as num?)?.toInt() ?? 0;
+              final int strips = (item['strips'] as num?)?.toInt() ?? 0;
+              final double costPrice = (item['cost_price'] as num?)?.toDouble() ?? 0.0;
+              final double stripCostPrice = (item['strip_cost_price'] as num?)?.toDouble() ?? 0.0;
+              cost += (boxes * costPrice) + (strips * stripCostPrice);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error parsing items for excel export: $e');
+        }
+
+        final double total = (inv['total'] as num?)?.toDouble() ?? 0.0;
+        final double profit = total - cost;
+
+        salesSheet.appendRow([
+          TextCellValue(inv['id'].toString()),
+          TextCellValue(inv['customer_name'].toString()),
+          TextCellValue(total.toString()),
+          TextCellValue(inv['paid_amount']?.toString() ?? '0'),
+          TextCellValue(inv['remaining']?.toString() ?? '0'),
+          TextCellValue(cost.toStringAsFixed(2)),
+          TextCellValue(profit.toStringAsFixed(2)),
+          TextCellValue(inv['created_at'].toString()),
+        ]);
+      }
+
+      // Sheet 3: الديون
       var debtsSheet = excel['الديون'];
       debtsSheet.appendRow([
         TextCellValue('ID'),

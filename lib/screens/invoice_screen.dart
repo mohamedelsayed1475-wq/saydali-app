@@ -14,6 +14,7 @@ import '../models/models.dart';
 import '../utils/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../utils/fuzzy_search.dart';
+import '../services/sync_service.dart';
 import 'scanner_screen.dart';
 
 class InvoiceScreen extends StatefulWidget {
@@ -313,6 +314,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                             style: const TextStyle(
                                                 color: AppColors.textMuted,
                                                 fontSize: 12),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'التكلفة: ${((item['boxes'] ?? 0) * (item['cost_price'] ?? 0) + (item['strips'] ?? 0) * (item['strip_cost_price'] ?? 0)).toStringAsFixed(2)} $_currency',
+                                            style: const TextStyle(
+                                                color: AppColors.warning,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600),
                                           ),
                                         ],
                                       ),
@@ -712,6 +721,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     final priceCtrl = TextEditingController(); // Box Price
     final stripPriceCtrl = TextEditingController(); // Strip Price
+    final costPriceCtrl = TextEditingController(); // Box Cost Price
+    final stripCostPriceCtrl = TextEditingController(); // Strip Cost Price
     final boxesCtrl = TextEditingController(text: '1');
     final stripsCtrl = TextEditingController(text: '0');
     final discountCtrl = TextEditingController(text: '0'); // Item discount
@@ -783,6 +794,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           if (s['price'] != null && s['price'].toString().isNotEmpty && s['price'].toString() != '0') {
                             priceCtrl.text = s['price'].toString();
                           }
+                          if (s['cost_price'] != null && s['cost_price'].toString().isNotEmpty && s['cost_price'].toString() != '0') {
+                            costPriceCtrl.text = s['cost_price'].toString();
+                          }
                         },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
 
@@ -842,7 +856,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: AppTextField(hint: 'سعر العلبة', controller: priceCtrl, keyboardType: TextInputType.number)),
+                    Expanded(child: AppTextField(hint: 'سعر بيع العلبة', controller: priceCtrl, keyboardType: TextInputType.number)),
                     const SizedBox(width: 8),
                     Expanded(child: AppTextField(hint: 'عدد العلب', controller: boxesCtrl, keyboardType: TextInputType.number)),
                   ],
@@ -850,9 +864,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: AppTextField(hint: 'سعر الشريط', controller: stripPriceCtrl, keyboardType: TextInputType.number)),
+                    Expanded(child: AppTextField(hint: 'سعر بيع الشريط', controller: stripPriceCtrl, keyboardType: TextInputType.number)),
                     const SizedBox(width: 8),
                     Expanded(child: AppTextField(hint: 'عدد الشرايط', controller: stripsCtrl, keyboardType: TextInputType.number)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: AppTextField(hint: 'سعر شراء العلبة (التكلفة)', controller: costPriceCtrl, keyboardType: TextInputType.number)),
+                    const SizedBox(width: 8),
+                    Expanded(child: AppTextField(hint: 'سعر شراء الشريط (التكلفة)', controller: stripCostPriceCtrl, keyboardType: TextInputType.number)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -871,6 +893,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 final name = itemNameCtrl.text.trim();
                 final boxPrice = double.tryParse(priceCtrl.text) ?? 0;
                 final stripPrice = double.tryParse(stripPriceCtrl.text) ?? 0;
+                final boxCost = double.tryParse(costPriceCtrl.text) ?? 0;
+                final stripCost = double.tryParse(stripCostPriceCtrl.text) ?? 0;
                 final boxes = int.tryParse(boxesCtrl.text) ?? 0;
                 final strips = int.tryParse(stripsCtrl.text) ?? 0;
                 final itemDiscount = double.tryParse(discountCtrl.text) ?? 0;
@@ -899,6 +923,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 onAdd({
                   'name': name,
                   'price': mainPrice,
+                  'cost_price': boxCost,
+                  'strip_cost_price': stripCost,
                   'qty': 1,
                   'qty_text': qtyText,
                   'item_discount': itemDiscount,

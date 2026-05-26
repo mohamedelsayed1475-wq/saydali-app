@@ -140,6 +140,46 @@ FOR ALL USING (
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
+-- 📝 توضيح هيكل بيانات الفواتير والمصروفات الجديد في قاعدة البيانات
+-- ══════════════════════════════════════════════════════════════════════════════
+--
+-- 1️⃣ جدول الفواتير (pharmacy_invoices):
+-- يتم تخزين سعر الشراء (التكلفة) تلقائياً داخل حقل الـ JSON في عمود items،
+-- مما يعني أنه لا توجد حاجة لتعديل هيكل الجدول (ALTER TABLE) في SQLite أو Supabase.
+-- شكل حقل items المخزن:
+-- [
+--   {
+--     "name": "اسم الدواء",
+--     "price": 100.0,       -- سعر بيع العلبة
+--     "cost_price": 80.0,   -- سعر شراء العلبة (التكلفة)
+--     "strip_cost_price": 40.0, -- سعر شراء الشريط (التكلفة)
+--     "boxes": 1,
+--     "strips": 0
+--   }
+-- ]
+--
+-- 2️⃣ جدول المصروفات (pharmacy_expenses) - في حال رغبت بمزامنته مستقبلاً على Supabase:
+-- يمكنك إنشاء الجدول في Supabase وتشغيل سياسة الحماية التالية له:
+--
+-- CREATE TABLE IF NOT EXISTS pharmacy_expenses (
+--   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   pharmacy_id UUID REFERENCES pharmacies(id) ON DELETE CASCADE,
+--   local_id INTEGER,
+--   category TEXT NOT NULL,
+--   amount REAL NOT NULL,
+--   description TEXT,
+--   expense_date TEXT NOT NULL,
+--   created_by TEXT,
+--   created_at TEXT NOT NULL
+-- );
+--
+-- ALTER TABLE pharmacy_expenses ENABLE ROW LEVEL SECURITY;
+--
+-- CREATE POLICY "secure_pharmacy_expenses" ON pharmacy_expenses
+-- FOR ALL USING (
+--   current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+-- );
+-- ══════════════════════════════════════════════════════════════════════════════
 -- 🎉 تمت تهيئة سياسات الحماية بنجاح! 
 -- الآن، أصبح مشروعك آمناً ومحصناً ضد أي محاولة استخراج جماعي أو وصول غير مصرح به.
 -- ══════════════════════════════════════════════════════════════════════════════
