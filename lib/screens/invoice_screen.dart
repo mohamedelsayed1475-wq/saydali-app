@@ -599,6 +599,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 'paid_amount': paidAmount,
                                 'remaining': remaining,
                               });
+                              SyncService.instance.syncAll(); // مزامنة فورية للفاتورة في الخلفية
                               
                               // تحويل المتبقي للمديونية حسب اختيار المستخدم
                               if (selectedCustomer != null && remaining > 0) {

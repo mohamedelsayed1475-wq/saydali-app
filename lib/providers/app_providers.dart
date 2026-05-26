@@ -99,16 +99,19 @@ class ShortagesProvider extends ChangeNotifier {
   Future<void> add(Map<String, dynamic> data) async {
     await DatabaseHelper.instance.insertShortage(data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> update(int id, Map<String, dynamic> data) async {
     await DatabaseHelper.instance.updateShortage(id, data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> delete(int id) async {
     await DatabaseHelper.instance.deleteShortage(id);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 }
 
@@ -153,6 +156,7 @@ class CustomersProvider extends ChangeNotifier {
     }
     await DatabaseHelper.instance.insertCustomer(data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> update(int id, Map<String, dynamic> data) async {
@@ -165,11 +169,13 @@ class CustomersProvider extends ChangeNotifier {
     }
     await DatabaseHelper.instance.updateCustomer(id, data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> delete(int id) async {
     await DatabaseHelper.instance.deleteCustomer(id);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> addTransaction(Map<String, dynamic> data) async {
@@ -182,6 +188,7 @@ class CustomersProvider extends ChangeNotifier {
     }
     await DatabaseHelper.instance.addDebtTransaction(data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 }
 
@@ -218,15 +225,18 @@ class RepsProvider extends ChangeNotifier {
   Future<void> add(Map<String, dynamic> data) async {
     await DatabaseHelper.instance.insertRep(data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> update(int id, Map<String, dynamic> data) async {
     await DatabaseHelper.instance.updateRep(id, data);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 
   Future<void> delete(int id) async {
     await DatabaseHelper.instance.deleteRep(id);
     await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
   }
 }

@@ -193,14 +193,14 @@ class SyncService {
   // المزامنة الدورية
   // ══════════════════════════════════════════════════════════════
 
-  /// بدء المزامنة الدورية (كل 30 ثانية)
+  /// بدء المزامنة الدورية (كل 15 ثانية)
   void startPeriodicSync() {
     if (!isConfigured) {
       debugPrint('⚠️ المزامنة غير مفعلة - Supabase غير مُعدّ');
       return;
     }
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       syncAll();
     });
     debugPrint('🔄 بدء المزامنة الدورية');
