@@ -175,6 +175,23 @@ class ScheduledSyncService {
       callbackDispatcher,
     );
     debugPrint('✅ WorkManager initialized');
+
+    // جدولة مهمة متكررة تلقائية (كل 15 دقيقة — الحد الأدنى المقبول من نظام التشغيل)
+    try {
+      await Workmanager().registerPeriodicTask(
+        kSyncTaskUniqueName,
+        kSyncTaskName,
+        frequency: const Duration(minutes: 15),
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+        existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+        tag: 'saydali_sync_periodic',
+      );
+      debugPrint('📅 تم جدولة المزامنة الاحتياطية التلقائية كل 15 دقيقة');
+    } catch (e) {
+      debugPrint('⚠️ فشل جدولة المزامنة الاحتياطية: $e');
+    }
   }
 
   /// حفظ مواعيد المزامنة (من 1 لـ 7)
@@ -276,7 +293,7 @@ class ScheduledSyncService {
     await Workmanager().registerPeriodicTask(
       kSyncTaskUniqueName,
       kSyncTaskName,
-      frequency: const Duration(hours: 1),
+      frequency: const Duration(minutes: 15),
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),

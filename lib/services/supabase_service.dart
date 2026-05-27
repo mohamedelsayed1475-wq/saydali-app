@@ -422,7 +422,7 @@ class SupabaseService {
           .get(
             Uri.parse(
                 '$_url/subscription_codes?code=eq.${code.toUpperCase()}&select=*'),
-            headers: _headers,
+            headers: {..._headers, 'x-subscription-code': code.toUpperCase()},
           )
           .timeout(const Duration(seconds: 10));
 
@@ -494,7 +494,7 @@ class SupabaseService {
           .patch(
             Uri.parse(
                 '$_url/subscription_codes?code=eq.${code.toUpperCase()}'),
-            headers: _headers,
+            headers: {..._headers, 'x-subscription-code': code.toUpperCase()},
             body: jsonEncode({'is_used': usedCount > 0}),
           )
           .timeout(const Duration(seconds: 10));

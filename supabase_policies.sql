@@ -4,7 +4,10 @@
 -- اتجاهات الأمان:
 -- 1. تفعيل حماية مستوى الصفوف (RLS) لجميع جداول التطبيق.
 -- 2. منع جلب البيانات الكلية (Mass Scraping) من قِبل أي طرف خارجي يمتلك المفتاح العام (Anon Key).
--- 3. السماح بالقراءة فقط عند توفير شروط محددة (مثل كود الصيدلية UUID أو الـ PIN أو كود الجلسة).
+-- 3. السماح بالقراءة فقط عند توفير شروط محددة (هيدرات مخصصة مثل x-pharmacy-id أو x-subscription-code).
+--
+-- ⚠️ ملاحظة مهمة: السياسات القديمة كانت تعتمد على فحص الهيدر x-forwarded-uri وهو غير متاح في Supabase.
+-- تم استبدالها بهيدرات مخصصة (Custom Headers) يتم إرسالها من التطبيق مباشرة.
 --
 -- 💡 قم بنسخ هذا الكود بالكامل ولصقه وتشغيله في SQL Editor الخاص بـ Supabase Dashboard.
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -25,6 +28,9 @@ ALTER TABLE pharmacy_medication_expiries ENABLE ROW LEVEL SECURITY;
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 1. جدول مساعدي الصيدلية (pharmacy_assistants)
 -- ══════════════════════════════════════════════════════════════════════════════
+-- الحماية: يُسمح بالقراءة/الكتابة/التعديل/الحذف فقط عند تطابق pharmacy_id مع الهيدر x-pharmacy-id.
+-- هذا الهيدر يُرسل من التطبيق ويحتوي على UUID الصيدلية (غير قابل للتخمين).
+-- ══════════════════════════════════════════════════════════════════════════════
 DROP POLICY IF EXISTS "allow_read_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_insert_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_update_pharmacy_assistants" ON pharmacy_assistants;
@@ -34,48 +40,52 @@ DROP POLICY IF EXISTS "secure_insert_pharmacy_assistants" ON pharmacy_assistants
 DROP POLICY IF EXISTS "secure_update_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_delete_pharmacy_assistants" ON pharmacy_assistants;
 
--- القراءة: يُسمح بالقراءة إذا كان الاستعلام يحتوي على معرّف الصيدلية (UUID الآمن والغير قابل للتخمين).
+-- القراءة: يُسمح فقط لمن يعرف pharmacy_id (UUID آمن)
 CREATE POLICY "secure_read_pharmacy_assistants" ON pharmacy_assistants
 FOR SELECT USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
--- الإضافة: يُسمح للمالك والمساعدين بالإضافة.
+-- الإضافة: يُسمح فقط لمن يعرف pharmacy_id
 CREATE POLICY "secure_insert_pharmacy_assistants" ON pharmacy_assistants
-FOR INSERT WITH CHECK (true);
+FOR INSERT WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
 
--- التعديل والحذف: يُسمح بالتعديل والحذف إذا كان الاستعلام يحتوي على معرّف الصيدلية أو معرّف الصف.
+-- التعديل: يُسمح فقط لمن يعرف pharmacy_id
 CREATE POLICY "secure_update_pharmacy_assistants" ON pharmacy_assistants
 FOR UPDATE USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%' OR
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
+-- الحذف: يُسمح فقط لمن يعرف pharmacy_id
 CREATE POLICY "secure_delete_pharmacy_assistants" ON pharmacy_assistants
 FOR DELETE USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%' OR
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 2. جدول أكواد الاشتراك (subscription_codes)
 -- ══════════════════════════════════════════════════════════════════════════════
+-- الحماية: يُسمح بالقراءة والتعديل فقط عند تطابق كود الاشتراك مع الهيدر x-subscription-code.
+-- الكود نفسه هو عامل المصادقة (6-10 أحرف عشوائية).
+-- ══════════════════════════════════════════════════════════════════════════════
 DROP POLICY IF EXISTS "allow_read_subscription_codes" ON subscription_codes;
 DROP POLICY IF EXISTS "allow_update_subscription_codes" ON subscription_codes;
 DROP POLICY IF EXISTS "secure_read_subscription_codes" ON subscription_codes;
 DROP POLICY IF EXISTS "secure_update_subscription_codes" ON subscription_codes;
 
--- القراءة: يُمنع نهائياً جلب قائمة الأكواد. يجب تحديد الكود المطلوب بدقة للحصول على النتيجة.
+-- القراءة: يُسمح فقط عند توفير الكود المطلوب في الهيدر
 CREATE POLICY "secure_read_subscription_codes" ON subscription_codes
 FOR SELECT USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%code=eq.%'
+  code = coalesce(current_setting('request.headers', true)::json->>'x-subscription-code', '')
 );
 
--- التعديل: يُسمح فقط بتحديث حالة الكود (مثل استخدامه) عند مطابقة كود محدد في الاستعلام.
+-- التعديل: يُسمح فقط عند مطابقة كود محدد
 CREATE POLICY "secure_update_subscription_codes" ON subscription_codes
 FOR UPDATE USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%code=eq.%'
+  code = coalesce(current_setting('request.headers', true)::json->>'x-subscription-code', '')
 );
 
 
@@ -129,41 +139,43 @@ CREATE POLICY "secure_delete_response_codes" ON response_codes FOR DELETE USING 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 5. جداول بيانات الصيدلية والمزامنة (Shortages, Customers, Debts, Invoices, Expiries)
 -- ══════════════════════════════════════════════════════════════════════════════
--- حماية جداول المزامنة: يمنع الاستعلام الجماعي، ويجب توفير معرّف الصيدلية الخاص بك (pharmacy_id وهو عبارة عن UUID صعب التخمين) لقراءة أو تعديل البيانات.
+-- الحماية: يُسمح بالقراءة/الكتابة فقط عند تطابق pharmacy_id مع الهيدر x-pharmacy-id.
+-- هذا يمنع أي طرف من الوصول لبيانات صيدلية أخرى حتى لو امتلك API Key.
+-- ══════════════════════════════════════════════════════════════════════════════
 
 -- جدول النواقص (pharmacy_shortages)
 DROP POLICY IF EXISTS "secure_pharmacy_shortages" ON pharmacy_shortages;
 CREATE POLICY "secure_pharmacy_shortages" ON pharmacy_shortages
 FOR ALL USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 -- جدول العملاء (pharmacy_customers)
 DROP POLICY IF EXISTS "secure_pharmacy_customers" ON pharmacy_customers;
 CREATE POLICY "secure_pharmacy_customers" ON pharmacy_customers
 FOR ALL USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 -- جدول معاملات الديون (pharmacy_debt_transactions)
 DROP POLICY IF EXISTS "secure_pharmacy_debt_transactions" ON pharmacy_debt_transactions;
 CREATE POLICY "secure_pharmacy_debt_transactions" ON pharmacy_debt_transactions
 FOR ALL USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 -- جدول الفواتير (pharmacy_invoices)
 DROP POLICY IF EXISTS "secure_pharmacy_invoices" ON pharmacy_invoices;
 CREATE POLICY "secure_pharmacy_invoices" ON pharmacy_invoices
 FOR ALL USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 -- جدول تواريخ صلاحية الأدوية (pharmacy_medication_expiries)
 DROP POLICY IF EXISTS "secure_pharmacy_medication_expiries" ON pharmacy_medication_expiries;
 CREATE POLICY "secure_pharmacy_medication_expiries" ON pharmacy_medication_expiries
 FOR ALL USING (
-  current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -204,9 +216,36 @@ FOR ALL USING (
 --
 -- CREATE POLICY "secure_pharmacy_expenses" ON pharmacy_expenses
 -- FOR ALL USING (
---   current_setting('request.headers', true)::json->>'x-forwarded-uri' LIKE '%pharmacy_id=eq.%'
+--   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 -- );
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 🎉 تمت تهيئة سياسات الحماية بنجاح! 
 -- الآن، أصبح مشروعك آمناً ومحصناً ضد أي محاولة استخراج جماعي أو وصول غير مصرح به.
 -- ══════════════════════════════════════════════════════════════════════════════
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 🔄 تفعيل المزامنة الفورية (Realtime Replication) لجدول الصيدلية
+-- ══════════════════════════════════════════════════════════════════════════════
+-- قم بتشغيل الأوامر التالية لتمكين بث التغييرات فورياً لجميع الأجهزة المتصلة:
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- إضافة الجداول إلى منشور البث الفوري الافتراضي لـ Supabase (supabase_realtime)
+-- (إذا كانت الجداول مضافة مسبقاً، سيعمل الأور بسلامة دون إحداث مشاكل)
+BEGIN;
+  -- تنظيف الجداول من المنشور في حال وجودها لتجنب التكرار
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_shortages;
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_customers;
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_debt_transactions;
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_invoices;
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_medication_expiries;
+  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_assistants;
+
+  -- إعادة إضافة الجداول مجدداً للتفعيل
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_shortages;
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_customers;
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_debt_transactions;
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_invoices;
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_medication_expiries;
+  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_assistants;
+COMMIT;
+

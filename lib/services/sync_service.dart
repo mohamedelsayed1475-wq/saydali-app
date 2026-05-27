@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
@@ -20,6 +21,10 @@ class SyncService {
   bool _isSyncing = false;
   String? _pharmacyCloudId; // UUID من Supabase
 
+  WebSocket? _webSocket;
+  Timer? _heartbeatTimer;
+  bool _isConnectingRealtime = false;
+
   // بث انتهاء المزامنة لتحديث الواجهات تلقائياً
   final StreamController<void> _syncCompleteController = StreamController<void>.broadcast();
   Stream<void> get onSyncComplete => _syncCompleteController.stream;
@@ -30,12 +35,18 @@ class SyncService {
       !_url.contains('REPLACE') &&
       !_key.contains('REPLACE');
 
-  Map<String, String> get _headers => {
-        'apikey': _key,
-        'Authorization': 'Bearer $_key',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      };
+  Map<String, String> get _headers {
+    final h = <String, String>{
+      'apikey': _key,
+      'Authorization': 'Bearer $_key',
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    };
+    if (_pharmacyCloudId != null && _pharmacyCloudId!.isNotEmpty) {
+      h['x-pharmacy-id'] = _pharmacyCloudId!;
+    }
+    return h;
+  }
 
   // ══════════════════════════════════════════════════════════════
   // تسجيل الصيدلية (المالك فقط)
@@ -193,24 +204,137 @@ class SyncService {
   // المزامنة الدورية
   // ══════════════════════════════════════════════════════════════
 
-  /// بدء المزامنة الدورية (كل 15 ثانية)
+  /// بدء المزامنة المجدولة (الاحتياطية كل 30 ثانية) والمزامنة الفورية (WebSockets)
   void startPeriodicSync() {
     if (!isConfigured) {
       debugPrint('⚠️ المزامنة غير مفعلة - Supabase غير مُعدّ');
       return;
     }
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       syncAll();
     });
-    debugPrint('🔄 بدء المزامنة الدورية');
+    _connectRealtime();
+    debugPrint('🔄 بدء المزامنة الدورية الاحتياطية + الفورية عبر WebSockets');
   }
 
   /// إيقاف المزامنة
   void stopSync() {
     _syncTimer?.cancel();
     _syncTimer = null;
+    _disconnectRealtime();
     debugPrint('⏹️ إيقاف المزامنة');
+  }
+
+  /// الاتصال بـ Supabase Realtime WebSocket لتلقي التحديثات فوراً (مثل الواتساب)
+  Future<void> _connectRealtime() async {
+    if (_webSocket != null || _isConnectingRealtime || !isConfigured) return;
+    _isConnectingRealtime = true;
+
+    if (_pharmacyCloudId == null) {
+      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+    }
+
+    try {
+      final uri = Uri.parse(_url);
+      final wsProtocol = uri.scheme == 'https' ? 'wss' : 'ws';
+      final wsUrl = '$wsProtocol://${uri.host}/realtime/v1/websocket?apikey=$_key&vsn=1.0.0';
+
+      debugPrint('🔌 جاري الاتصال بـ Supabase Realtime: $wsUrl');
+      _webSocket = await WebSocket.connect(wsUrl).timeout(const Duration(seconds: 10));
+      _isConnectingRealtime = false;
+      debugPrint('⚡ تم الاتصال بـ Supabase Realtime بنجاح!');
+
+      // إرسال رسالة الاشتراك في قناة التغييرات (postgres_changes) لجميع الجداول بالـ public schema
+      final joinPayload = {
+        "topic": "realtime:public",
+        "event": "phx_join",
+        "payload": {
+          "config": {
+            "postgres_changes": [
+              {
+                "event": "*",
+                "schema": "public",
+              }
+            ]
+          }
+        },
+        "ref": "1"
+      };
+      
+      _webSocket!.add(jsonEncode(joinPayload));
+
+      // إرسال heartbeat كل 30 ثانية للحفاظ على استقرار الاتصال ومنع إغلاقه
+      _heartbeatTimer?.cancel();
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+        if (_webSocket != null) {
+          _webSocket!.add(jsonEncode({
+            "topic": "phoenix",
+            "event": "heartbeat",
+            "payload": {},
+            "ref": "hb_${timer.tick}"
+          }));
+        }
+      });
+
+      // الاستماع للرسائل الواردة وتفعيل المزامنة عند رصد أي تحديث
+      _webSocket!.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            final event = data['event'];
+            final payload = data['payload'];
+
+            if (event == 'postgres_changes') {
+              final record = payload['record'] ?? payload['old_record'];
+              if (record != null) {
+                final recordPharmacyId = record['pharmacy_id']?.toString();
+                // المزامنة فوراً إذا كان التغيير يخص الصيدلية الحالية، أو إذا كان مجهولاً (كما في الحذف)
+                if (recordPharmacyId == null || recordPharmacyId == _pharmacyCloudId) {
+                  debugPrint('🔔 تم رصد تغيير في قاعدة البيانات السحابية لجدول: ${payload['table']}! جاري المزامنة الفورية...');
+                  syncAll();
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('⚠️ خطأ في معالجة رسالة Realtime: $e');
+          }
+        },
+        onError: (err) {
+          debugPrint('❌ خطأ في اتصال Realtime: $err');
+          _reconnectRealtime();
+        },
+        onDone: () {
+          debugPrint('🔌 تم إغلاق اتصال Realtime');
+          _reconnectRealtime();
+        },
+        cancelOnError: true,
+      );
+
+    } catch (e) {
+      debugPrint('⚠️ فشل الاتصال بـ Realtime: $e');
+      _isConnectingRealtime = false;
+      _reconnectRealtime();
+    }
+  }
+
+  /// قطع الاتصال بالـ Realtime
+  void _disconnectRealtime() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _webSocket?.close();
+    _webSocket = null;
+    _isConnectingRealtime = false;
+  }
+
+  /// محاولة إعادة الاتصال التلقائي بعد 5 ثوانٍ
+  void _reconnectRealtime() {
+    _disconnectRealtime();
+    Timer(const Duration(seconds: 5), () {
+      if (_syncTimer != null) { // إذا كانت المزامنة ما زالت مفعلة بالتطبيق
+        _connectRealtime();
+      }
+    });
   }
 
   /// مزامنة شاملة (رفع + سحب)
