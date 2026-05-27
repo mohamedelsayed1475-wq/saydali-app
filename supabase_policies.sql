@@ -229,23 +229,62 @@ FOR ALL USING (
 -- قم بتشغيل الأوامر التالية لتمكين بث التغييرات فورياً لجميع الأجهزة المتصلة:
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- إضافة الجداول إلى منشور البث الفوري الافتراضي لـ Supabase (supabase_realtime)
--- (إذا كانت الجداول مضافة مسبقاً، سيعمل الأور بسلامة دون إحداث مشاكل)
-BEGIN;
-  -- تنظيف الجداول من المنشور في حال وجودها لتجنب التكرار
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_shortages;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_customers;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_debt_transactions;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_invoices;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_medication_expiries;
-  ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS pharmacy_assistants;
+-- إضافة الجداول إلى منشور البث الفوري الافتراضي لـ Supabase (supabase_realtime) بأمان
+-- (يتأكد الاستعلام من عدم تكرار الإضافة لتفادي الأخطاء)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_shortages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_shortages;
+  END IF;
 
-  -- إعادة إضافة الجداول مجدداً للتفعيل
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_shortages;
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_customers;
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_debt_transactions;
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_invoices;
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_medication_expiries;
-  ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_assistants;
-COMMIT;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_customers'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_customers;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_debt_transactions'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_debt_transactions;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_invoices'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_invoices;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_medication_expiries'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_medication_expiries;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_rel pr 
+    JOIN pg_class c ON pr.prrelid = c.oid 
+    JOIN pg_publication p ON pr.prpubid = p.oid 
+    WHERE p.pubname = 'supabase_realtime' AND c.relname = 'pharmacy_assistants'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE pharmacy_assistants;
+  END IF;
+END $$;
 
