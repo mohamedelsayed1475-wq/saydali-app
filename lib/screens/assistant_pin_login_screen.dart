@@ -375,26 +375,26 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
                 children: [
                   const SizedBox(height: 20),
                   // Logo
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primary, AppColors.primaryDark],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                  GestureDetector(
+                    onTap: _onLogoDiagTap,
+                    child: Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.primaryDark],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 25,
+                            spreadRadius: 3,
+                          )
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.3),
-                          blurRadius: 25,
-                          spreadRadius: 3,
-                        )
-                      ],
-                    ),
-                    child: GestureDetector(
-                      onTap: _onLogoDiagTap,
                       child: const Center(
                         child: Text('💊', style: TextStyle(fontSize: 44)),
                       ),
