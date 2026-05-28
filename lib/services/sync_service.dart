@@ -838,11 +838,21 @@ class SyncService {
 
     for (final a in assistants) {
       try {
+        String? existingCloudId;
+        
+        // أولاً: نبحث بالـ cloud_id لو موجود (أكثر دقة من البحث بالاسم)
+        if (a['cloud_id'] != null && a['cloud_id'].toString().isNotEmpty) {
+          existingCloudId = a['cloud_id'].toString();
+        }
+        
         // تحقق هل موجود في السحابة
+        final checkUrl = existingCloudId != null
+            ? '$_url/pharmacy_assistants?id=eq.$existingCloudId&select=id'
+            : '$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&name=eq.${Uri.encodeComponent(a['name'].toString())}&select=id';
+        
         final checkRes = await http
             .get(
-              Uri.parse(
-                  '$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&name=eq.${Uri.encodeComponent(a['name'].toString())}&select=id'),
+              Uri.parse(checkUrl),
               headers: _headers,
             )
             .timeout(const Duration(seconds: 10));
@@ -1032,17 +1042,16 @@ class SyncService {
 
   Future<Map<String, dynamic>?> checkAssistantLoginByPin(String pin) async {
     if (!isConfigured) return null;
-    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
-      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
-      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return null;
-    }
+    // تحميل pharmacy_cloud_id دائماً من السيتينجز لضمان أحدث قيمة
+    _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return null;
     try {
       final res = await http
           .get(
             Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&pin=eq.$pin&is_active=eq.true&select=*'),
             headers: _headers,
           )
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
         final items = jsonDecode(res.body) as List;
