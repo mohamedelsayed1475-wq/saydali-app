@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 14,
+      version: 15,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -237,6 +237,12 @@ class DatabaseHelper {
         await db.execute("UPDATE alternatives SET country_code = 'EG' WHERE country_code IS NULL");
       } catch (_) {}
     }
+    if (oldVersion < 15) {
+      // إضافة cloud_id للمساعدين
+      try {
+        await db.execute("ALTER TABLE assistants ADD COLUMN cloud_id TEXT");
+      } catch (_) {}
+    }
   }
 
   /// حذف الإعلانات المنتهية تلقائياً
@@ -423,6 +429,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS assistants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cloud_id TEXT,
         name TEXT NOT NULL,
         phone TEXT,
         pin TEXT NOT NULL,

@@ -174,22 +174,12 @@ class SyncService {
       await db.setSetting('pharmacy_name', pharmacy['name'] ?? 'صيدليتي');
       await db.setSetting('is_assistant_device', '1');
 
-      // جلب المساعدين من السحابة
-      final assistantsRes = await http
-          .get(
-            Uri.parse(
-                '$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&is_active=eq.true&select=*'),
-            headers: _headers,
-          )
-          .timeout(const Duration(seconds: 10));
+      // ══ جلب المساعدين من السحابة وحفظهم محلياً ══
+      await pullAssistantsFromServer();
 
-      List<Map<String, dynamic>> assistants = [];
-      if (assistantsRes.statusCode == 200) {
-        final data = jsonDecode(assistantsRes.body) as List;
-        assistants = data.cast<Map<String, dynamic>>();
-      }
-
-      return (success: true, error: null, assistants: assistants);
+      // جلب المساعدين بعد التحديث
+      final localAssistants = await db.getAssistants();
+      return (success: true, error: null, assistants: localAssistants);
     } catch (e) {
       debugPrint('❌ joinPharmacy error: $e');
       return (
@@ -979,7 +969,7 @@ class SyncService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&select=*'),
+            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId\u0026select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -987,10 +977,17 @@ class SyncService {
       if (res.statusCode == 200) {
         final items = jsonDecode(res.body) as List;
         for (final item in items) {
-          final cloudName = item['name'];
-          // تحديث الصلاحيات وحالة النشاط
+          final cloudId = item['id']?.toString();
+          final cloudName = item['name']?.toString().trim();
+          if (cloudId == null || cloudName == null || cloudName.isEmpty) continue;
+
+          // تحديث البيانات الكاملة للمساعد
           final Map<String, dynamic> updateData = {
-            'pin': item['pin'],
+            'cloud_id': cloudId,
+            'name': cloudName,
+            'phone': item['phone']?.toString() ?? '',
+            'role': item['role']?.toString() ?? 'assistant',
+            'pin': item['pin']?.toString() ?? '',
             'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
             'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
             'can_delete': item['can_delete'] == true ? 1 : 0,
@@ -999,21 +996,23 @@ class SyncService {
             'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
             'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
             'is_active': item['is_active'] == true ? 1 : 0,
+            'subscription_expiry': item['subscription_expiry'],
+            'subscription_duration_days': item['subscription_duration_days'] ?? 30,
           };
-          if (item.containsKey('subscription_expiry')) {
-            updateData['subscription_expiry'] = item['subscription_expiry'];
-          }
-          if (item.containsKey('subscription_duration_days')) {
-            updateData['subscription_duration_days'] = item['subscription_duration_days'];
+
+          // نبحث بالـ cloud_id أولاً (أكثر دقة)
+          final existingByCloudId = await db.query('assistants', where: 'cloud_id = ?', whereArgs: [cloudId]);
+          if (existingByCloudId.isNotEmpty) {
+            // تحديث الموجود بالـ cloud_id
+            await db.update('assistants', updateData, where: 'cloud_id = ?', whereArgs: [cloudId]);
+            continue;
           }
 
-          final existing = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
-          if (existing.isEmpty) {
-            // إضافة مساعد جديد من السحابة لو مش موجود محلياً
+          // لو مش موجود بـ cloud_id، نبحث بالاسم (backward compatibility)
+          final existingByName = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
+          if (existingByName.isEmpty) {
+            // إضافة مساعد جديد من السحابة
             final insertData = {
-              'name': cloudName,
-              'phone': item['phone'] ?? '',
-              'role': item['role'] ?? 'assistant',
               'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
               ...updateData,
             };
@@ -1021,6 +1020,7 @@ class SyncService {
             insertData['subscription_duration_days'] ??= 30;
             await db.insert('assistants', insertData);
           } else {
+            // تحديث الموجود بالاسم ونضيف cloud_id
             await db.update('assistants', updateData, where: 'name = ?', whereArgs: [cloudName]);
           }
         }
@@ -1048,12 +1048,17 @@ class SyncService {
         final items = jsonDecode(res.body) as List;
         if (items.isNotEmpty) {
           final item = items.first;
-          final cloudName = item['name'];
+          final cloudId = item['id']?.toString();
+          final cloudName = item['name']?.toString().trim() ?? '';
           
           // حفظ/تحديث المساعد محلياً
           final db = await DatabaseHelper.instance.database;
           final Map<String, dynamic> localData = {
-            'pin': item['pin'],
+            'cloud_id': cloudId,
+            'name': cloudName,
+            'phone': item['phone']?.toString() ?? '',
+            'role': item['role']?.toString() ?? 'assistant',
+            'pin': item['pin']?.toString() ?? '',
             'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
             'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
             'can_delete': item['can_delete'] == true ? 1 : 0,
@@ -1066,12 +1071,19 @@ class SyncService {
             'subscription_duration_days': item['subscription_duration_days'] ?? 30,
           };
           
-          final existing = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
-          if (existing.isEmpty) {
+          // نبحث بالـ cloud_id أولاً (أكثر دقة)
+          final existingByCloudId = await db.query('assistants', where: 'cloud_id = ?', whereArgs: [cloudId]);
+          if (existingByCloudId.isNotEmpty) {
+            await db.update('assistants', localData, where: 'cloud_id = ?', whereArgs: [cloudId]);
+            final Map<String, dynamic> result = Map<String, dynamic>.from(existingByCloudId.first);
+            result.addAll(localData);
+            return result;
+          }
+
+          // لو مش موجود بـ cloud_id، نبحث بالاسم (backward compatibility)
+          final existingByName = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
+          if (existingByName.isEmpty) {
             final insertData = {
-              'name': cloudName,
-              'phone': item['phone'] ?? '',
-              'role': item['role'] ?? 'assistant',
               'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
               ...localData,
             };
@@ -1081,7 +1093,7 @@ class SyncService {
             return result;
           } else {
             await db.update('assistants', localData, where: 'name = ?', whereArgs: [cloudName]);
-            final Map<String, dynamic> result = Map<String, dynamic>.from(existing.first);
+            final Map<String, dynamic> result = Map<String, dynamic>.from(existingByName.first);
             result.addAll(localData);
             return result;
           }
