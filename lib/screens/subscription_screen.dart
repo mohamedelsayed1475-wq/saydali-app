@@ -175,29 +175,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 setDlg(() => isJoining = false);
                 
                 if (res.success) {
-                  // حفظ المساعدين محلياً
+                  // المساعدون تم حفظهم بالفعل بواسطة pullAssistantsFromServer داخل joinPharmacy
+                  // لا نحتاج لحذف وإعادة إدراجهم - فقط نتأكد من السيتينجز
                   final db = DatabaseHelper.instance;
-                  final localDb = await db.database;
-                  await localDb.delete('assistants'); // مسح القديم
-                  for (final a in res.assistants) {
-                    await localDb.insert('assistants', {
-                      'name': a['name'],
-                      'phone': a['phone'],
-                      'pin': a['pin'],
-                      'role': a['role'],
-                      'can_add_debt': (a['can_add_debt'] == true || a['can_add_debt'] == 1) ? 1 : 0,
-                      'can_edit_debt': (a['can_edit_debt'] == true || a['can_edit_debt'] == 1) ? 1 : 0,
-                      'can_delete': (a['can_delete'] == true || a['can_delete'] == 1) ? 1 : 0,
-                      'can_view_reports': (a['can_view_reports'] == true || a['can_view_reports'] == 1) ? 1 : 0,
-                      'can_manage_invoices': (a['can_manage_invoices'] == true || a['can_manage_invoices'] == 1) ? 1 : 0,
-                      'can_manage_shortages': (a['can_manage_shortages'] == true || a['can_manage_shortages'] == 1) ? 1 : 0,
-                      'can_manage_reps': (a['can_manage_reps'] == true || a['can_manage_reps'] == 1) ? 1 : 0,
-                      'is_active': (a['is_active'] == true || a['is_active'] == 1) ? 1 : 0,
-                      'subscription_expiry': a['subscription_expiry'] ?? DateTime.now().add(const Duration(days: 30)).toIso8601String(),
-                      'subscription_duration_days': a['subscription_duration_days'] ?? 30,
-                      'created_at': DateTime.now().toIso8601String(),
-                    });
-                  }
                   
                   await db.setSetting('assistants_activated', '1');
                   final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
