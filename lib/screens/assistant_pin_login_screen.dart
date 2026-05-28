@@ -26,6 +26,172 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
 
+  // ── تشخيص المشكلة (اضغط على الأيقونة 5 مرات) ──
+  int _diagTapCount = 0;
+  DateTime? _lastDiagTap;
+
+  void _onLogoDiagTap() {
+    final now = DateTime.now();
+    if (_lastDiagTap == null || now.difference(_lastDiagTap!) > const Duration(seconds: 3)) {
+      _diagTapCount = 0;
+    }
+    _lastDiagTap = now;
+    _diagTapCount++;
+    if (_diagTapCount >= 5) {
+      _diagTapCount = 0;
+      _runDiagnostics();
+    }
+  }
+
+  Future<void> _runDiagnostics() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        backgroundColor: Color(0xFF1E293B),
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: Color(0xFF10B981)),
+            SizedBox(width: 16),
+            Text('جاري التشخيص...', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      ),
+    );
+
+    final db = DatabaseHelper.instance;
+    final results = <String, dynamic>{};
+
+    // 1. تحقق من إعدادات الصيدلية المحلية
+    final pharmacyCloudId = await db.getSetting('pharmacy_cloud_id');
+    final pharmacyCode = await db.getSetting('pharmacy_code');
+    final pharmacyName = await db.getSetting('pharmacy_name');
+    final isAssistantDevice = await db.getSetting('is_assistant_device');
+    results['pharmacy_cloud_id'] = pharmacyCloudId ?? '❌ غير موجود';
+    results['pharmacy_code'] = pharmacyCode ?? '❌ غير موجود';
+    results['pharmacy_name'] = pharmacyName ?? '❌ غير موجود';
+    results['is_assistant_device'] = isAssistantDevice ?? '❌ غير موجود';
+
+    // 2. تحقق من المساعدين المحليين
+    final localAssistants = await db.getAssistants();
+    results['local_assistants_count'] = localAssistants.length;
+    final assistantsSummary = localAssistants.map((a) =>
+      '${a['name']} | PIN:${a['pin']} | active:${a['is_active']} | cloud_id:${a['cloud_id'] ?? 'null'} | exp:${(a['subscription_expiry'] ?? 'null').toString().substring(0, 10)}'
+    ).join('\n');
+    results['local_assistants'] = assistantsSummary.isEmpty ? '❌ لا يوجد مساعدون محلياً' : assistantsSummary;
+
+    // 3. تحقق من الاتصال بـ Supabase
+    bool supabaseReachable = false;
+    String supabaseError = '';
+    try {
+      final isConfigured = SyncService.instance.isConfigured;
+      results['supabase_configured'] = isConfigured ? '✅ نعم' : '❌ لا';
+      if (isConfigured) {
+        // محاولة جلب المساعدين من Supabase
+        if (pharmacyCloudId != null && pharmacyCloudId.isNotEmpty) {
+          final fetchedAssistants = await SyncService.instance.checkAssistantLoginByPin('____TEST____').timeout(
+            const Duration(seconds: 8),
+          ).then((_) => 'OK').catchError((e) => 'error: $e');
+          // بدلاً من ذلك نجرب pullAssistantsFromServer
+          await SyncService.instance.pullAssistantsFromServer().timeout(const Duration(seconds: 8));
+          supabaseReachable = true;
+          results['supabase_connection'] = '✅ متصل';
+
+          // تحقق من المساعدين بعد السحب
+          final afterPull = await db.getAssistants();
+          results['assistants_after_pull'] = afterPull.length.toString();
+        } else {
+          results['supabase_connection'] = '⚠️ pharmacy_cloud_id مش موجود - تعذر الاتصال';
+        }
+      }
+    } catch (e) {
+      supabaseError = e.toString();
+      results['supabase_connection'] = '❌ فشل الاتصال: $e';
+    }
+
+    // 4. تحقق من الـ PIN المدخل لو موجود
+    final currentPin = _pinController.text.trim();
+    if (currentPin.length == 4) {
+      final localMatch = await db.getAssistantByPin(currentPin);
+      results['pin_in_local_db'] = localMatch != null ? '✅ موجود: ${localMatch['name']}' : '❌ غير موجود في DB المحلي';
+    } else {
+      results['pin_in_local_db'] = '⚠️ لم تدخل PIN بعد';
+    }
+
+    if (mounted) Navigator.pop(context); // close loading dialog
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: const Row(
+            children: [
+              Text('🔍', style: TextStyle(fontSize: 20)),
+              SizedBox(width: 8),
+              Text('تشخيص المشكلة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: results.entries.map((e) {
+                final isError = e.value.toString().startsWith('❌');
+                final isWarn = e.value.toString().startsWith('⚠️');
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isError
+                          ? Colors.red.withValues(alpha: 0.15)
+                          : isWarn
+                              ? Colors.orange.withValues(alpha: 0.15)
+                              : Colors.green.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isError
+                            ? Colors.red.withValues(alpha: 0.4)
+                            : isWarn
+                                ? Colors.orange.withValues(alpha: 0.4)
+                                : Colors.green.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          e.key,
+                          style: TextStyle(
+                            color: isError ? Colors.red[300] : isWarn ? Colors.orange[300] : Colors.green[300],
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          e.value.toString(),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إغلاق', style: TextStyle(color: Color(0xFF10B981))),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -68,8 +234,18 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
         debugPrint('⚠️ Supabase login check failed: $e');
       }
 
-      // إذا لم ينجح التحقق من السحابة (مثلاً لعدم وجود إنترنت)، نلجأ لقاعدة البيانات المحلية
+      // إذا لم ينجح التحقق من السحابة، نلجأ لقاعدة البيانات المحلية
       assistantMap ??= await db.getAssistantByPin(pin);
+
+      // لو فشل الاثنان، نحاول تحديث المساعدين من السحابة ثم نحاول مرة أخرى
+      if (assistantMap == null) {
+        try {
+          await SyncService.instance.pullAssistantsFromServer();
+          assistantMap = await db.getAssistantByPin(pin);
+        } catch (e) {
+          debugPrint('⚠️ Retry pull assistants failed: $e');
+        }
+      }
 
       if (assistantMap == null) {
         setState(() {
@@ -217,8 +393,11 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
                         )
                       ],
                     ),
-                    child: const Center(
-                      child: Text('💊', style: TextStyle(fontSize: 44)),
+                    child: GestureDetector(
+                      onTap: _onLogoDiagTap,
+                      child: const Center(
+                        child: Text('💊', style: TextStyle(fontSize: 44)),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
