@@ -14,6 +14,7 @@ import 'screens/subscription_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/assistant_pin_login_screen.dart';
 import 'widgets/subscription_guard.dart';
+import 'widgets/pharmacy_logo.dart';
 import 'models/models.dart';
 import 'database/database_helper.dart';
 import 'utils/security_helper.dart';
@@ -257,7 +258,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.dark,
+      backgroundColor: Colors.black,
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -266,45 +267,19 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.primaryDark],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
-                          blurRadius: 30,
-                          spreadRadius: 5)
-                    ],
-                  ),
-                  child: const Center(
-                      child: Text('💊', style: TextStyle(fontSize: 50))),
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 200,
+                  height: 200,
                 ),
-                const SizedBox(height: 20),
-                const Text('صيدلي',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 36,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1)),
-                const Text('PRO',
-                    style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 4)),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 const SizedBox(
-                    width: 40,
-                    child: LinearProgressIndicator(
-                        color: AppColors.primary,
-                        backgroundColor: AppColors.darkBorder)),
+                  width: 40,
+                  child: LinearProgressIndicator(
+                    color: AppColors.primary,
+                    backgroundColor: AppColors.darkBorder,
+                  ),
+                ),
               ],
             ),
           ),
@@ -336,11 +311,11 @@ class _MainScreenState extends State<MainScreen> {
 
   final _tabs = const [
     (icon: Icons.home_rounded, label: 'الرئيسية'),
-    (icon: Icons.medication_rounded, label: 'النواقص'),
-    (icon: Icons.people_rounded, label: 'المندوبون'),
-    (icon: Icons.account_balance_wallet_rounded, label: 'الديون'),
+    (icon: Icons.medical_services_outlined, label: 'النواقص'),
+    (icon: Icons.people_outline_rounded, label: 'المندوبون'),
+    (icon: Icons.account_balance_wallet_outlined, label: 'الديون'),
     (icon: Icons.bar_chart_rounded, label: 'التقارير'),
-    (icon: Icons.settings_rounded, label: 'الإعدادات'),
+    (icon: Icons.settings_outlined, label: 'الإعدادات'),
   ];
 
   final _titles = [
@@ -359,26 +334,57 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: AppColors.dark,
         appBar: AppBar(
           backgroundColor: AppColors.darkCard,
-        title: Row(
-          children: [
-            const Text('💊', style: TextStyle(fontSize: 22)),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('صيدلي',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        height: 1.2)),
-                Text(_titles[_currentIndex],
+          title: Row(
+            children: [
+              const PharmacyLogo(size: 24),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'صيدلي',
+                        style: TextStyle(
+                          color: AppColors.textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppColors.primary, width: 0.8),
+                        ),
+                        child: const Text(
+                          'PRO',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    _titles[_currentIndex],
                     style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 11, height: 1.2)),
-              ],
-            ),
-          ],
-        ),
+                      color: AppColors.textMuted,
+                      fontSize: 10,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         actions: [
           // Badge الاشتراك
           GestureDetector(

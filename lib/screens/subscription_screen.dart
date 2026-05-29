@@ -5,6 +5,7 @@ import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 import '../widgets/common_widgets.dart';
+import '../widgets/pharmacy_logo.dart';
 import '../services/supabase_service.dart';
 import '../utils/security_helper.dart';
 import '../main.dart';
@@ -41,7 +42,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   Future<void> _loadExtraSlots() async {
     final extras = await DatabaseHelper.instance.getExtraAssistantSlots();
-    if (mounted) setState(() => _extraSlots = extras);
+    final currency = await DatabaseHelper.instance.getCurrency();
+    if (mounted) setState(() {
+      _extraSlots = extras;
+      _currency = currency;
+    });
   }
 
   final _plans = [
@@ -175,11 +180,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 setDlg(() => isJoining = false);
                 
                 if (res.success) {
-                  // المساعدون تم حفظهم بالفعل بواسطة pullAssistantsFromServer داخل joinPharmacy
-                  // لا نحتاج لحذف وإعادة إدراجهم - فقط نتأكد من السيتينجز
+                  // joinPharmacy بيستدعي pullAssistantsFromServer داخلياً ويحفظ المساعدين تلقائياً
+                  // فقط نحفظ الإعدادات وننتقل لشاشة الـ PIN
                   final db = DatabaseHelper.instance;
-                  
+
+                  // تأكيد إضافي: لو ما فيش مساعدين محلياً، نجرب مرة ثانية
+                  final localCount = await db.getActiveAssistantCount();
+                  if (localCount == 0) {
+                    try {
+                      await SyncService.instance.pullAssistantsFromServer()
+                          .timeout(const Duration(seconds: 8));
+                    } catch (e) {
+                      debugPrint('⚠️ retry pullAssistants error: $e');
+                    }
+                  }
                   await db.setSetting('assistants_activated', '1');
+                  await db.setSetting('is_assistant_device', '1');
                   final expiry = DateTime.now().add(const Duration(days: 3650)).toIso8601String();
                   await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
                   
@@ -425,7 +441,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                           BoxShadow(color: AppColors.primary.withValues(alpha: 0.5), blurRadius: 20),
                         ],
                       ),
-                      child: const Center(child: Text('💊', style: TextStyle(fontSize: 36))),
+                      child: const Center(child: PharmacyLogo(size: 36)),
                     ),
                     const SizedBox(height: 14),
                     const Text('صيدلي PRO',

@@ -125,7 +125,7 @@ class RxNormService {
     }
     buf.writeln();
     for (final alt in alternatives) {
-      buf.writeln('💊 ${alt.name}');
+      buf.writeln('▪️ ${alt.name}');
     }
     buf.writeln('\n💡 كل البدائل بنفس المادة الفعالة. استشر الصيدلاني قبل الاستبدال.');
     return buf.toString().trim();

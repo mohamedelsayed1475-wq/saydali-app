@@ -358,13 +358,20 @@ class _AlternativesScreenState extends State<AlternativesScreen> {
       itemCount: _alternatives.length,
       itemBuilder: (ctx, idx) {
         final item = _alternatives[idx];
-        return Card(
-          color: AppColors.darkCard,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.darkBorder),
-          ),
+        return Container(
           margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: AppColors.darkCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.darkBorder),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                blurRadius: 10,
+                spreadRadius: 1,
+              )
+            ],
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14.0),
             child: Column(

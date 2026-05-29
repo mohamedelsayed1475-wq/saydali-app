@@ -18,6 +18,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   double _totalExpenses = 0.0;
   String _selectedFilter = 'all'; // all, daily, weekly, monthly
   String? _selectedCategoryFilter;
+  String _currency = 'ج.م';
 
   final List<String> _categories = [
     'رواتب',
@@ -59,10 +60,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       );
 
       final total = await DatabaseHelper.instance.getTotalExpenses();
+      final currency = await DatabaseHelper.instance.getCurrency();
 
       setState(() {
         _expenses = data.map((e) => Expense.fromMap(e)).toList();
         _totalExpenses = total;
+        _currency = currency;
         _loading = false;
       });
     } catch (e) {
@@ -350,7 +353,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       const Text('إجمالي المصروفات العامة',
                           style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                       Text(
-                        '${_totalExpenses.toStringAsFixed(2)} ج.م',
+                        '${_totalExpenses.toStringAsFixed(2)} $_currency',
                         style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 22,
@@ -433,11 +436,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         itemBuilder: (ctx, idx) {
                           final item = _expenses[idx];
                           final catColor = _getCategoryColor(item.category);
-                          return Card(
-                            color: AppColors.darkCard,
-                            shape: RoundedRectangleBorder(
+                           return Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.darkCard,
                               borderRadius: BorderRadius.circular(14),
-                              side: const BorderSide(color: AppColors.darkBorder),
+                              border: Border.all(color: catColor.withValues(alpha: 0.25)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: catColor.withValues(alpha: 0.08),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             margin: const EdgeInsets.only(bottom: 10),
                             child: ListTile(
@@ -454,7 +464,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                         color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                                   ),
                                   Text(
-                                    '- ${item.amount.toStringAsFixed(2)} ج.م',
+                                    '- ${item.amount.toStringAsFixed(2)} $_currency',
                                     style: const TextStyle(
                                         color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 15),
                                   ),

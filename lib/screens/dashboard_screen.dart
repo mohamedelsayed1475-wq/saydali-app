@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../database/database_helper.dart';
 import '../services/supabase_service.dart';
 import '../utils/app_theme.dart';
-import '../widgets/common_widgets.dart';
 import 'shortages_screen.dart';
 import 'debts_screen.dart';
 import 'rep_response_screen.dart';
@@ -14,7 +14,6 @@ import 'documents_screen.dart';
 import 'statistics_screen.dart';
 import 'rep_message_parser_screen.dart';
 import 'medication_expiry_screen.dart';
-import 'alternatives_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -193,6 +192,270 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  List<FlSpot> _generateSpots(double currentRatePct) {
+    return [
+      FlSpot(0, currentRatePct * 0.1),
+      FlSpot(1, currentRatePct * 0.25),
+      FlSpot(2, currentRatePct * 0.45),
+      FlSpot(3, currentRatePct * 0.65),
+      FlSpot(4, currentRatePct * 0.8),
+      FlSpot(5, currentRatePct * 0.9),
+      FlSpot(6, currentRatePct),
+    ];
+  }
+
+  Widget _buildCoverageChart(double rate) {
+    final ratePct = rate * 100;
+    final spots = _generateSpots(ratePct);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F223A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF1E3347), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'معدل التغطية اليوم',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF132A4A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF1E3347), width: 0.8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 14),
+                    SizedBox(width: 4),
+                    Text(
+                      'اليوم',
+                      style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${ratePct.toStringAsFixed(0)}%',
+            style: const TextStyle(
+              color: Color(0xFF00D4B4),
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 140,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 25,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: const Color(0xFF1E3347).withValues(alpha: 0.3),
+                      strokeWidth: 1,
+                      dashArray: [5, 5],
+                    );
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 25,
+                      getTitlesWidget: (value, meta) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Text(
+                            '${value.toInt()}%',
+                            style: const TextStyle(
+                              color: Color(0xFF7A9BB5),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        );
+                      },
+                      reservedSize: 32,
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        const labels = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'];
+                        final index = value.toInt();
+                        if (index >= 0 && index < labels.length) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              labels[index],
+                              style: const TextStyle(
+                                color: Color(0xFF7A9BB5),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      reservedSize: 20,
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                minX: 0,
+                maxX: 6,
+                minY: 0,
+                maxY: 100,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00D4B4), Color(0xFF00A07A)],
+                    ),
+                    barWidth: 2.5,
+                    isStrokeCapRound: true,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) {
+                        return FlDotCirclePainter(
+                          radius: 3,
+                          color: const Color(0xFF00D4B4),
+                          strokeWidth: 1.5,
+                          strokeColor: Colors.white,
+                        );
+                      },
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF00D4B4).withValues(alpha: 0.15),
+                          const Color(0xFF00D4B4).withValues(alpha: 0.0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _chartLegendItem(const Color(0xFF00C896), 'تحت التغطية'),
+              _chartLegendItem(const Color(0xFF3B82F6), 'عروض'),
+              _chartLegendItem(const Color(0xFFF59E0B), 'بانتظار'),
+              _chartLegendItem(const Color(0xFFEF4444), 'مستحقة'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chartLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF7A9BB5),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _quickActionItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F223A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF1E3347), width: 1),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 18,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -207,300 +470,316 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final offered = _stats['offered'] ?? 0;
     final rate = total > 0 ? (covered / total) : 0.0;
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      backgroundColor: AppColors.darkCard,
-      onRefresh: _loadData,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Smart Alerts
-          if (_alerts.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.primaryDark),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Text('🤖', style: TextStyle(fontSize: 20)),
-                      SizedBox(width: 8),
-                      Text('تنبيهات ذكية',
-                          style: TextStyle(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13)),
-                    ],
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.darkCard,
+        onRefresh: _loadData,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Smart Alerts
+            if (_alerts.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0D2E1C), Color(0xFF0A3525)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  const SizedBox(height: 10),
-                  ..._alerts.map((a) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(a['icon'], style: const TextStyle(fontSize: 16)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(a['title'],
-                                      style: TextStyle(
-                                          color: a['color'] as Color,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 12)),
-                                  Text(a['subtitle'],
-                                      style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 11)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // Stats Row 1
-          Row(
-            children: [
-              StatCard(icon: '💊', value: '$total', label: 'إجمالي النواقص'),
-              const SizedBox(width: 10),
-              StatCard(
-                  icon: '✅',
-                  value: '$covered',
-                  label: 'تمت التغطية',
-                  valueColor: AppColors.primary),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Stats Row 2
-          Row(
-            children: [
-              StatCard(
-                  icon: '⚠️',
-                  value: '$stubborn',
-                  label: 'مستعصية',
-                  valueColor: AppColors.danger),
-              const SizedBox(width: 10),
-              StatCard(
-                icon: '📈',
-                value: '${(rate * 100).toStringAsFixed(0)}%',
-                label: 'معدل التغطية',
-                valueColor: AppColors.warning,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-
-          // Stats Row 3 - Pending & Offered
-          Row(
-            children: [
-              StatCard(
-                  icon: '⏳',
-                  value: '$pending',
-                  label: 'بانتظار الرد',
-                  valueColor: AppColors.warning),
-              const SizedBox(width: 10),
-              StatCard(
-                  icon: '🎁',
-                  value: '$offered',
-                  label: 'عروض متاحة',
-                  valueColor: const Color(0xFF2563EB)),
-            ],
-          ),
-
-          // Coverage Bar
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.darkCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('معدل التغطية اليوم',
-                        style: TextStyle(
-                            color: AppColors.textLight,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
-                    Text('${(rate * 100).toStringAsFixed(0)}%',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w800)),
-                  ],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primaryDark),
                 ),
-                const SizedBox(height: 10),
-                GradientProgressBar(value: rate),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
-                  children: [
-                    _legendItem(AppColors.primary, 'تمت ($covered)'),
-                    _legendItem(const Color(0xFF2563EB), 'عروض ($offered)'),
-                    _legendItem(AppColors.warning, 'انتظار ($pending)'),
-                    _legendItem(AppColors.danger, 'مستعصي ($stubborn)'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Debt Summary
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.danger.withValues(alpha: 0.15),
-                  AppColors.darkCard
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border:
-                  Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                const Text('💰', style: TextStyle(fontSize: 32)),
-                const SizedBox(width: 12),
-                Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('إجمالي ديون العملاء',
-                        style: TextStyle(
-                            color: AppColors.textMuted, fontSize: 12)),
-                    Text(
-                      '${_totalDebt.toStringAsFixed(2)} $_currency',
-                      style: const TextStyle(
-                          color: AppColors.danger,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800),
+                    const Row(
+                      children: [
+                        Text('🤖', style: TextStyle(fontSize: 20)),
+                        SizedBox(width: 8),
+                        Text('تنبيهات ذكية',
+                            style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ],
                     ),
+                    const SizedBox(height: 10),
+                    ..._alerts.map((a) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(a['icon'], style: const TextStyle(fontSize: 16)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(a['title'],
+                                        style: TextStyle(
+                                            color: a['color'] as Color,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12)),
+                                    Text(a['subtitle'],
+                                        style: const TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
                   ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // KPI Grid - Row 1 (Right to Left: مستحقة, تحت التغطية, إجمالي النواقص)
+            Row(
+              children: [
+                _KPICard(
+                  label: 'مستحقة',
+                  value: '$stubborn',
+                  icon: Icons.warning_amber_rounded,
+                  color: const Color(0xFFEF4444),
+                ),
+                const SizedBox(width: 10),
+                _KPICard(
+                  label: 'تحت التغطية',
+                  value: '$covered',
+                  icon: Icons.shield_outlined,
+                  color: const Color(0xFF00C896),
+                ),
+                const SizedBox(width: 10),
+                _KPICard(
+                  label: 'إجمالي النواقص',
+                  value: '$total',
+                  icon: Icons.medical_services_outlined,
+                  color: const Color(0xFF00D4B4),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
-          // Quick Actions
-          const Text('⚡ وصول سريع',
+            // KPI Grid - Row 2 (Right to Left: عروض متاحة, بانتظار الرد, معدل التغطية)
+            Row(
+              children: [
+                _KPICard(
+                  label: 'عروض متاحة',
+                  value: '$offered',
+                  icon: Icons.card_giftcard_rounded,
+                  color: const Color(0xFF8B5CF6),
+                ),
+                const SizedBox(width: 10),
+                _KPICard(
+                  label: 'بانتظار الرد',
+                  value: '$pending',
+                  icon: Icons.hourglass_empty_rounded,
+                  color: const Color(0xFF3B82F6),
+                ),
+                const SizedBox(width: 10),
+                _KPICard(
+                  label: 'معدل التغطية',
+                  value: '${(rate * 100).toStringAsFixed(0)}%',
+                  icon: Icons.trending_up_rounded,
+                  color: const Color(0xFFF59E0B),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Coverage Line Chart Card
+            _buildCoverageChart(rate),
+            const SizedBox(height: 12),
+
+            // Debt Summary Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F223A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF1E3347), width: 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4B4).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF00D4B4).withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00D4B4).withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: Color(0xFF00D4B4),
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'هذا الشهر',
+                        style: TextStyle(
+                          color: Color(0xFF7A9BB5),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.trending_up_rounded,
+                            color: Color(0xFF00C896),
+                            size: 13,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '0.00',
+                            style: TextStyle(
+                              color: AppColors.textColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'إجمالي ديون العملاء',
+                        style: TextStyle(
+                          color: Color(0xFF7A9BB5),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_totalDebt.toStringAsFixed(2)} $_currency',
+                        style: const TextStyle(
+                          color: Color(0xFF00D4B4),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Quick Actions Header
+            const Text(
+              'عمليات سريعة',
               style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 2.5,
-            children: [
-              _quickAction('➕', 'ناقص جديد', AppColors.primary, () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ShortagesScreen()));
-              }),
-              _quickAction('👤', 'عميل جديد', AppColors.accent, () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const DebtsScreen()));
-              }),
-              _quickAction('📤', 'رد المندوب', const Color(0xFF2563EB), () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const RepResponseScreen()));
-              }),
-              _quickAction('📈', 'الإحصائيات', AppColors.warning, () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const StatisticsScreen()));
-              }),
-              _quickAction('🧾', 'فاتورة جديدة', const Color(0xFF8B5CF6), () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const InvoiceScreen()));
-              }),
-              _quickAction('📁', 'المستندات', const Color(0xFF10B981), () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const DocumentsScreen()));
-              }),
-              _quickAction('🪄', 'تحليل رسائل', AppColors.accent, () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const RepMessageParserScreen()));
-              }),
-              _quickAction('📅', 'صلاحية الأدوية', const Color(0xFFEC4899), () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const MedicationExpiryScreen()));
-              }),
-              _quickAction('🔄', 'بدائل الأدوية', Colors.teal, () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const AlternativesScreen()));
-              }),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+                color: Color(0xFF7A9BB5),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
 
-  Widget _legendItem(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-      ],
-    );
-  }
-
-  Widget _quickAction(
-      String emoji, String label, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+            // Quick Actions Grid (4 Columns)
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 4,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.95,
+              children: [
+                _quickActionItem(
+                  icon: Icons.person_add_alt_1_outlined,
+                  label: 'عميل جديد',
+                  color: const Color(0xFF00C896),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DebtsScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'ناقص جديد',
+                  color: const Color(0xFF00D4B4),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ShortagesScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.send_rounded,
+                  label: 'رد مندوب',
+                  color: const Color(0xFF3B82F6),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const RepResponseScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.bar_chart_rounded,
+                  label: 'الإحصائيات',
+                  color: const Color(0xFFF59E0B),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const StatisticsScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.folder_outlined,
+                  label: 'المستندات',
+                  color: const Color(0xFF10B981),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.monetization_on_outlined,
+                  label: 'فاتورة جديدة',
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const InvoiceScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.pie_chart_outline_rounded,
+                  label: 'تحليل رسائل',
+                  color: const Color(0xFFFF6B35),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const RepMessageParserScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.calendar_month_outlined,
+                  label: 'الأدوية القادمة',
+                  color: const Color(0xFFEC4899),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicationExpiryScreen()));
+                  },
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -639,6 +918,102 @@ class _AdDialogState extends State<AdDialog> {
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── بطاقة إحصائية مخصصة للوحة التحكم ──────────────────────────────────────────────────
+class _KPICard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _KPICard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F223A),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF1E3347), width: 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 3,
+                  color: color,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Icon(
+                          icon,
+                          color: color,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF7A9BB5),
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

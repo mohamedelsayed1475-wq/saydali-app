@@ -25,10 +25,27 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     'license': '🪪 تراخيص',
     'ministry': '🏛️ ملفات الوزارة',
     'invoice': '🧾 فواتير',
-    'prescription': '💊 روشتات',
+    'prescription': '📝 روشتات',
     'id': '🆔 هويات/بطاقات',
     'other': '📄 أخرى',
   };
+
+  Color _getCategoryColor(String cat) {
+    switch (cat) {
+      case 'license':
+        return Colors.purple;
+      case 'ministry':
+        return Colors.amber;
+      case 'invoice':
+        return Colors.blue;
+      case 'prescription':
+        return AppColors.primary;
+      case 'id':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
 
   @override
   void initState() {
@@ -462,13 +479,20 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                             final doc = docs[j];
                             final file = File(doc['path'] ?? '');
 
+                            final catColor = _getCategoryColor(category);
                             return GestureDetector(
                               onTap: () => _viewDocument(doc),
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: AppColors.darkCard,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.darkBorder),
+                                  border: Border.all(color: catColor.withValues(alpha: 0.35)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: catColor.withValues(alpha: 0.1),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
                                 ),
                                 child: Stack(
                                   children: [

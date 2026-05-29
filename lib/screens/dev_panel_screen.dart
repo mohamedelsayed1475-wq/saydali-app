@@ -900,7 +900,7 @@ class _DevPanelScreenState extends State<DevPanelScreen>
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _statRow('💊 إجمالي النواقص', '${stats['total']}'),
+            _statRow('📦 إجمالي النواقص', '${stats['total']}'),
             _statRow('✅ تمت التغطية', '${stats['covered']}'),
             _statRow('⚠️ مستعصية', '${stats['stubborn']}'),
             _statRow('🎟️ أكواد مفعلة',

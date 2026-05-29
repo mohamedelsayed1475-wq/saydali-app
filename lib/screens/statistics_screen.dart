@@ -14,10 +14,12 @@ class StatisticsScreen extends StatefulWidget {
 class _StatisticsScreenState extends State<StatisticsScreen> {
   late Future<Map<String, dynamic>> _statsFuture;
   Timer? _refreshTimer;
+  String _currency = 'ج.م';
 
   @override
   void initState() {
     super.initState();
+    _loadCurrency();
     _statsFuture = DatabaseHelper.instance.getStatisticsSummary();
     // تحديث تلقائي كل 4 ثوانٍ
     _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -27,6 +29,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         });
       }
     });
+  }
+
+  Future<void> _loadCurrency() async {
+    final currency = await DatabaseHelper.instance.getCurrency();
+    if (mounted) {
+      setState(() {
+        _currency = currency;
+      });
+    }
   }
 
   @override
@@ -117,7 +128,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     Expanded(
                       child: _buildMiniStatCard(
                         title: 'إجمالي المبيعات',
-                        value: '${totalSales.toStringAsFixed(0)} ج.م',
+                        value: '${totalSales.toStringAsFixed(0)} $_currency',
                         icon: Icons.point_of_sale_rounded,
                         color: AppColors.primary,
                       ),
@@ -126,7 +137,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     Expanded(
                       child: _buildMiniStatCard(
                         title: 'تكلفة المشتريات',
-                        value: '${totalCost.toStringAsFixed(0)} ج.م',
+                        value: '${totalCost.toStringAsFixed(0)} $_currency',
                         icon: Icons.shopping_bag_rounded,
                         color: AppColors.warning,
                       ),
@@ -137,7 +148,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
                 _buildStatCard(
                   title: 'المكسب الإجمالي (المبيعات - التكلفة)',
-                  value: '${grossProfit.toStringAsFixed(2)} ج.م',
+                  value: '${grossProfit.toStringAsFixed(2)} $_currency',
                   icon: Icons.monetization_on_rounded,
                   color: grossProfit >= 0 ? AppColors.primary : AppColors.danger,
                 ),
@@ -145,7 +156,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
                 _buildStatCard(
                   title: 'المصروفات التشغيلية',
-                  value: '${totalExpenses.toStringAsFixed(2)} ج.م',
+                  value: '${totalExpenses.toStringAsFixed(2)} $_currency',
                   icon: Icons.payments_rounded,
                   color: AppColors.danger,
                 ),
@@ -153,7 +164,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
                 _buildStatCard(
                   title: 'صافي الأرباح (المكسب - المصروفات)',
-                  value: '${netProfit.toStringAsFixed(2)} ج.م',
+                  value: '${netProfit.toStringAsFixed(2)} $_currency',
                   icon: Icons.trending_up_rounded,
                   color: netProfit >= 0 ? AppColors.primary : AppColors.danger,
                 ),
@@ -161,7 +172,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
                 _buildStatCard(
                   title: 'أموالك في السوق (الديون المستحقة)',
-                  value: '${totalDebts.toStringAsFixed(2)} ج.م',
+                  value: '${totalDebts.toStringAsFixed(2)} $_currency',
                   icon: Icons.account_balance_wallet_rounded,
                   color: AppColors.warning,
                 ),
@@ -211,7 +222,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                                 children: [
                                   Text(catName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
                                   Text(
-                                    '${catTotal.toStringAsFixed(0)} ج.م (${(percent * 100).toStringAsFixed(0)}%)',
+                                    '${catTotal.toStringAsFixed(0)} $_currency (${(percent * 100).toStringAsFixed(0)}%)',
                                     style: TextStyle(color: catColor, fontSize: 13, fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -247,14 +258,24 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       child: Text('لا توجد مبيعات مسجلة بعد', style: TextStyle(color: Colors.white54)),
                     ),
                   ),
-                ...topSelling.map((item) => Card(
-                  color: AppColors.darkCard,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  margin: const EdgeInsets.only(bottom: 8),
+                ...topSelling.map((item) => Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkCard,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: AppColors.primary,
-                      child: Icon(Icons.medication_liquid_rounded, color: Colors.white, size: 20),
+                    leading: CircleAvatar(
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                      child: const Icon(Icons.medication_liquid_rounded, color: AppColors.primary, size: 20),
                     ),
                     title: Text(item['name']?.toString() ?? '', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     trailing: Text('${item['qty']} علبة', style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 16)),

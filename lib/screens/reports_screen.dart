@@ -121,12 +121,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primaryDark, Color(0xFF004D38)],
+              gradient: LinearGradient(
+                colors: [AppColors.primary.withValues(alpha: 0.15), AppColors.darkCard],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,7 +168,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             decoration: BoxDecoration(
               color: AppColors.darkCard,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkBorder),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +243,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             decoration: BoxDecoration(
               color: AppColors.darkCard,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkBorder),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,9 +302,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _exportPDF,
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.danger.withValues(alpha: 0.8)),
-                  icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-                  label: const Text('تصدير PDF'),
+                    backgroundColor: AppColors.danger.withValues(alpha: 0.15),
+                    foregroundColor: AppColors.danger,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.4)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.picture_as_pdf, color: AppColors.danger),
+                  label: const Text('تصدير PDF', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -292,9 +317,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _exportExcel,
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF217346)),
-                  icon: const Icon(Icons.table_chart, color: Colors.white),
-                  label: const Text('تصدير Excel'),
+                    backgroundColor: const Color(0xFF217346).withValues(alpha: 0.15),
+                    foregroundColor: const Color(0xFF217346),
+                    side: BorderSide(color: const Color(0xFF217346).withValues(alpha: 0.4)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.table_chart, color: Color(0xFF217346)),
+                  label: const Text('تصدير Excel', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

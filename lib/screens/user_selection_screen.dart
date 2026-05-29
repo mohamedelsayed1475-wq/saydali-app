@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../widgets/pharmacy_logo.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../providers/current_user_provider.dart';
@@ -290,8 +291,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
                           ],
                         ),
                         child: const Center(
-                            child:
-                                Text('💊', style: TextStyle(fontSize: 40))),
+                            child: PharmacyLogo(size: 42)),
                       ),
                       const SizedBox(height: 16),
                       const Text('من يستخدم التطبيق؟',
@@ -405,6 +405,13 @@ class _UserSelectionScreenState extends State<UserSelectionScreen>
           gradient: LinearGradient(colors: gradient),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.15),
+              blurRadius: 12,
+              spreadRadius: 1,
+            )
+          ],
         ),
         child: Row(
           children: [

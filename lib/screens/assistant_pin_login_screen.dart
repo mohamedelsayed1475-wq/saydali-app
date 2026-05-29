@@ -8,6 +8,7 @@ import '../utils/app_theme.dart';
 import '../services/sync_service.dart';
 import '../services/scheduled_sync_service.dart';
 import 'subscription_screen.dart';
+import '../widgets/pharmacy_logo.dart';
 import '../main.dart';
 
 class AssistantPinLoginScreen extends StatefulWidget {
@@ -226,15 +227,23 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
     try {
       final db = DatabaseHelper.instance;
       
-      // محاولة التحقق من تسجيل الدخول مباشرة من Supabase أولاً
+      // ── خطوة 1: مزامنة المساعدين من السيرفر أولاً (لضمان أحدث بيانات) ──
+      try {
+        await SyncService.instance.pullAssistantsFromServer()
+            .timeout(const Duration(seconds: 6));
+        debugPrint('✅ تم سحب المساعدين من السيرفر قبل تسجيل الدخول');
+      } catch (e) {
+        debugPrint('⚠️ تعذّر سحب المساعدين من السيرفر: $e');
+      }
+
+      // ── خطوة 2: التحقق من PIN في السحابة مباشرةً ──
       Map<String, dynamic>? assistantMap;
       try {
         assistantMap = await SyncService.instance.checkAssistantLoginByPin(pin);
       } catch (e) {
         debugPrint('⚠️ Supabase login check failed: $e');
       }
-
-      // إذا لم ينجح التحقق من السحابة، نلجأ لقاعدة البيانات المحلية
+      // ── خطوة 3: لو السحابة ما ردّت، ابحث محلياً ──
       assistantMap ??= await db.getAssistantByPin(pin);
 
       // لو فشل الاثنان، نحاول تحديث المساعدين من السحابة ثم نحاول مرة أخرى
@@ -248,9 +257,27 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
       }
 
       if (assistantMap == null) {
+        // ── خطوة 4: تشخيص أدق للخطأ ──
+        // هل المساعد موجود بهذا الـ PIN لكن غير نشط؟
+        final allDbRes = await (await db.database).query(
+          'assistants',
+          where: 'pin = ?',
+          whereArgs: [pin],
+        );
+        String errMsg;
+        if (allDbRes.isNotEmpty) {
+          final a = allDbRes.first;
+          if ((a['is_active'] ?? 1) == 0) {
+            errMsg = 'الحساب معطل، يرجى التواصل مع صاحب الصيدلية';
+          } else {
+            errMsg = 'رمز PIN غير صحيح أو الحساب معطل';
+          }
+        } else {
+          errMsg = 'رمز PIN غير صحيح أو لم تتم المزامنة بعد، تأكد من الاتصال بالإنترنت وأعد المحاولة';
+        }
         setState(() {
           _loading = false;
-          _errorMessage = 'رمز PIN غير صحيح أو الحساب معطل';
+          _errorMessage = errMsg;
           _pinController.clear();
         });
         return;
@@ -258,11 +285,14 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
 
       final assistant = Assistant.fromMap(assistantMap);
 
-      // Check subscription
-      if (assistant.isSubscriptionExpired) {
+      // Check subscription (مع سماح 3 أيام grace period)
+      if (assistant.subscriptionExpiry != null &&
+          DateTime.now().isAfter(
+              assistant.subscriptionExpiry!.add(const Duration(days: 3)))) {
+        final expStr = '${assistant.subscriptionExpiry!.day}/${assistant.subscriptionExpiry!.month}/${assistant.subscriptionExpiry!.year}';
         setState(() {
           _loading = false;
-          _errorMessage = 'انتهى اشتراكك، يرجى التواصل مع الصيدلية لتجديد التفعيل';
+          _errorMessage = 'انتهى اشتراكك بتاريخ $expStr، يرجى التواصل مع الصيدلية لتجديد التفعيل';
           _pinController.clear();
         });
         return;
@@ -280,7 +310,7 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
       }
 
       // Store in SQLite settings
-      await db.setSetting('logged_in_assistant_id', assistant.id.toString());
+      await db.setSetting('logged_in_assistant_id', (assistant.id ?? 0).toString());
       await db.setSetting('assistant_session_token', sessionToken);
       await db.setSetting('assistant_session_expiry', sessionExpiry.toIso8601String());
 
@@ -396,7 +426,7 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
                         ],
                       ),
                       child: const Center(
-                        child: Text('💊', style: TextStyle(fontSize: 44)),
+                        child: PharmacyLogo(size: 44),
                       ),
                     ),
                   ),
@@ -428,9 +458,9 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
                       border: Border.all(color: AppColors.darkBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 15,
-                          spreadRadius: 1,
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          spreadRadius: 2,
                         )
                       ],
                     ),

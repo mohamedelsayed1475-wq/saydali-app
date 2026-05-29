@@ -135,6 +135,13 @@ class _PinLockScreenState extends State<PinLockScreen>
                 gradient: const LinearGradient(
                     colors: [AppColors.primary, AppColors.primaryDark]),
                 borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.45),
+                    blurRadius: 24,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
               child: const Center(
                 child: Icon(Icons.lock_rounded, color: Colors.white, size: 32),
@@ -188,6 +195,15 @@ class _PinLockScreenState extends State<PinLockScreen>
                         width: 2,
                       ),
                       borderRadius: BorderRadius.circular(10),
+                      boxShadow: filled
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.5),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                   );
                 }),
@@ -261,8 +277,16 @@ class _KeyButton extends StatelessWidget {
           height: 64,
           decoration: BoxDecoration(
             color: AppColors.darkCard,
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.2),
+            ),
             borderRadius: BorderRadius.circular(35),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                blurRadius: 8,
+              ),
+            ],
           ),
           child: Center(
             child: isDelete

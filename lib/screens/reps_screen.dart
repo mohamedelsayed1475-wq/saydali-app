@@ -336,6 +336,13 @@ class _RepsScreenState extends State<RepsScreen> {
                 left: BorderSide(color: AppColors.darkBorder),
                 right: BorderSide(color: AppColors.darkBorder),
               ),
+              boxShadow: index < 3 ? [
+                BoxShadow(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                )
+              ] : null,
             ),
             child: Column(
               children: [

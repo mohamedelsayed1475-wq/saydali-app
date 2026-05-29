@@ -1556,6 +1556,15 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                 color: assistant.isActive
                     ? AppColors.primary.withValues(alpha: 0.3)
                     : AppColors.darkBorder),
+            boxShadow: assistant.isActive
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

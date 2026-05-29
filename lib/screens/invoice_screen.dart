@@ -349,10 +349,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   if (items.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.dark,
-                        border: Border(
+                        border: const Border(
                             top: BorderSide(color: AppColors.darkBorder)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.05),
+                            offset: const Offset(0, -4),
+                            blurRadius: 12,
+                          )
+                        ],
                       ),
                       child: Column(
                         children: [
@@ -1711,6 +1718,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               color: AppColors.darkCard,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(color: AppColors.darkBorder),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.05),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                )
+                              ],
                             ),
                             child: Row(
                               children: [

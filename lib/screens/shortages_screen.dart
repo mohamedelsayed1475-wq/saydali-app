@@ -653,7 +653,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     buffer.writeln('📋 تقرير النواقص (${filtered.length} أصناف):');
     buffer.writeln('-------------------');
     for (var s in filtered) {
-      buffer.writeln('💊 الدواء: ${s.name}');
+      buffer.writeln('📋 الدواء: ${s.name}');
       buffer.writeln('🏢 الشركة: ${s.company}');
       buffer.writeln('📦 الكمية: ${s.quantity}');
       if (s.isUrgent) buffer.writeln('🚨 حالة: عاجل جداً');
@@ -671,7 +671,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
 
     final text = data.text!;
-    final drugRegex = RegExp(r'💊 الدواء:\s*(.*)');
+    final drugRegex = RegExp(r'[💊📋]?\s*الدواء:\s*(.*)');
     final companyRegex = RegExp(r'🏢 الشركة:\s*(.*)');
     final qtyRegex = RegExp(r'📦 الكمية:\s*(\d+)');
     final urgentRegex = RegExp(r'🚨 حالة:\s*عاجل');
@@ -1039,6 +1039,13 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       ? AppColors.danger.withValues(alpha: 0.3)
                       : AppColors.darkBorder),
             ),
+            boxShadow: item.isUrgent ? [
+              BoxShadow(
+                color: AppColors.danger.withValues(alpha: 0.1),
+                blurRadius: 10,
+                spreadRadius: 1,
+              )
+            ] : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

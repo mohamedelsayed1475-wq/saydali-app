@@ -454,7 +454,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('💊 ${a['drugName']}',
+                    Text('🔸 ${a['drugName']}',
                         style: const TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w800, fontSize: 14)),
                     const SizedBox(height: 8),
                     // جدول المقارنة
@@ -734,7 +734,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
 
         widgets.add(pw.SizedBox(height: 20));
         widgets.add(pw.Center(
-          child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO 💊',
+          child: pw.Text('تم إنشاء هذا التقرير بواسطة تطبيق صيدلي PRO',
               style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500)),
         ));
 
@@ -755,7 +755,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       final a = alerts[i];
       final allOffers = a['allOffers'] as List<Map<String, dynamic>>;
 
-      msg += '💊 ${i + 1}. ${a['drugName']}\n';
+      msg += '🔸 ${i + 1}. ${a['drugName']}\n';
       for (var offer in allOffers) {
         final isBest = offer == allOffers.first;
         final icon = isBest ? '👑' : '  ';
@@ -773,7 +773,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     final totalSaving = alerts.fold(0.0, (s, a) => s + (a['saving'] as double));
     msg += '━━━━━━━━━━━━━━━━━━━━\n';
     msg += '📋 إجمالي التوفير الممكن: ${totalSaving.toStringAsFixed(2)} $_currency/علبة\n';
-    msg += '\nتم الإرسال عبر صيدلي PRO 💊';
+    msg += '\nتم الإرسال عبر صيدلي PRO';
 
     Share.share(msg);
   }
@@ -1042,7 +1042,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
       }
     }
 
-    msg += '\nتم الإرسال عبر صيدلي PRO 💊';
+    msg += '\nتم الإرسال عبر صيدلي PRO';
     Share.share(msg);
   }
 
@@ -1983,7 +1983,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '💊 بديل مقترح من المندوب: ${item.repAlternative}',
+                           '🔸 بديل مقترح من المندوب: ${item.repAlternative}',
                           style: const TextStyle(
                             color: Color(0xFF93C5FD),
                             fontSize: 11,

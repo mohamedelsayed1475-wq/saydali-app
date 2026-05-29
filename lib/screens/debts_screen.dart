@@ -1150,8 +1150,14 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(16),
-                border:
-                    Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.danger.withValues(alpha: 0.15),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -1312,6 +1318,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   color: customer.totalDebt > 0
                       ? AppColors.danger.withValues(alpha: 0.3)
                       : AppColors.darkBorder),
+              boxShadow: customer.totalDebt > 0 ? [
+                BoxShadow(
+                  color: AppColors.danger.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                )
+              ] : null,
             ),
             child: Row(
               children: [

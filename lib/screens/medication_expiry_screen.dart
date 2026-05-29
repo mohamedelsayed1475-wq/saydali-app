@@ -728,13 +728,20 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
       statusText = 'آمن ✅';
     }
 
-    return Card(
-      color: AppColors.darkCard,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: statusColor.withValues(alpha: 0.3), width: 1.5),
-      ),
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppColors.darkCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withValues(alpha: 0.15),
+            blurRadius: 12,
+            spreadRadius: 1,
+          )
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(14.0),
         child: Column(

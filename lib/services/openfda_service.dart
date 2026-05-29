@@ -102,7 +102,7 @@ class DrugInfo {
   // تحويل لنص عربي منظم
   String toArabicText() {
     final buf = StringBuffer();
-    if (brandName.isNotEmpty) buf.writeln('💊 $brandName');
+    if (brandName.isNotEmpty) buf.writeln('📋 $brandName');
     if (genericName.isNotEmpty) buf.writeln('🧪 المادة الفعالة: $genericName');
     if (indications != null && indications!.isNotEmpty) {
       buf.writeln('\n📋 دواعي الاستعمال:');

@@ -124,7 +124,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.07),
+                blurRadius: 12,
+              ),
+            ],
           ),
           child: DropdownButtonFormField<String>(
             initialValue: _selectedCountryCode,
@@ -171,7 +177,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.07),
+                blurRadius: 12,
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -200,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
           ),
           child: SwitchListTile(
             title: const Text('تفعيل الإشعارات',
@@ -222,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
           ),
           child: SwitchListTile(
             title: const Text('قفل برقم سري',
@@ -296,7 +308,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
           ),
           child: SwitchListTile(
             title: const Text('إغلاق النواقص القديمة تلقائياً',
@@ -416,7 +428,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.05),
+                blurRadius: 12,
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -483,7 +501,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: BoxDecoration(
           color: AppColors.darkCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.2),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              blurRadius: 10,
+            ),
+          ],
         ),
         child: Row(
           children: [
