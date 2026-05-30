@@ -1131,86 +1131,208 @@ class _DebtsScreenState extends State<DebtsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // حساب المتأخرات (ديون تجاوز تاريخ سدادها)
+    final now = DateTime.now();
+    final overdueDebt = _customers
+        .where((c) => c.totalDebt > 0 && c.dueDate != null && c.dueDate!.isBefore(now))
+        .fold(0.0, (sum, c) => sum + c.totalDebt);
+
     return Scaffold(
       backgroundColor: AppColors.dark,
       body: Column(
         children: [
-          // Total Debt Banner
-          if (_customers.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.danger.withValues(alpha: 0.2),
-                    AppColors.darkCard
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+          // Stats Cards Row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                // كارت العملاء
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.darkBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.people_alt_rounded,
+                              color: AppColors.primary, size: 20),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('العملاء',
+                            style: TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                        Text('${_customers.length}',
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800)),
+                        const Text('عميل',
+                            style: TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                      ],
+                    ),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.danger.withValues(alpha: 0.15),
-                    blurRadius: 20,
-                    spreadRadius: 2,
+                const SizedBox(width: 8),
+                // كارت إجمالي الديون
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.darkBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.account_balance_wallet_rounded,
+                              color: AppColors.accent, size: 20),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('إجمالي الديون',
+                            style: TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                        Text(_totalDebt.toStringAsFixed(2),
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800)),
+                        Text(_currency,
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Text('💰', style: TextStyle(fontSize: 32)),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('إجمالي الديون',
-                          style: TextStyle(
-                              color: AppColors.textMuted, fontSize: 12)),
-                      Text('${_totalDebt.toStringAsFixed(2)} $_currency',
-                          style: const TextStyle(
-                              color: AppColors.danger,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800)),
-                      Text('${_customers.length} عميل',
-                          style: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 12)),
-                    ],
+                ),
+                const SizedBox(width: 8),
+                // كارت المتأخرات
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: overdueDebt > 0
+                              ? AppColors.warning.withValues(alpha: 0.3)
+                              : AppColors.darkBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.access_time_rounded,
+                              color: AppColors.warning, size: 20),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('المتأخرات',
+                            style: TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                        Text(overdueDebt.toStringAsFixed(2),
+                            style: TextStyle(
+                                color: overdueDebt > 0
+                                    ? AppColors.warning
+                                    : AppColors.textColor,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800)),
+                        Text(_currency,
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 11)),
+                      ],
+                    ),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.paste_rounded, color: Colors.white),
-                    tooltip: 'إضافة من رسالة المساعد',
-                    style: IconButton.styleFrom(
-                        backgroundColor:
-                            AppColors.warning.withValues(alpha: 0.2)),
-                    onPressed: _importFromClipboard,
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.share, color: Colors.white),
-                    tooltip: 'مشاركة التقرير مع المدير',
-                    style: IconButton.styleFrom(
-                        backgroundColor:
-                            AppColors.accent.withValues(alpha: 0.2)),
-                    onPressed: _shareDebts,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: 12),
 
-          // Search
+          // Search with filter icon
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              onChanged: (v) => setState(() => _search = v),
-              style: const TextStyle(color: AppColors.textColor),
-              decoration: const InputDecoration(
-                hintText: 'ابحث عن عميل...',
-                prefixIcon: Icon(Icons.search, color: AppColors.textMuted),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => setState(() => _search = v),
+                    style: const TextStyle(color: AppColors.textColor),
+                    decoration: const InputDecoration(
+                      hintText: 'ابحث عن عميل...',
+                      prefixIcon:
+                          Icon(Icons.search, color: AppColors.textMuted),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.tune_rounded,
+                        color: AppColors.primary, size: 22),
+                    color: AppColors.darkCard,
+                    tooltip: 'فلترة',
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                          value: 'share',
+                          child: Row(
+                            children: [
+                              Icon(Icons.share_rounded,
+                                  color: AppColors.primary, size: 18),
+                              SizedBox(width: 8),
+                              Text('مشاركة التقرير',
+                                  style:
+                                      TextStyle(color: AppColors.textColor)),
+                            ],
+                          )),
+                      const PopupMenuItem(
+                          value: 'import',
+                          child: Row(
+                            children: [
+                              Icon(Icons.paste_rounded,
+                                  color: AppColors.warning, size: 18),
+                              SizedBox(width: 8),
+                              Text('استيراد من الحافظة',
+                                  style:
+                                      TextStyle(color: AppColors.textColor)),
+                            ],
+                          )),
+                    ],
+                    onSelected: (v) {
+                      if (v == 'share') _shareDebts();
+                      if (v == 'import') _importFromClipboard();
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 10),

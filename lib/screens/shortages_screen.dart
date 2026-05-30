@@ -781,14 +781,43 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     final _filtered = _getFiltered(_shortages);
     final _loading = provider.loading;
 
+    // حساب الإحصائيات
+    final totalCount = _shortages.length;
+    final pendingCount = _shortages.where((s) => s.status == 'pending').length;
+    final sentCount = _shortages.where((s) => s.status == 'offered').length;
+
     return Scaffold(
       backgroundColor: AppColors.dark,
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(
               children: [
+                // كاردات إحصائية
+                Row(
+                  children: [
+                    Expanded(
+                      child: _statCard('إجمالي النواقص',
+                          totalCount.toString(), 'صنف',
+                          Icons.inventory_2_rounded, AppColors.accent),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _statCard('بانتظار الرد',
+                          pendingCount.toString(), 'صنف',
+                          Icons.hourglass_empty_rounded, Colors.amber),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _statCard('تم الإرسال',
+                          sentCount.toString(), 'صنف',
+                          Icons.check_circle_outline_rounded, AppColors.primary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
                 // Search
                 TextField(
                   onChanged: (v) => setState(() => _search = v),
@@ -812,6 +841,12 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                             },
                           ),
                         IconButton(
+                          icon: const Icon(Icons.paste_rounded,
+                              color: AppColors.warning),
+                          tooltip: 'إضافة من الحافظة',
+                          onPressed: _importFromClipboard,
+                        ),
+                        IconButton(
                           icon: const Icon(Icons.upload_file,
                               color: AppColors.primary),
                           tooltip: 'استيراد Excel',
@@ -823,69 +858,51 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 ),
                 const SizedBox(height: 10),
 
+                // Action Buttons Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _actionBtn(
+                        icon: Icons.send_rounded,
+                        label: 'إرسال لمندوب',
+                        color: AppColors.primary,
+                        onTap: _showSelectRepDialog,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _actionBtn(
+                        icon: Icons.share_rounded,
+                        label: 'مشاركة للمدير',
+                        color: AppColors.accent,
+                        onTap: _shareShortages,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _actionBtn(
+                        icon: Icons.swap_vert_rounded,
+                        label: 'ترتيب',
+                        color: AppColors.textLight,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const RepMessageParserScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
                 // Filter Tabs
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.send,
-                              size: 16, color: Colors.white),
-                          label: const Text('إرسال لمندوب',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600)),
-                          backgroundColor: AppColors.primary,
-                          onPressed: _showSelectRepDialog,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.share,
-                              size: 16, color: Colors.white),
-                          label: const Text('مشاركة للمدير',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600)),
-                          backgroundColor: AppColors.accent,
-                          onPressed: _shareShortages,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.auto_awesome,
-                              size: 16, color: Colors.white),
-                          label: const Text('تحليل رسالة مندوب',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600)),
-                          backgroundColor: AppColors.accent,
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const RepMessageParserScreen()),
-                            );
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.paste_rounded,
-                              size: 16, color: Colors.white),
-                          label: const Text('إضافة من الرسالة',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600)),
-                          backgroundColor: AppColors.warning,
-                          onPressed: _importFromClipboard,
-                        ),
-                      ),
                       // Bulk Delete - only show when a specific filter is active
                       if (_filter != 'all' && _filtered.isNotEmpty)
                         Padding(
@@ -938,13 +955,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary))
                 : _filtered.isEmpty
-                    ? EmptyState(
-                        emoji: '🎉',
-                        title: 'لا توجد نواقص',
-                        subtitle: 'اضغط + لإضافة ناقص جديد\nأو استورد من Excel',
-                        buttonText: 'إضافة ناقص',
-                        onButton: () => _showAddSheet(),
-                      )
+                    ? _buildEmptyState()
                     : RefreshIndicator(
                         color: AppColors.primary,
                         backgroundColor: AppColors.darkCard,
@@ -969,6 +980,163 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                 fontWeight: FontWeight.w700,
                 fontFamily: 'Cairo')),
       ),
+    );
+  }
+
+  Widget _statCard(String title, String value, String unit, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.darkCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
+          Text(title,
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800)),
+            ],
+          ),
+          Text(unit,
+              style:
+                  const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.darkBorder),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary.withValues(alpha: 0.08),
+              border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.15), width: 2),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // نجوم صغيرة
+                Positioned(
+                    top: 20,
+                    left: 25,
+                    child: Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                            color: AppColors.primary, shape: BoxShape.circle))),
+                Positioned(
+                    top: 35,
+                    right: 20,
+                    child: Container(
+                        width: 3,
+                        height: 3,
+                        decoration: const BoxDecoration(
+                            color: AppColors.primary, shape: BoxShape.circle))),
+                Positioned(
+                    bottom: 25,
+                    left: 20,
+                    child: Container(
+                        width: 4,
+                        height: 4,
+                        decoration: const BoxDecoration(
+                            color: AppColors.primary, shape: BoxShape.circle))),
+                // أيقونة الصندوق
+                Icon(Icons.inventory_2_rounded,
+                    color: AppColors.primary, size: 60),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('لا توجد نواقص',
+              style: TextStyle(
+                  color: AppColors.textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          const Text('جميع الأصناف متوفرة حالياً',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+          const SizedBox(height: 4),
+          const Text('عند وجود نقص ستظهر هنا',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const SizedBox(height: 24),
+          // ميزات
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _featureChip(Icons.shield_rounded, 'مخزون منظم'),
+              const SizedBox(width: 12),
+              _featureChip(Icons.timer_rounded, 'تحديث لحظي'),
+              const SizedBox(width: 12),
+              _featureChip(Icons.check_rounded, 'بيانات دقيقة'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _featureChip(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: AppColors.primary, size: 14),
+        const SizedBox(width: 4),
+        Text(label,
+            style:
+                const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+      ],
     );
   }
 

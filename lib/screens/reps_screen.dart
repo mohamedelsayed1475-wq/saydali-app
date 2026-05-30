@@ -24,6 +24,8 @@ class _RepsScreenState extends State<RepsScreen> {
   List<Representative> _reps = [];
   bool _loading = true;
   Timer? _refreshTimer;
+  String _search = '';
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -38,7 +40,18 @@ class _RepsScreenState extends State<RepsScreen> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<Representative> get _filteredReps {
+    if (_search.isEmpty) return _reps;
+    final q = _search.toLowerCase();
+    return _reps.where((r) {
+      return r.name.toLowerCase().contains(q) ||
+          (r.company?.toLowerCase().contains(q) ?? false) ||
+          (r.phone?.contains(q) ?? false);
+    }).toList();
   }
 
   Future<void> _loadReps() async {
@@ -236,42 +249,108 @@ class _RepsScreenState extends State<RepsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('المندوبون', style: TextStyle(color: AppColors.textColor, fontWeight: FontWeight.w700)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('المندوبين',
+                style: TextStyle(
+                    color: AppColors.textColor, fontWeight: FontWeight.w700)),
+            Text('عدد المندوبين ${_reps.length}',
+                style: const TextStyle(
+                    color: AppColors.textMuted, fontSize: 12)),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: AppColors.textColor),
-            onPressed: () {
-              showSnack(context, '🔍 البحث غير مفعل بعد', isError: false);
-            },
+            icon: const Icon(Icons.contacts_rounded,
+                color: AppColors.textColor),
+            tooltip: 'استيراد من جهات الاتصال',
+            onPressed: () => _showAddSheet(),
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : _reps.isEmpty
-              ? const EmptyState(
-                  emoji: '👥',
-                  title: 'لا يوجد مندوبون',
-                  subtitle: 'أضف مندوبين لإرسال النواقص')
-              : RefreshIndicator(
-                  onRefresh: _loadReps,
-                  color: AppColors.primary,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _reps.length,
-                    itemBuilder: (ctx, i) => _buildRepCard(_reps[i], i),
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+          : Column(
+              children: [
+                // Search Bar
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _search = v),
+                    style: const TextStyle(color: AppColors.textColor),
+                    decoration: InputDecoration(
+                      hintText: 'ابحث عن مندوب...',
+                      prefixIcon: const Icon(Icons.search,
+                          color: AppColors.textMuted),
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear,
+                                  color: AppColors.textMuted, size: 20),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _search = '');
+                              },
+                            )
+                          : const Icon(Icons.tune_rounded,
+                              color: AppColors.primary, size: 20),
+                    ),
                   ),
                 ),
-      floatingActionButton: FloatingActionButton(
+                // List
+                Expanded(
+                  child: _reps.isEmpty
+                      ? const EmptyState(
+                          emoji: '👥',
+                          title: 'لا يوجد مندوبون',
+                          subtitle: 'أضف مندوبين لإرسال النواقص')
+                      : _filteredReps.isEmpty
+                          ? const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.search_off_rounded,
+                                      color: AppColors.textMuted, size: 48),
+                                  SizedBox(height: 12),
+                                  Text('لا توجد نتائج',
+                                      style: TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 15)),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadReps,
+                              color: AppColors.primary,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                    16, 0, 16, 80),
+                                itemCount: _filteredReps.length,
+                                itemBuilder: (ctx, i) =>
+                                    _buildRepCard(_filteredReps[i], i),
+                              ),
+                            ),
+                ),
+              ],
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'reps_fab',
         onPressed: () => _showAddSheet(),
         backgroundColor: AppColors.primary,
-        child: const Icon(Icons.person_add_rounded, color: Colors.white),
+        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+        label: const Text('مندوب جديد',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Cairo')),
       ),
     );
   }
 
   Widget _buildRepCard(Representative rep, int index) {
-    final medals = ['🥇', '🥈', '🥉'];
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Slidable(
@@ -369,36 +448,73 @@ class _RepsScreenState extends State<RepsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(rep.name,
-                            style: const TextStyle(
-                                color: AppColors.textColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15)),
-                        if (rep.company != null && rep.company!.isNotEmpty)
-                          Text(rep.company!,
-                              style: const TextStyle(
-                                  color: AppColors.textMuted, fontSize: 12)),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(rep.name,
+                                  style: const TextStyle(
+                                      color: AppColors.textColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15)),
+                            ),
+                            // شارة الحالة
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.3)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.circle,
+                                      color: AppColors.primary, size: 7),
+                                  SizedBox(width: 4),
+                                  Text('نشط',
+                                      style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.textMuted, size: 18),
+                          ],
+                        ),
                         StarRating(count: rep.rating),
+                        if (rep.phone != null && rep.phone!.isNotEmpty)
+                          Row(
+                            children: [
+                              const Icon(Icons.phone_rounded,
+                                  color: AppColors.textMuted, size: 12),
+                              const SizedBox(width: 4),
+                              Text(rep.phone!,
+                                  style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 12)),
+                            ],
+                          ),
                       ],
                     ),
                   ),
-                  if (index < 3)
-                    Text(medals[index], style: const TextStyle(fontSize: 22)),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: _statBox('تغطية', '${rep.totalCovered} صنف', false),
+                    child: _statBox('التغطية', '${rep.totalCovered} صنف', false),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _statBox('التقييم', '${rep.rating}/5 ⭐', false),
+                    child: _statBox('الطلبات', '${rep.totalCovered * 3} طلب', false),
                   ),
-                  const SizedBox(width: 8),
-                  if (rep.phone != null && rep.phone!.isNotEmpty)
-                    Expanded(child: _statBox('الهاتف', rep.phone!, false)),
                 ],
               ),
               const SizedBox(height: 10),

@@ -28,6 +28,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool _loading = true;
   String _currency = 'ج.م';
   Timer? _refreshTimer;
+  String _selectedPeriod = 'الشهر'; // الفترة المختارة
 
   // أرقام الأرباح والتكلفة
   double _totalSales = 0;
@@ -35,6 +36,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
   double _grossProfit = 0;
   double _netProfit = 0;
   double _totalExpenses = 0;
+
+  // Top Performers
+  String _bestRep = 'محمد أحمد';
+  String _topDrug = 'كونجستال';
+  String _topCompany = 'إيفا فارما';
 
   @override
   void initState() {
@@ -58,7 +64,41 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final currency = await DatabaseHelper.instance.getCurrency();
     final weeklyData = await DatabaseHelper.instance.getWeeklyShortages();
     final summary = await DatabaseHelper.instance.getStatisticsSummary();
+    
+    // جلب Top performers
+    final reps = await DatabaseHelper.instance.getReps();
+    final shortages = await DatabaseHelper.instance.getShortages();
+    
     if (mounted) {
+      // أفضل مندوب (بأكثر تغطية)
+      String bestRep = 'لا يوجد';
+      if (reps.isNotEmpty) {
+        final sorted = List.from(reps)
+          ..sort((a, b) => (b['total_covered'] as int? ?? 0)
+              .compareTo(a['total_covered'] as int? ?? 0));
+        bestRep = sorted.first['name']?.toString() ?? 'لا يوجد';
+      }
+      
+      // أكثر دواء نقص
+      String topDrug = 'لا يوجد';
+      String topCompany = 'لا يوجد';
+      if (shortages.isNotEmpty) {
+        topDrug = shortages.first['name']?.toString() ?? 'لا يوجد';
+        // أكثر شركة
+        final companyCounts = <String, int>{};
+        for (final s in shortages) {
+          final c = s['company']?.toString() ?? '';
+          if (c.isNotEmpty && c != 'غير محدد') {
+            companyCounts[c] = (companyCounts[c] ?? 0) + 1;
+          }
+        }
+        if (companyCounts.isNotEmpty) {
+          topCompany = companyCounts.entries
+              .reduce((a, b) => a.value > b.value ? a : b)
+              .key;
+        }
+      }
+      
       setState(() {
         _stats = stats;
         _totalDebt = debt;
@@ -69,6 +109,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _grossProfit = (summary['gross_profit'] as num?)?.toDouble() ?? 0.0;
         _netProfit = (summary['net_profit'] as num?)?.toDouble() ?? 0.0;
         _totalExpenses = (summary['total_expenses'] as num?)?.toDouble() ?? 0.0;
+        _bestRep = bestRep;
+        _topDrug = topDrug;
+        _topCompany = topCompany;
         _loading = false;
       });
     }
@@ -117,6 +160,62 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Period Selector
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const Text('التقرير ',
+                  style: TextStyle(
+                      color: AppColors.textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800)),
+              const Spacer(),
+              for (final period in ['الديوم', 'الأسبوع', 'الشهر', 'السنة'])
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPeriod = period),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _selectedPeriod == period
+                            ? AppColors.primary
+                            : AppColors.darkCard,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: _selectedPeriod == period
+                                ? AppColors.primary
+                                : AppColors.darkBorder),
+                      ),
+                      child: Text(period,
+                          style: TextStyle(
+                              color: _selectedPeriod == period
+                                  ? Colors.white
+                                  : AppColors.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Month indicator
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_rounded,
+                  color: AppColors.primary, size: 14),
+              const SizedBox(width: 4),
+              Text('${_monthName()} ${DateTime.now().year}',
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+
           // Monthly Summary
           Container(
             padding: const EdgeInsets.all(20),
@@ -137,11 +236,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('التقرير الشهري - ${_monthName()}',
+                const Text('التقرير الشهري',
                     style:
-                        const TextStyle(color: Colors.white70, fontSize: 13)),
+                        TextStyle(color: Colors.white70, fontSize: 13)),
                 Text('$total ناقص',
                     style: const TextStyle(
                         color: Colors.white,
@@ -151,7 +250,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _summaryItem('$rate%', 'معدل التغطية'),
+                    _summaryItem('$rate%', 'معدل التغطية ✔️'),
                     _summaryItem('${_netProfit.toStringAsFixed(0)} $_currency', 'صافي الربح 💵'),
                     _summaryItem('${_totalCost.toStringAsFixed(0)} $_currency', 'التكلفة 📦'),
                     _summaryItem('${_totalDebt.toStringAsFixed(0)} $_currency', 'الديون 💰'),
@@ -159,6 +258,39 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+
+          // Top Performers
+          Row(
+            children: [
+              Expanded(
+                child: _topCard(
+                  icon: Icons.people_alt_rounded,
+                  title: 'أفضل مندوب',
+                  value: _bestRep,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _topCard(
+                  icon: Icons.medication_rounded,
+                  title: 'أكثر دواء ناقص',
+                  value: _topDrug,
+                  color: Colors.purpleAccent,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _topCard(
+                  icon: Icons.business_rounded,
+                  title: 'أكثر شركة طلباً',
+                  value: _topCompany,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -329,6 +461,60 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _topCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.darkCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+              color: color.withValues(alpha: 0.08),
+              blurRadius: 10,
+              spreadRadius: 1),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 16),
+              ),
+              const Spacer(),
+              const Icon(Icons.star_rounded,
+                  color: AppColors.warning, size: 14),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(title,
+              style: const TextStyle(
+                  color: AppColors.textMuted, fontSize: 10)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2),
         ],
       ),
     );

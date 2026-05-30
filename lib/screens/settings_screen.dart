@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
-import 'invoice_screen.dart';
 import '../utils/country_config.dart';
 import '../database/database_helper.dart';
 import '../services/supabase_service.dart';
@@ -205,79 +204,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Notifications
-        _sectionTitle('🔔 الإشعارات'),
+        // Notifications & PIN Lock combined
+        _sectionTitle('🔔 الإشعارات والحماية'),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.darkCard,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
           ),
-          child: SwitchListTile(
-            title: const Text('تفعيل الإشعارات',
-                style: TextStyle(color: AppColors.textColor)),
-            subtitle: const Text('تنبيهات النواقص والديون',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-            value: _notificationsEnabled,
-            activeThumbColor: AppColors.primary,
-            onChanged: (v) => setState(() => _notificationsEnabled = v),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        const SizedBox(height: 16),
+          child: Column(
+            children: [
+              SwitchListTile(
+                title: const Text('تفعيل الإشعارات',
+                    style: TextStyle(color: AppColors.textColor)),
+                subtitle: const Text('تنبيهات النواقص والديون',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                value: _notificationsEnabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: (v) => setState(() => _notificationsEnabled = v),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              ),
 
-        // PIN Lock
-        _sectionTitle('🔐 قفل التطبيق'),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-          ),
-          child: SwitchListTile(
-            title: const Text('قفل برقم سري',
-                style: TextStyle(color: AppColors.textColor)),
-            subtitle: Text(
-                _pinEnabled ? 'التطبيق محمي برقم سري' : 'اضغط لتفعيل القفل',
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-            value: _pinEnabled,
-            activeThumbColor: AppColors.primary,
-            onChanged: (v) {
-              if (v) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PinLockScreen(
-                      isSetup: true,
-                      onSuccess: () {
-                        Navigator.pop(context);
-                        setState(() => _pinEnabled = true);
-                        showSnack(context, '🔐 تم تفعيل القفل بنجاح!');
-                      },
-                    ),
-                  ),
-                );
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PinLockScreen(
-                      onSuccess: () async {
-                        await PinLockScreen.removePin();
-                        if (mounted) {
-                          Navigator.pop(context);
-                          setState(() => _pinEnabled = false);
-                          showSnack(context, '🔓 تم إلغاء القفل');
-                        }
-                      },
-                    ),
-                  ),
-                );
-              }
-            },
-            contentPadding: EdgeInsets.zero,
+              const Divider(color: AppColors.darkBorder, height: 1),
+              SwitchListTile(
+                title: const Text('🔐 قفل برقم سري',
+                    style: TextStyle(color: AppColors.textColor)),
+                subtitle: Text(
+                    _pinEnabled
+                        ? 'التطبيق محمي برقم سري'
+                        : 'اضغط لتفعيل القفل',
+                    style: const TextStyle(
+                        color: AppColors.textMuted, fontSize: 12)),
+                value: _pinEnabled,
+                activeThumbColor: AppColors.primary,
+                onChanged: (v) {
+                  if (v) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PinLockScreen(
+                          isSetup: true,
+                          onSuccess: () {
+                            Navigator.pop(context);
+                            setState(() => _pinEnabled = true);
+                            showSnack(context, '🔐 تم تفعيل القفل بنجاح!');
+                          },
+                        ),
+                      ),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PinLockScreen(
+                          onSuccess: () async {
+                            await PinLockScreen.removePin();
+                            if (mounted) {
+                              Navigator.pop(context);
+                              setState(() => _pinEnabled = false);
+                              showSnack(context, '🔓 تم إلغاء القفل');
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  }
+                },
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -326,20 +323,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Invoices
-        _sectionTitle('🧾 الفواتير'),
-        _settingsTile(
-          emoji: '🧾',
-          title: 'الفواتير',
-          subtitle: 'إنشاء وعرض فواتير البيع',
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const InvoiceScreen())),
-          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 16),
-
-        // Subscription
-        _sectionTitle('💳 الاشتراك'),
         _settingsTile(
           emoji: '🥈',
           title: 'باقة احترافي',
