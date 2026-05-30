@@ -82,20 +82,14 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
     results['local_assistants'] = assistantsSummary.isEmpty ? '❌ لا يوجد مساعدون محلياً' : assistantsSummary;
 
     // 3. تحقق من الاتصال بـ Supabase
-    bool supabaseReachable = false;
-    String supabaseError = '';
     try {
       final isConfigured = SyncService.instance.isConfigured;
       results['supabase_configured'] = isConfigured ? '✅ نعم' : '❌ لا';
       if (isConfigured) {
         // محاولة جلب المساعدين من Supabase
         if (pharmacyCloudId != null && pharmacyCloudId.isNotEmpty) {
-          final fetchedAssistants = await SyncService.instance.checkAssistantLoginByPin('____TEST____').timeout(
-            const Duration(seconds: 8),
-          ).then((_) => 'OK').catchError((e) => 'error: $e');
-          // بدلاً من ذلك نجرب pullAssistantsFromServer
+          // جرّب الاتصال بـ Supabase
           await SyncService.instance.pullAssistantsFromServer().timeout(const Duration(seconds: 8));
-          supabaseReachable = true;
           results['supabase_connection'] = '✅ متصل';
 
           // تحقق من المساعدين بعد السحب
@@ -106,7 +100,6 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
         }
       }
     } catch (e) {
-      supabaseError = e.toString();
       results['supabase_connection'] = '❌ فشل الاتصال: $e';
     }
 
