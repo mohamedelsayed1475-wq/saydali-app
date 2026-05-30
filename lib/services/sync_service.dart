@@ -833,26 +833,33 @@ class SyncService {
         await DatabaseHelper.instance.getSetting('is_assistant_device');
     if (isAssistantDevice == '1') return; // المساعد لا يرفع مساعدين
 
+    // تأكد من وجود pharmacy_cloud_id قبل أي عملية
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      _pharmacyCloudId =
+          await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+        debugPrint('⚠️ _syncAssistants: pharmacy_cloud_id غير موجود، تخطي');
+        return;
+      }
+    }
+
     final db = await DatabaseHelper.instance.database;
     final assistants = await db.query('assistants');
 
+    if (assistants.isEmpty) {
+      debugPrint('ℹ️ لا يوجد مساعدون محليون للمزامنة');
+      return;
+    }
+
+    debugPrint('🔄 بدء مزامنة ${assistants.length} مساعد...');
+
     for (final a in assistants) {
       try {
-        String? existingCloudId;
-        
-        // أولاً: نبحث بالـ cloud_id لو موجود (أكثر دقة من البحث بالاسم)
-        if (a['cloud_id'] != null && a['cloud_id'].toString().isNotEmpty) {
-          existingCloudId = a['cloud_id'].toString();
-        }
-        
         // تحقق هل موجود في السحابة
-        final checkUrl = existingCloudId != null
-            ? '$_url/pharmacy_assistants?id=eq.$existingCloudId&select=id'
-            : '$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&name=eq.${Uri.encodeComponent(a['name'].toString())}&select=id';
-        
         final checkRes = await http
             .get(
-              Uri.parse(checkUrl),
+              Uri.parse(
+                  '$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&name=eq.${Uri.encodeComponent(a['name'].toString())}&select=id'),
               headers: _headers,
             )
             .timeout(const Duration(seconds: 10));
@@ -885,8 +892,10 @@ class SyncService {
                   body: jsonEncode(data),
                 )
                 .timeout(const Duration(seconds: 10));
-            if (res.statusCode == 400) {
-              debugPrint('⚠️ Schema mismatch on post. Retrying assistant sync without subscription fields.');
+            if (res.statusCode == 201 || res.statusCode == 200) {
+              debugPrint('✅ تم رفع المساعد: ${a['name']}');
+            } else if (res.statusCode == 400) {
+              debugPrint('⚠️ Schema mismatch on post. Retrying without subscription fields. Body: ${res.body}');
               final fallbackData = Map<String, dynamic>.from(data)
                 ..remove('subscription_expiry')
                 ..remove('subscription_duration_days');
@@ -897,10 +906,12 @@ class SyncService {
                     body: jsonEncode(fallbackData),
                   )
                   .timeout(const Duration(seconds: 10));
-              if (resFallback.statusCode != 200 && resFallback.statusCode != 201) {
+              if (resFallback.statusCode == 200 || resFallback.statusCode == 201) {
+                debugPrint('✅ تم رفع المساعد (fallback): ${a['name']}');
+              } else {
                 debugPrint('❌ Fallback assistant post failed: ${resFallback.statusCode} ${resFallback.body}');
               }
-            } else if (res.statusCode != 200 && res.statusCode != 201) {
+            } else {
               debugPrint('❌ Assistant post failed: ${res.statusCode} ${res.body}');
             }
           } else {
@@ -1042,16 +1053,17 @@ class SyncService {
 
   Future<Map<String, dynamic>?> checkAssistantLoginByPin(String pin) async {
     if (!isConfigured) return null;
-    // تحميل pharmacy_cloud_id دائماً من السيتينجز لضمان أحدث قيمة
-    _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
-    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return null;
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return null;
+    }
     try {
       final res = await http
           .get(
             Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&pin=eq.$pin&is_active=eq.true&select=*'),
             headers: _headers,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         final items = jsonDecode(res.body) as List;
