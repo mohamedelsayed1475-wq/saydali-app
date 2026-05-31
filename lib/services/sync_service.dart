@@ -903,37 +903,64 @@ class SyncService {
           };
 
           if (existing.isEmpty) {
-            final res = await http
+            var res = await http
                 .post(
                   Uri.parse('$_url/pharmacy_assistants'),
                   headers: _headers,
                   body: jsonEncode(data),
                 )
                 .timeout(const Duration(seconds: 10));
+
+            int retryCount = 0;
+            final currentData = Map<String, dynamic>.from(data);
+            while (res.statusCode == 400 && retryCount < 5) {
+              final bodyStr = res.body;
+              debugPrint('⚠️ Schema mismatch on post: $bodyStr');
+              if (bodyStr.contains('PGRST204')) {
+                final regExp = RegExp(r"Could not find the '([^']+)' column");
+                final match = regExp.firstMatch(bodyStr);
+                if (match != null) {
+                  final columnName = match.group(1);
+                  if (columnName != null && currentData.containsKey(columnName)) {
+                    debugPrint('🔧 Self-healing: Removing missing column "$columnName" from payload and retrying.');
+                    currentData.remove(columnName);
+                    res = await http
+                        .post(
+                          Uri.parse('$_url/pharmacy_assistants'),
+                          headers: _headers,
+                          body: jsonEncode(currentData),
+                        )
+                        .timeout(const Duration(seconds: 10));
+                    retryCount++;
+                    continue;
+                  }
+                }
+              }
+
+              if (currentData.containsKey('subscription_expiry') || currentData.containsKey('subscription_duration_days')) {
+                debugPrint('🔧 Fallback: Removing subscription fields and retrying.');
+                currentData.remove('subscription_expiry');
+                currentData.remove('subscription_duration_days');
+                res = await http
+                    .post(
+                      Uri.parse('$_url/pharmacy_assistants'),
+                      headers: _headers,
+                      body: jsonEncode(currentData),
+                    )
+                    .timeout(const Duration(seconds: 10));
+                retryCount++;
+                continue;
+              }
+              break;
+            }
+
             if (res.statusCode == 201 || res.statusCode == 200) {
               debugPrint('✅ تم رفع المساعد: ${a['name']}');
-            } else if (res.statusCode == 400) {
-              debugPrint('⚠️ Schema mismatch on post. Retrying without subscription fields. Body: ${res.body}');
-              final fallbackData = Map<String, dynamic>.from(data)
-                ..remove('subscription_expiry')
-                ..remove('subscription_duration_days');
-              final resFallback = await http
-                  .post(
-                    Uri.parse('$_url/pharmacy_assistants'),
-                    headers: _headers,
-                    body: jsonEncode(fallbackData),
-                  )
-                  .timeout(const Duration(seconds: 10));
-              if (resFallback.statusCode == 200 || resFallback.statusCode == 201) {
-                debugPrint('✅ تم رفع المساعد (fallback): ${a['name']}');
-              } else {
-                debugPrint('❌ Fallback assistant post failed: ${resFallback.statusCode} ${resFallback.body}');
-              }
             } else {
               debugPrint('❌ Assistant post failed: ${res.statusCode} ${res.body}');
             }
           } else {
-            final res = await http
+            var res = await http
                 .patch(
                   Uri.parse(
                       '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
@@ -941,23 +968,55 @@ class SyncService {
                   body: jsonEncode(data),
                 )
                 .timeout(const Duration(seconds: 10));
-            if (res.statusCode == 400) {
-              debugPrint('⚠️ Schema mismatch on patch. Retrying assistant sync without subscription fields.');
-              final fallbackData = Map<String, dynamic>.from(data)
-                ..remove('subscription_expiry')
-                ..remove('subscription_duration_days');
-              final resFallback = await http
-                  .patch(
-                    Uri.parse(
-                        '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
-                    headers: _headers,
-                    body: jsonEncode(fallbackData),
-                  )
-                  .timeout(const Duration(seconds: 10));
-              if (resFallback.statusCode != 200 && resFallback.statusCode != 204) {
-                debugPrint('❌ Fallback assistant patch failed: ${resFallback.statusCode} ${resFallback.body}');
+
+            int retryCount = 0;
+            final currentData = Map<String, dynamic>.from(data);
+            while (res.statusCode == 400 && retryCount < 5) {
+              final bodyStr = res.body;
+              debugPrint('⚠️ Schema mismatch on patch: $bodyStr');
+              if (bodyStr.contains('PGRST204')) {
+                final regExp = RegExp(r"Could not find the '([^']+)' column");
+                final match = regExp.firstMatch(bodyStr);
+                if (match != null) {
+                  final columnName = match.group(1);
+                  if (columnName != null && currentData.containsKey(columnName)) {
+                    debugPrint('🔧 Self-healing: Removing missing column "$columnName" from payload and retrying.');
+                    currentData.remove(columnName);
+                    res = await http
+                        .patch(
+                          Uri.parse(
+                              '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
+                          headers: _headers,
+                          body: jsonEncode(currentData),
+                        )
+                        .timeout(const Duration(seconds: 10));
+                    retryCount++;
+                    continue;
+                  }
+                }
               }
-            } else if (res.statusCode != 200 && res.statusCode != 204) {
+
+              if (currentData.containsKey('subscription_expiry') || currentData.containsKey('subscription_duration_days')) {
+                debugPrint('🔧 Fallback: Removing subscription fields and retrying.');
+                currentData.remove('subscription_expiry');
+                currentData.remove('subscription_duration_days');
+                res = await http
+                    .patch(
+                      Uri.parse(
+                          '$_url/pharmacy_assistants?id=eq.${existing[0]['id']}'),
+                      headers: _headers,
+                      body: jsonEncode(currentData),
+                    )
+                    .timeout(const Duration(seconds: 10));
+                retryCount++;
+                continue;
+              }
+              break;
+            }
+
+            if (res.statusCode == 200 || res.statusCode == 204) {
+              debugPrint('✅ تم تحديث المساعد: ${a['name']}');
+            } else {
               debugPrint('❌ Assistant patch failed: ${res.statusCode} ${res.body}');
             }
           }

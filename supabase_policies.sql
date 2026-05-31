@@ -31,6 +31,11 @@ ALTER TABLE pharmacy_medication_expiries ENABLE ROW LEVEL SECURITY;
 -- الحماية: يُسمح بالقراءة/الكتابة/التعديل/الحذف فقط عند تطابق pharmacy_id مع الهيدر x-pharmacy-id.
 -- هذا الهيدر يُرسل من التطبيق ويحتوي على UUID الصيدلية (غير قابل للتخمين).
 -- ══════════════════════════════════════════════════════════════════════════════
+
+-- تحديث الهيكل: إضافة الأعمدة المفقودة لجدول المساعدين
+ALTER TABLE pharmacy_assistants ADD COLUMN IF NOT EXISTS can_manage_shortages BOOLEAN DEFAULT TRUE;
+ALTER TABLE pharmacy_assistants ADD COLUMN IF NOT EXISTS can_manage_reps BOOLEAN DEFAULT FALSE;
+
 DROP POLICY IF EXISTS "allow_read_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_insert_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_update_pharmacy_assistants" ON pharmacy_assistants;
