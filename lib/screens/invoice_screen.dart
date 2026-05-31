@@ -1775,6 +1775,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                           style: const TextStyle(
                                               color: AppColors.textMuted, fontSize: 11),
                                         ),
+                                      if (inv['created_by'] != null && inv['created_by'].toString().isNotEmpty) ...[
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.person_outline_rounded,
+                                                color: AppColors.accent, size: 12),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              'باعها: ${inv['created_by']}',
+                                              style: const TextStyle(
+                                                color: AppColors.accent,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

@@ -7,6 +7,7 @@ class Shortage {
   final String status; // pending, offered, covered, stubborn
   final bool isUrgent;
   final String? notes;
+  final String? createdBy; // ← اسم من أضاف الناقص
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -18,6 +19,7 @@ class Shortage {
     this.status = 'pending',
     this.isUrgent = false,
     this.notes,
+    this.createdBy,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -30,6 +32,7 @@ class Shortage {
         status: map['status'] ?? 'pending',
         isUrgent: (map['is_urgent'] ?? 0) == 1,
         notes: map['notes'],
+        createdBy: map['created_by'],
         createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
         updatedAt: DateTime.tryParse(map['updated_at']?.toString() ?? '') ?? DateTime.now(),
       );
@@ -149,6 +152,7 @@ class Customer {
   final double totalDebt;
   final DateTime? dueDate;
   final String? photoUrl;
+  final String? createdBy; // ← اسم من أضاف العميل
   final DateTime createdAt;
 
   Customer({
@@ -159,6 +163,7 @@ class Customer {
     this.totalDebt = 0.0,
     this.dueDate,
     this.photoUrl,
+    this.createdBy,
     required this.createdAt,
   });
 
@@ -170,6 +175,7 @@ class Customer {
         totalDebt: (map['total_debt'] as num?)?.toDouble() ?? 0.0,
         dueDate: map['due_date'] != null ? DateTime.tryParse(map['due_date']) : null,
         photoUrl: map['photo_url'],
+        createdBy: map['created_by'],
         createdAt: DateTime.parse(map['created_at']),
       );
 
@@ -192,6 +198,7 @@ class DebtTransaction {
   final String type; // debt أو payment
   final String? description;
   final String? receiptUrl;
+  final String? createdBy; // ← اسم من سجّل المعاملة
   final DateTime transactionDate;
 
   DebtTransaction({
@@ -201,6 +208,7 @@ class DebtTransaction {
     required this.type,
     this.description,
     this.receiptUrl,
+    this.createdBy,
     required this.transactionDate,
   });
 
@@ -211,6 +219,7 @@ class DebtTransaction {
         type: map['type'],
         description: map['description'],
         receiptUrl: map['receipt_url'],
+        createdBy: map['created_by'],
         transactionDate: DateTime.parse(map['transaction_date']),
       );
 

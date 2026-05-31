@@ -632,6 +632,19 @@ class _DebtsScreenState extends State<DebtsScreen> {
                                             style: const TextStyle(
                                                 color: AppColors.textMuted,
                                                 fontSize: 11)),
+                                        if (tx.createdBy != null && tx.createdBy!.isNotEmpty)
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.person_outline_rounded,
+                                                  color: AppColors.accent, size: 11),
+                                              const SizedBox(width: 2),
+                                              Text('سجّله: ${tx.createdBy}',
+                                                  style: const TextStyle(
+                                                      color: AppColors.accent,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w600)),
+                                            ],
+                                          ),
                                       ],
                                     ),
                                   ),
@@ -1489,6 +1502,21 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         Text(customer.phone!,
                             style: const TextStyle(
                                 color: AppColors.textMuted, fontSize: 12)),
+                      if (customer.createdBy != null && customer.createdBy!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            const Icon(Icons.person_outline_rounded,
+                                color: AppColors.accent, size: 12),
+                            const SizedBox(width: 3),
+                            Text('أضافه: ${customer.createdBy}',
+                                style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

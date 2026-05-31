@@ -329,7 +329,15 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('${items.length} أصناف', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        Text('${date.day}/${date.month}/${date.year}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        Row(
+                          children: [
+                            Text('${date.day}/${date.month}/${date.year}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            if (order['created_by'] != null && order['created_by'].toString().isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Text('· أرسله: ${order['created_by']}', style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -440,6 +448,12 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
                   const SizedBox(width: 4),
                   Text('أُضيف: ${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2,'0')}',
                       style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                  if (ret['created_by'] != null && ret['created_by'].toString().isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.person_outline_rounded, size: 14, color: AppColors.accent),
+                    const SizedBox(width: 2),
+                    Text('بواسطة: ${ret['created_by']}', style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ],
                 ],
               ),
               if (reminderTime != null) ...[

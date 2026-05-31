@@ -1278,6 +1278,21 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                             '${item.company} · ${item.quantity} علبة · ${item.timeAgo}',
                             style: const TextStyle(
                                 color: AppColors.textMuted, fontSize: 12)),
+                        if (item.createdBy != null && item.createdBy!.isNotEmpty) ...[ 
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              const Icon(Icons.person_outline_rounded,
+                                  color: AppColors.accent, size: 12),
+                              const SizedBox(width: 3),
+                              Text('أضافه: ${item.createdBy}',
+                                  style: const TextStyle(
+                                      color: AppColors.accent,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

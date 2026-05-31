@@ -636,6 +636,7 @@ class SyncService {
             'due_date': item['due_date'],
             'photo_url': item['photo_url'],
             'total_debt': 0,
+            'created_by': item['created_by'],
             'created_at': item['created_at'],
             'is_synced': 1,
           });
@@ -832,6 +833,7 @@ class SyncService {
             'discount': item['discount'] ?? 0,
             'total': item['total'],
             'notes': item['notes'],
+            'created_by': item['created_by'],
             'created_at': item['created_at'],
             'is_synced': 1,
           });

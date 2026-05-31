@@ -20,7 +20,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 15,
+      version: 16,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -243,6 +243,14 @@ class DatabaseHelper {
         await db.execute("ALTER TABLE assistants ADD COLUMN cloud_id TEXT");
       } catch (_) {}
     }
+    if (oldVersion < 16) {
+      try {
+        await db.execute('ALTER TABLE rep_orders ADD COLUMN created_by TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE rep_returns ADD COLUMN created_by TEXT');
+      } catch (_) {}
+    }
   }
 
   /// حذف الإعلانات المنتهية تلقائياً
@@ -373,6 +381,7 @@ class DatabaseHelper {
         items TEXT NOT NULL,
         total REAL NOT NULL,
         is_paid INTEGER DEFAULT 0,
+        created_by TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -386,6 +395,7 @@ class DatabaseHelper {
         reason TEXT NOT NULL,
         reminder_time TEXT,
         is_returned INTEGER DEFAULT 0,
+        created_by TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -836,8 +846,10 @@ class DatabaseHelper {
   // ── طلبات ومرتجعات المندوبين ──────────────────────────────────────────────────
   Future<int> insertRepOrder(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = data['created_at'] ?? DateTime.now().toIso8601String();
-    return await db.insert('rep_orders', data);
+    final map = Map<String, dynamic>.from(data);
+    map['created_at'] = map['created_at'] ?? DateTime.now().toIso8601String();
+    map['created_by'] ??= await getCurrentUserName();
+    return await db.insert('rep_orders', map);
   }
 
   Future<List<Map<String, dynamic>>> getRepOrders(String repName) async {
@@ -879,8 +891,10 @@ class DatabaseHelper {
 
   Future<int> insertRepReturn(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = data['created_at'] ?? DateTime.now().toIso8601String();
-    return await db.insert('rep_returns', data);
+    final map = Map<String, dynamic>.from(data);
+    map['created_at'] = map['created_at'] ?? DateTime.now().toIso8601String();
+    map['created_by'] ??= await getCurrentUserName();
+    return await db.insert('rep_returns', map);
   }
 
   Future<List<Map<String, dynamic>>> getRepReturns(String repName) async {

@@ -834,6 +834,21 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
                 ),
               ],
             ),
+            if (item.createdBy != null && item.createdBy!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.person_outline_rounded,
+                      color: AppColors.accent, size: 12),
+                  const SizedBox(width: 3),
+                  Text('أضافه: ${item.createdBy}',
+                      style: const TextStyle(
+                          color: AppColors.accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
             
             if (item.notes != null && item.notes!.isNotEmpty) ...[
               const SizedBox(height: 8),
