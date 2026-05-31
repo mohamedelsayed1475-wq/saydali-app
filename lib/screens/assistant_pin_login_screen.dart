@@ -304,6 +304,7 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
 
       // Store in SQLite settings
       await db.setSetting('logged_in_assistant_id', (assistant.id ?? 0).toString());
+      await db.setSetting('logged_in_assistant_name', assistant.name);
       await db.setSetting('assistant_session_token', sessionToken);
       await db.setSetting('assistant_session_expiry', sessionExpiry.toIso8601String());
 

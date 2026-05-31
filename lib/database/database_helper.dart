@@ -513,10 +513,13 @@ class DatabaseHelper {
   // ── النواقص ──────────────────────────────────────────────────
   Future<int> insertShortage(Map<String, dynamic> data) async {
     final db = await database;
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     final now = DateTime.now().toIso8601String();
-    data['created_at'] = now;
-    data['updated_at'] = now;
-    return await db.insert('shortages', data);
+    map['created_at'] = now;
+    map['updated_at'] = now;
+    map['created_by'] ??= await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.insert('shortages', map);
   }
 
   Future<List<Map<String, dynamic>>> getShortages({String? status}) async {
@@ -531,8 +534,11 @@ class DatabaseHelper {
 
   Future<int> updateShortage(int id, Map<String, dynamic> data) async {
     final db = await database;
-    data['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('shortages', data, where: 'id = ?', whereArgs: [id]);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['updated_at'] = DateTime.now().toIso8601String();
+    map['created_by'] = await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.update('shortages', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteShortage(int id) async {
@@ -628,9 +634,12 @@ class DatabaseHelper {
   // ── العملاء والديون ──────────────────────────────────────────────────
   Future<int> insertCustomer(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = DateTime.now().toIso8601String();
-    data['total_debt'] = 0.0;
-    return await db.insert('customers', data);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_at'] = DateTime.now().toIso8601String();
+    map['total_debt'] = 0.0;
+    map['created_by'] ??= await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.insert('customers', map);
   }
 
   Future<List<Map<String, dynamic>>> getCustomers() async {
@@ -649,7 +658,10 @@ class DatabaseHelper {
 
   Future<int> updateCustomer(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return await db.update('customers', data, where: 'id = ?', whereArgs: [id]);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_by'] = await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.update('customers', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteCustomer(int id) async {
@@ -661,8 +673,11 @@ class DatabaseHelper {
 
   Future<int> addDebtTransaction(Map<String, dynamic> data) async {
     final db = await database;
-    data['transaction_date'] = DateTime.now().toIso8601String();
-    final txId = await db.insert('debt_transactions', data);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['transaction_date'] ??= DateTime.now().toIso8601String();
+    map['created_by'] ??= await getCurrentUserName();
+    map['is_synced'] = 0;
+    final txId = await db.insert('debt_transactions', map);
 
     // ✅ احسب من الأول من جدول المعاملات (أكثر أمانًا)
     final result = await db.rawQuery(
@@ -671,15 +686,16 @@ class DatabaseHelper {
           COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0) 
           as net
          FROM debt_transactions WHERE customer_id = ?""",
-      [data['customer_id']],
+      [map['customer_id']],
     );
     final newDebt = (result.first['net'] as num?)?.toDouble() ?? 0.0;
-    
+
+    // تحديث العميل مع تفعيل إعادة المزامنة
     await db.update(
       'customers',
-      {'total_debt': newDebt < 0 ? 0.0 : newDebt},
+      {'total_debt': newDebt < 0 ? 0.0 : newDebt, 'is_synced': 0},
       where: 'id = ?',
-      whereArgs: [data['customer_id']],
+      whereArgs: [map['customer_id']],
     );
     return txId;
   }
@@ -894,8 +910,11 @@ class DatabaseHelper {
 
   Future<int> insertInvoice(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = DateTime.now().toIso8601String();
-    return await db.insert('invoices', data);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_at'] ??= DateTime.now().toIso8601String();
+    map['created_by'] ??= await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.insert('invoices', map);
   }
 
   Future<List<Map<String, dynamic>>> getInvoices() async {
@@ -905,7 +924,10 @@ class DatabaseHelper {
 
   Future<int> updateInvoice(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return await db.update('invoices', data, where: 'id = ?', whereArgs: [id]);
+    final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_by'] = await getCurrentUserName();
+    map['is_synced'] = 0;
+    return await db.update('invoices', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteInvoice(int id) async {
@@ -926,7 +948,17 @@ class DatabaseHelper {
 
   Future<void> clearAssistantSession() async {
     final db = await database;
-    await db.delete('settings', where: "key IN ('logged_in_assistant_id', 'assistant_session_token', 'assistant_session_expiry')");
+    await db.delete('settings', where: "key IN ('logged_in_assistant_id', 'logged_in_assistant_name', 'assistant_session_token', 'assistant_session_expiry')");
+  }
+
+  Future<String> getCurrentUserName() async {
+    final isAssistant = await getSetting('is_assistant_device');
+    if (isAssistant == '1') {
+      final name = await getSetting('logged_in_assistant_name');
+      if (name != null && name.isNotEmpty) return name;
+      return 'مساعد';
+    }
+    return 'المالك';
   }
 
   Future<List<Map<String, dynamic>>> getAssistants() async {
@@ -1207,7 +1239,8 @@ class DatabaseHelper {
   Future<int> insertMedicationExpiry(Map<String, dynamic> data) async {
     final db = await database;
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
-    map['created_at'] = DateTime.now().toIso8601String();
+    map['created_at'] ??= DateTime.now().toIso8601String();
+    map['created_by'] ??= await getCurrentUserName();
     map['is_synced'] = 0;
     return await db.insert('medication_expiries', map);
   }
@@ -1220,6 +1253,7 @@ class DatabaseHelper {
   Future<int> updateMedicationExpiry(int id, Map<String, dynamic> data) async {
     final db = await database;
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
+    map['created_by'] = await getCurrentUserName();
     map['is_synced'] = 0;
     return await db.update('medication_expiries', map, where: 'id = ?', whereArgs: [id]);
   }

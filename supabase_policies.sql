@@ -13,6 +13,7 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- تفعيل الـ RLS على كافة جداول قاعدة البيانات
+ALTER TABLE pharmacies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_assistants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscription_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ads ENABLE ROW LEVEL SECURITY;
@@ -24,6 +25,28 @@ ALTER TABLE pharmacy_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_debt_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_medication_expiries ENABLE ROW LEVEL SECURITY;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 0. جدول الصيدليات (pharmacies) — سياسات الوصول
+-- ══════════════════════════════════════════════════════════════════════════════
+-- القراءة: مفتوحة للجميع (مطلوبة لربط جهاز المساعد بالصيدلية)
+-- الإضافة: مفتوحة لتسجيل الصيدليات الجديدة عند الاشتراك
+-- التعديل: مقيدة بـ pharmacy_id المُرسل في الهيدر x-pharmacy-id فقط
+
+DROP POLICY IF EXISTS "secure_select_pharmacies" ON pharmacies;
+DROP POLICY IF EXISTS "secure_insert_pharmacies" ON pharmacies;
+DROP POLICY IF EXISTS "secure_update_pharmacies" ON pharmacies;
+
+CREATE POLICY "secure_select_pharmacies" ON pharmacies
+FOR SELECT USING (true);
+
+CREATE POLICY "secure_insert_pharmacies" ON pharmacies
+FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "secure_update_pharmacies" ON pharmacies
+FOR UPDATE USING (
+  id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 1. جدول مساعدي الصيدلية (pharmacy_assistants)
