@@ -32,7 +32,8 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with SingleTickerProviderStateMixin {
   final _nameCtrl = TextEditingController();
   final _pharmacistCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -42,11 +43,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _devTapCount = 0;
   String _selectedCountryCode = 'EG';
   bool _autoCloseEnabled = false;
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _nameCtrl.dispose();
+    _pharmacistCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -65,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       PinLockScreen.isPinEnabled().then((v) {
         if (mounted) setState(() => _pinEnabled = v);
       });
+      _animCtrl.forward();
     }
   }
 
@@ -88,458 +106,762 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // فقط المالك يمكنه الوصول للإعدادات
     final userProvider = context.watch<CurrentUserProvider>();
     if (!userProvider.isOwner) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('🔒', style: TextStyle(fontSize: 50)),
-            SizedBox(height: 12),
-            Text('غير مصرح لك',
-                style: TextStyle(
-                    color: AppColors.textColor,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
-            SizedBox(height: 6),
-            Text('الإعدادات متاحة للمالك فقط',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-          ],
-        ),
-      );
+      return _buildAccessDenied();
     }
-    if (_loading)
+    if (_loading) {
       return const Center(
           child: CircularProgressIndicator(color: AppColors.primary));
+    }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Country Selector
-        _sectionTitle('🌍 الدولة والعملة'),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.07),
-                blurRadius: 12,
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        children: [
+          // ─── Header ───────────────────────────────────────────
+          _buildHeader(),
+          const SizedBox(height: 24),
+
+          // ─── Country & Currency ───────────────────────────────
+          _sectionLabel('🌍 الدولة والعملة'),
+          _buildCountryCard(),
+          const SizedBox(height: 20),
+
+          // ─── Pharmacy Info ────────────────────────────────────
+          _sectionLabel('🏥 بيانات الصيدلية'),
+          _buildPharmacyInfoCard(),
+          const SizedBox(height: 20),
+
+          // ─── Notifications & PIN ──────────────────────────────
+          _sectionLabel('🔔 الإشعارات والحماية'),
+          _buildToggleGroup([
+            _ToggleItem(
+              icon: Icons.notifications_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              title: 'الإشعارات',
+              subtitle: 'تنبيهات النواقص والديون',
+              value: _notificationsEnabled,
+              onChanged: (v) => setState(() => _notificationsEnabled = v),
+            ),
+            _ToggleItem(
+              icon: Icons.lock_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              title: 'قفل برقم سري',
+              subtitle: _pinEnabled ? 'التطبيق محمي برقم سري' : 'اضغط لتفعيل القفل',
+              value: _pinEnabled,
+              onChanged: _handlePinToggle,
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ─── Auto Close ───────────────────────────────────────
+          _sectionLabel('⚙️ إغلاق النواقص تلقائياً'),
+          _buildToggleGroup([
+            _ToggleItem(
+              icon: Icons.timer_rounded,
+              iconColor: const Color(0xFF06B6D4),
+              title: 'الإغلاق التلقائي',
+              subtitle: 'بعد 24 ساعة تنتقل لـ "مستعصي"',
+              value: _autoCloseEnabled,
+              onChanged: (v) async {
+                setState(() => _autoCloseEnabled = v);
+                await DatabaseHelper.instance
+                    .setSetting('auto_close_enabled', v ? '1' : '0');
+              },
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ─── Assistants & Sync ────────────────────────────────
+          _sectionLabel('👥 المساعدون والمزامنة'),
+          _buildNavTilesGroup([
+            _NavTile(
+              icon: Icons.people_alt_rounded,
+              iconBg: const Color(0xFF10B981),
+              title: 'إدارة المساعدين',
+              subtitle: 'أضف مساعدين وتحكم في صلاحياتهم',
+              onTap: _openAssistants,
+            ),
+            _NavTile(
+              icon: Icons.sync_rounded,
+              iconBg: const Color(0xFF3B82F6),
+              title: 'مواعيد المزامنة',
+              subtitle: 'مزامنة تلقائية في الخلفية بين الأجهزة',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SyncScheduleScreen())),
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ─── Subscription ─────────────────────────────────────
+          _buildSubscriptionCard(),
+          const SizedBox(height: 20),
+
+          // ─── Dictionary ───────────────────────────────────────
+          _sectionLabel('📚 قاموس الأدوية'),
+          _buildNavTilesGroup([
+            _NavTile(
+              icon: Icons.upload_file_rounded,
+              iconBg: const Color(0xFF6366F1),
+              title: 'رفع قاموس الأدوية',
+              subtitle: 'ملف Excel لتسهيل الإضافة في النواقص',
+              onTap: _uploadDictionary,
+            ),
+            _NavTile(
+              icon: Icons.download_rounded,
+              iconBg: const Color(0xFF0EA5E9),
+              title: 'تصدير القاموس',
+              subtitle: 'حفظ كملف Excel',
+              onTap: _exportDictionary,
+            ),
+            _NavTile(
+              icon: Icons.delete_sweep_rounded,
+              iconBg: const Color(0xFFEF4444),
+              title: 'مسح القاموس',
+              subtitle: 'حذف جميع الأدوية من القاموس',
+              onTap: _deleteDictionary,
+              isDanger: true,
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ─── Backup & Restore ─────────────────────────────────
+          _sectionLabel('☁️ النسخ الاحتياطي وقاعدة البيانات'),
+          _buildNavTilesGroup([
+            _NavTile(
+              icon: Icons.backup_rounded,
+              iconBg: const Color(0xFF059669),
+              title: 'نسخة احتياطية',
+              subtitle: 'تصدير وحفظ بياناتك',
+              onTap: _backupDB,
+            ),
+            _NavTile(
+              icon: Icons.restore_rounded,
+              iconBg: const Color(0xFF7C3AED),
+              title: 'استعادة النسخة',
+              subtitle: 'استرجاع بيانات من ملف سابق',
+              onTap: _restoreDB,
+            ),
+            _NavTile(
+              icon: Icons.speed_rounded,
+              iconBg: const Color(0xFFF59E0B),
+              title: 'تحسين قاعدة البيانات',
+              subtitle: 'ضغط وتنظيف البيانات لتقليل الحجم',
+              onTap: _optimizeDB,
+            ),
+          ]),
+          const SizedBox(height: 20),
+
+          // ─── About ────────────────────────────────────────────
+          _sectionLabel('ℹ️ عن التطبيق'),
+          _buildAboutCard(),
+          const SizedBox(height: 20),
+
+          // ─── Dev Panel (debug only) ───────────────────────────
+          if (kDebugMode) ...[
+            _buildNavTilesGroup([
+              _NavTile(
+                icon: Icons.developer_mode_rounded,
+                iconBg: const Color(0xFF6B7280),
+                title: 'لوحة المطور',
+                subtitle: 'للمطور فقط - مقيدة بكلمة مرور',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const DevPanelScreen())),
               ),
+            ]),
+            const SizedBox(height: 20),
+          ],
+
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────── Widgets ───────────────────────────────────────────────────
+
+  Widget _buildAccessDenied() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 90,
+            height: 90,
+            decoration: BoxDecoration(
+              gradient: RadialGradient(colors: [
+                AppColors.danger.withValues(alpha: 0.2),
+                AppColors.danger.withValues(alpha: 0.04),
+              ]),
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: Text('🔒', style: TextStyle(fontSize: 40)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('غير مصرح لك',
+              style: TextStyle(
+                  color: AppColors.textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          const Text('الإعدادات متاحة للمالك فقط',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.18),
+            AppColors.primary.withValues(alpha: 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryDark],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.settings_rounded,
+                color: Colors.white, size: 26),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('الإعدادات',
+                    style: TextStyle(
+                        color: AppColors.textColor,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800)),
+                Text('تخصيص الصيدلية والحساب',
+                    style: TextStyle(
+                        color: AppColors.textMuted.withValues(alpha: 0.8),
+                        fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 10, right: 4),
+        child: Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+      );
+
+  Widget _buildCountryCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _iconBox(Icons.public_rounded, const Color(0xFF10B981)),
+              const SizedBox(width: 12),
+              const Text('اختر دولتك',
+                  style: TextStyle(
+                      color: AppColors.textColor, fontWeight: FontWeight.w700)),
             ],
           ),
-          child: DropdownButtonFormField<String>(
-            initialValue: _selectedCountryCode,
-            dropdownColor: AppColors.darkCard,
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.dark,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                dropdownColor: AppColors.darkCard,
+                value: _selectedCountryCode,
+                style: const TextStyle(
+                    color: AppColors.textColor,
+                    fontFamily: 'Cairo',
+                    fontSize: 14),
+                items: CountryConfig.countries
+                    .map((c) => DropdownMenuItem(
+                          value: c.code,
+                          child: Text('${c.flag}  ${c.name}  (${c.currency})'),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => _selectedCountryCode = v);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPharmacyInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          _inputRow(
+              icon: Icons.local_pharmacy_rounded,
+              iconColor: AppColors.primary,
+              hint: 'اسم الصيدلية',
+              ctrl: _nameCtrl),
+          const SizedBox(height: 12),
+          _inputRow(
+              icon: Icons.person_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              hint: 'اسم الصيدلي',
+              ctrl: _pharmacistCtrl),
+          const SizedBox(height: 12),
+          _inputRow(
+              icon: Icons.phone_rounded,
+              iconColor: const Color(0xFF0EA5E9),
+              hint: 'رقم الهاتف',
+              ctrl: _phoneCtrl,
+              keyboard: TextInputType.phone),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _saveSettings,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.save_rounded, size: 18),
+              label: const Text('حفظ البيانات',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _inputRow({
+    required IconData icon,
+    required Color iconColor,
+    required String hint,
+    required TextEditingController ctrl,
+    TextInputType keyboard = TextInputType.text,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: iconColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextField(
+            controller: ctrl,
+            keyboardType: keyboard,
             style: const TextStyle(
                 color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 14),
             decoration: InputDecoration(
-              labelText: 'اختر دولتك',
-              labelStyle: const TextStyle(color: AppColors.textMuted),
-              prefixIcon: Text(
-                '  ${CountryConfig.getByCode(_selectedCountryCode).flag}  ',
-                style: const TextStyle(fontSize: 22),
-              ),
-              prefixIconConstraints:
-                  const BoxConstraints(minWidth: 40, minHeight: 0),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.darkBorder),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary),
-              ),
+              hintText: hint,
+              hintStyle:
+                  const TextStyle(color: AppColors.textMuted, fontSize: 13),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               filled: true,
               fillColor: AppColors.dark,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.darkBorder)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.darkBorder)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5)),
             ),
-            items: CountryConfig.countries
-                .map((c) => DropdownMenuItem(
-                      value: c.code,
-                      child: Text('${c.flag}  ${c.name}  (${c.currency})'),
-                    ))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) setState(() => _selectedCountryCode = v);
-            },
           ),
         ),
-        const SizedBox(height: 16),
-
-        // Pharmacy Info
-        _sectionTitle('🏥 بيانات الصيدلية'),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.07),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              AppTextField(hint: 'اسم الصيدلية', controller: _nameCtrl),
-              const SizedBox(height: 10),
-              AppTextField(hint: 'اسم الصيدلي', controller: _pharmacistCtrl),
-              const SizedBox(height: 10),
-              AppTextField(
-                  hint: 'رقم الهاتف',
-                  controller: _phoneCtrl,
-                  keyboardType: TextInputType.phone),
-              const SizedBox(height: 14),
-              PrimaryButton(
-                  text: 'حفظ البيانات',
-                  onTap: _saveSettings,
-                  icon: Icons.save_rounded),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Notifications & PIN Lock combined
-        _sectionTitle('🔔 الإشعارات والحماية'),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-          ),
-          child: Column(
-            children: [
-              SwitchListTile(
-                title: const Text('تفعيل الإشعارات',
-                    style: TextStyle(color: AppColors.textColor)),
-                subtitle: const Text('تنبيهات النواقص والديون',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                value: _notificationsEnabled,
-                activeThumbColor: AppColors.primary,
-                onChanged: (v) => setState(() => _notificationsEnabled = v),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              ),
-
-              const Divider(color: AppColors.darkBorder, height: 1),
-              SwitchListTile(
-                title: const Text('🔐 قفل برقم سري',
-                    style: TextStyle(color: AppColors.textColor)),
-                subtitle: Text(
-                    _pinEnabled
-                        ? 'التطبيق محمي برقم سري'
-                        : 'اضغط لتفعيل القفل',
-                    style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12)),
-                value: _pinEnabled,
-                activeThumbColor: AppColors.primary,
-                onChanged: (v) {
-                  if (v) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PinLockScreen(
-                          isSetup: true,
-                          onSuccess: () {
-                            Navigator.pop(context);
-                            setState(() => _pinEnabled = true);
-                            showSnack(context, '🔐 تم تفعيل القفل بنجاح!');
-                          },
-                        ),
-                      ),
-                    );
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PinLockScreen(
-                          onSuccess: () async {
-                            await PinLockScreen.removePin();
-                            if (mounted) {
-                              Navigator.pop(context);
-                              setState(() => _pinEnabled = false);
-                              showSnack(context, '🔓 تم إلغاء القفل');
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  }
-                },
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Assistants Management
-        _sectionTitle('👥 المساعدون'),
-        _settingsTile(
-          emoji: '👥',
-          title: 'إدارة المساعدين',
-          subtitle: 'أضف مساعدين وتحكم في صلاحياتهم',
-          onTap: () => _openAssistants(),
-          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 10),
-        _settingsTile(
-          emoji: '🔄',
-          title: 'مواعيد المزامنة',
-          subtitle: 'مزامنة تلقائية في الخلفية بين الأجهزة',
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SyncScheduleScreen())),
-          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 16),
-
-        // Auto Close Settings
-        _sectionTitle('⚙️ إغلاق النواقص'),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-          ),
-          child: SwitchListTile(
-            title: const Text('إغلاق النواقص القديمة تلقائياً',
-                style: TextStyle(color: AppColors.textColor)),
-            subtitle: const Text('بعد 24 ساعة تنتقل لـ "مستعصي"',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-            value: _autoCloseEnabled,
-            onChanged: (v) async {
-              setState(() => _autoCloseEnabled = v);
-              await DatabaseHelper.instance
-                  .setSetting('auto_close_enabled', v ? '1' : '0');
-            },
-            activeTrackColor: AppColors.primary,
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        _settingsTile(
-          emoji: '🥈',
-          title: 'باقة احترافي',
-          subtitle: 'اشتراكك الحالي - اضغط للتجديد أو الترقية',
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
-          trailing: const Icon(Icons.chevron_left, color: AppColors.textMuted),
-        ),
-        const SizedBox(height: 16),
-
-        // Dictionary Upload
-        _sectionTitle('📚 قاموس الأدوية (مساعد الكتابة)'),
-        _settingsTile(
-          emoji: '📖',
-          title: 'رفع قاموس الأدوية',
-          subtitle: 'ملف Excel لتسهيل الإضافة في النواقص',
-          onTap: _uploadDictionary,
-          trailing: const Icon(Icons.upload_file, color: AppColors.primary),
-        ),
-        const SizedBox(height: 10),
-        // Export & Delete Dictionary
-        Row(
-          children: [
-            Expanded(
-              child: _settingsTile(
-                emoji: '📤',
-                title: 'تصدير القاموس',
-                subtitle: 'حفظ كملف Excel',
-                onTap: _exportDictionary,
-                trailing: const Icon(Icons.download, color: AppColors.primary),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _settingsTile(
-                emoji: '🗑️',
-                title: 'مسح القاموس',
-                subtitle: 'حذف كل الأدوية',
-                onTap: _deleteDictionary,
-                trailing: const Icon(Icons.delete_outline, color: AppColors.danger),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-
-
-        // Backup and Restore
-        _sectionTitle('☁️ النسخ الاحتياطي'),
-        Row(
-          children: [
-            Expanded(
-              child: _settingsTile(
-                emoji: '📤',
-                title: 'نسخة احتياطية',
-                subtitle: 'حفظ بياناتك',
-                onTap: _backupDB,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _settingsTile(
-                emoji: '📥',
-                title: 'استعادة',
-                subtitle: 'استرجاع البيانات',
-                onTap: _restoreDB,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _settingsTile(
-          emoji: '🧹',
-          title: 'تحسين قاعدة البيانات',
-          subtitle: 'ضغط وتنظيف البيانات لتقليل الحجم',
-          onTap: _optimizeDB,
-          trailing: const Icon(Icons.speed, color: AppColors.warning),
-        ),
-        const SizedBox(height: 16),
-
-        // App Info
-        _sectionTitle('ℹ️ عن التطبيق'),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.05),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: () {
-                  _devTapCount++;
-                  if (_devTapCount >= 5) {
-                    _devTapCount = 0;
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const DevPanelScreen()));
-                  }
-                },
-                child: _infoRow('الإصدار', '1.0.0'),
-              ),
-              const Divider(color: AppColors.darkBorder),
-              _infoRow('المطور', 'د. محمد السيد'),
-              const Divider(color: AppColors.darkBorder),
-              _infoRow('التواصل', 'Telegram: @Mohamed07Elsayed'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Developer Panel - debug only
-        if (kDebugMode) ...[
-          const SizedBox(height: 8),
-          _settingsTile(
-            emoji: '🛠️',
-            title: 'لوحة المطور',
-            subtitle: 'للمطور فقط - مقيدة بكلمة مرور',
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const DevPanelScreen())),
-            trailing: const Icon(Icons.lock_rounded,
-                color: AppColors.textMuted, size: 18),
-          ),
-        ],
-        const SizedBox(height: 30),
       ],
     );
   }
 
-  Widget _sectionTitle(String title) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(title,
-            style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
-      );
+  Widget _buildToggleGroup(List<_ToggleItem> items) {
+    return Container(
+      decoration: _cardDecoration(),
+      child: Column(
+        children: items.asMap().entries.map((e) {
+          final item = e.value;
+          final isLast = e.key == items.length - 1;
+          return Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  children: [
+                    _iconBox(item.icon, item.iconColor),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.title,
+                              style: const TextStyle(
+                                  color: AppColors.textColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14)),
+                          Text(item.subtitle,
+                              style: const TextStyle(
+                                  color: AppColors.textMuted, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: 0.85,
+                      child: Switch(
+                        value: item.value,
+                        onChanged: item.onChanged,
+                        activeThumbColor: item.iconColor,
+                        activeTrackColor:
+                            item.iconColor.withValues(alpha: 0.25),
+                        inactiveThumbColor: AppColors.textMuted,
+                        inactiveTrackColor:
+                            AppColors.textMuted.withValues(alpha: 0.2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!isLast)
+                const Divider(
+                    color: AppColors.darkBorder, height: 1, indent: 16),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
 
-  Widget _settingsTile(
-      {required String emoji,
-      required String title,
-      required String subtitle,
-      required VoidCallback onTap,
-      Widget? trailing}) {
+  Widget _buildNavTilesGroup(List<_NavTile> tiles) {
+    return Container(
+      decoration: _cardDecoration(),
+      child: Column(
+        children: tiles.asMap().entries.map((e) {
+          final tile = e.value;
+          final isLast = e.key == tiles.length - 1;
+          return Column(
+            children: [
+              InkWell(
+                onTap: tile.onTap,
+                borderRadius: BorderRadius.vertical(
+                  top: e.key == 0
+                      ? const Radius.circular(16)
+                      : Radius.zero,
+                  bottom: isLast
+                      ? const Radius.circular(16)
+                      : Radius.zero,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: tile.iconBg.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: tile.iconBg.withValues(alpha: 0.3)),
+                        ),
+                        child: Icon(tile.icon,
+                            color: tile.isDanger
+                                ? AppColors.danger
+                                : tile.iconBg,
+                            size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tile.title,
+                                style: TextStyle(
+                                    color: tile.isDanger
+                                        ? AppColors.danger
+                                        : AppColors.textColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14)),
+                            Text(tile.subtitle,
+                                style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_left_rounded,
+                        color: AppColors.textMuted.withValues(alpha: 0.6),
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!isLast)
+                const Divider(
+                    color: AppColors.darkBorder, height: 1, indent: 16),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildSubscriptionCard() {
     return InkWell(
-      onTap: onTap,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.darkCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.2),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF1A1040), Color(0xFF0F1E35)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFD700).withValues(alpha: 0.35)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.06),
-              blurRadius: 10,
-            ),
+                color: const Color(0xFFFFD700).withValues(alpha: 0.08),
+                blurRadius: 16)
           ],
         ),
         child: Row(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Expanded(
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFD700).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: const Color(0xFFFFD700).withValues(alpha: 0.4)),
+              ),
+              child: const Center(
+                  child:
+                      Text('🥈', style: TextStyle(fontSize: 22))),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          color: AppColors.textColor,
-                          fontWeight: FontWeight.w700)),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: AppColors.textMuted, fontSize: 12)),
+                  Text('باقة احترافي',
+                      style: TextStyle(
+                          color: Color(0xFFFFD700),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15)),
+                  SizedBox(height: 2),
+                  Text('اشتراكك الحالي — اضغط للتجديد أو الترقية',
+                      style:
+                          TextStyle(color: AppColors.textMuted, fontSize: 11)),
                 ],
               ),
             ),
-            trailing ?? const SizedBox(),
+            const Icon(Icons.chevron_left_rounded,
+                color: Color(0xFFFFD700), size: 20),
           ],
         ),
       ),
     );
   }
 
-  Widget _infoRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label,
-                style:
-                    const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            Text(value,
-                style: const TextStyle(
-                    color: AppColors.textLight,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
+  Widget _buildAboutCard() {
+    return Container(
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () {
+              _devTapCount++;
+              if (_devTapCount >= 5) {
+                _devTapCount = 0;
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const DevPanelScreen()));
+              }
+            },
+            child: _aboutRow(
+                icon: Icons.tag_rounded,
+                iconColor: AppColors.primary,
+                label: 'الإصدار',
+                value: '1.0.0'),
+          ),
+          const Divider(color: AppColors.darkBorder, height: 1, indent: 16),
+          _aboutRow(
+              icon: Icons.person_pin_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              label: 'المطور',
+              value: 'د. محمد السيد'),
+          const Divider(color: AppColors.darkBorder, height: 1, indent: 16),
+          InkWell(
+            onTap: () => _openLink('https://t.me/Mohamed07Elsayed'),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+            child: _aboutRow(
+                icon: Icons.telegram_rounded,
+                iconColor: const Color(0xFF229ED9),
+                label: 'Telegram',
+                value: '@Mohamed07Elsayed',
+                valueColor: const Color(0xFF229ED9)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aboutRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          _iconBox(icon, iconColor, size: 36),
+          const SizedBox(width: 12),
+          Text(label,
+              style:
+                  const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const Spacer(),
+          Text(value,
+              style: TextStyle(
+                  color: valueColor ?? AppColors.textLight,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconBox(IconData icon, Color color, {double size = 38}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, color: color, size: size * 0.5),
+    );
+  }
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+        color: AppColors.darkCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.05),
+            blurRadius: 12,
+          ),
+        ],
       );
 
+  // ─────────────── Logic ────────────────────────────────────────────────────
 
+  void _handlePinToggle(bool v) {
+    if (v) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PinLockScreen(
+            isSetup: true,
+            onSuccess: () {
+              Navigator.pop(context);
+              setState(() => _pinEnabled = true);
+              showSnack(context, '🔐 تم تفعيل القفل بنجاح!');
+            },
+          ),
+        ),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PinLockScreen(
+            onSuccess: () async {
+              await PinLockScreen.removePin();
+              if (mounted) {
+                Navigator.pop(context);
+                setState(() => _pinEnabled = false);
+                showSnack(context, '🔓 تم إلغاء القفل');
+              }
+            },
+          ),
+        ),
+      );
+    }
+  }
 
   Future<void> _openAssistants() async {
-    final activated = await DatabaseHelper.instance.getSetting('assistants_activated');
+    final activated =
+        await DatabaseHelper.instance.getSetting('assistants_activated');
     if (activated == '1') {
       if (mounted) {
         Navigator.push(context,
@@ -548,7 +870,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // عرض شاشة التفعيل
     if (!mounted) return;
     final codeCtrl = TextEditingController();
     bool isValidating = false;
@@ -558,7 +879,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlg) => AlertDialog(
           backgroundColor: AppColors.darkCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
               Text('👥', style: TextStyle(fontSize: 24)),
@@ -575,7 +897,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Premium Badge
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -598,7 +919,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     SizedBox(height: 4),
                     Text(
                         'أضف مساعدين للصيدلية وتحكم في صلاحياتهم مع سجل نشاط كامل',
-                        style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                        style:
+                            TextStyle(color: AppColors.textMuted, fontSize: 12),
                         textAlign: TextAlign.center),
                     SizedBox(height: 8),
                     Text('💰 100 ج.م فقط - تفعيل دائم',
@@ -610,8 +932,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Code Entry
               TextField(
                 controller: codeCtrl,
                 textCapitalization: TextCapitalization.characters,
@@ -621,70 +941,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     fontWeight: FontWeight.w700),
                 decoration: const InputDecoration(
                   hintText: 'أدخل كود التفعيل',
-                  hintStyle: TextStyle(color: AppColors.textMuted, letterSpacing: 1),
-                  prefixIcon: Icon(Icons.vpn_key_rounded, color: AppColors.primary),
+                  hintStyle: TextStyle(
+                      color: AppColors.textMuted, letterSpacing: 1),
+                  prefixIcon:
+                      Icon(Icons.vpn_key_rounded, color: AppColors.primary),
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Activate Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: isValidating
                       ? null
                       : () async {
-                          final code = codeCtrl.text.trim().toUpperCase();
+                          final code =
+                              codeCtrl.text.trim().toUpperCase();
                           if (code.isEmpty) {
-                            showSnack(ctx, 'أدخل كود التفعيل', isError: true);
+                            showSnack(ctx, 'أدخل كود التفعيل',
+                                isError: true);
                             return;
                           }
                           setDlg(() => isValidating = true);
 
-                          // تحقق من الكود
                           bool valid = false;
 
-                          // 1. Admin bypass (من GitHub Secrets فقط)
-                          if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
-                              EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
+                          if (EnvConfig.adminCode1.isNotEmpty &&
+                                  code == EnvConfig.adminCode1 ||
+                              EnvConfig.adminCode2.isNotEmpty &&
+                                  code == EnvConfig.adminCode2) {
                             valid = true;
                           }
 
-                          // 2. Check local DB
                           if (!valid) {
                             try {
-                              final db = await DatabaseHelper.instance.database;
-                              final local = await db.query('subscription_codes',
-                                  where: "code = ? AND is_active = 1 AND (plan = 'assistant' OR plan = 'premium_assistants')",
+                              final db = await DatabaseHelper
+                                  .instance.database;
+                              final local = await db.query(
+                                  'subscription_codes',
+                                  where:
+                                      "code = ? AND is_active = 1 AND (plan = 'assistant' OR plan = 'premium_assistants')",
                                   whereArgs: [code]);
                               if (local.isNotEmpty) {
-                                final maxUses = local.first['max_uses'] as int? ?? 1;
-                                final usedCount = local.first['used_count'] as int? ?? 0;
+                                final maxUses =
+                                    local.first['max_uses'] as int? ?? 1;
+                                final usedCount =
+                                    local.first['used_count'] as int? ?? 0;
                                 if (usedCount < maxUses) {
                                   valid = true;
-                                  await db.update('subscription_codes',
+                                  await db.update(
+                                      'subscription_codes',
                                       {'used_count': usedCount + 1},
-                                      where: 'code = ?', whereArgs: [code]);
+                                      where: 'code = ?',
+                                      whereArgs: [code]);
                                   await SupabaseService.instance
-                                      .updateSubscriptionCodeUsage(code, usedCount + 1);
+                                      .updateSubscriptionCodeUsage(
+                                          code, usedCount + 1);
                                 }
                               }
                             } catch (_) {}
                           }
 
-                          // 3. Check Supabase
                           if (!valid) {
                             try {
-                              final cloudData = await SupabaseService.instance
+                              final cloudData = await SupabaseService
+                                  .instance
                                   .checkSubscriptionCode(code);
                               if (cloudData != null &&
                                   (cloudData['plan'] == 'assistant' ||
                                       cloudData['plan'] == 'premium' ||
-                                      cloudData['plan'] == 'premium_assistants') &&
+                                      cloudData['plan'] ==
+                                          'premium_assistants') &&
                                   (cloudData['is_active'] == true ||
                                       cloudData['is_active'] == 1)) {
                                 final maxUses = cloudData['max_uses'] ?? 1;
-                                final usedCount = cloudData['used_count'] ?? 0;
+                                final usedCount =
+                                    cloudData['used_count'] ?? 0;
                                 if (usedCount < maxUses) {
                                   valid = true;
                                   await SupabaseService.instance
@@ -700,21 +1031,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (valid) {
                             await DatabaseHelper.instance
                                 .setSetting('assistants_activated', '1');
-                            await DatabaseHelper.instance.addAssistantSlots(3);
-                            // تفعيل الاشتراك أيضاً إذا كان الكود premium_assistants
-                            final expiry = DateTime.now().add(const Duration(days: 30)).toIso8601String();
-                            await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);
+                            await DatabaseHelper.instance
+                                .addAssistantSlots(3);
+                            final expiry = DateTime.now()
+                                .add(const Duration(days: 30))
+                                .toIso8601String();
+                            await SecurityHelper.saveSignedSetting(
+                                'subscription_expiry', expiry);
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
-                              showSnack(context, '✅ تم تفعيل إدارة المساعدين بنجاح!');
+                              showSnack(context,
+                                  '✅ تم تفعيل إدارة المساعدين بنجاح!');
                               Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (_) => const AssistantsScreen()));
+                                      builder: (_) =>
+                                          const AssistantsScreen()));
                             }
                           } else {
                             if (ctx.mounted) {
-                              showSnack(ctx, '❌ كود غير صحيح أو منتهي', isError: true);
+                              showSnack(ctx, '❌ كود غير صحيح أو منتهي',
+                                  isError: true);
                             }
                           }
                         },
@@ -731,7 +1068,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           actions: [
-            // Contact Developer
             TextButton.icon(
               onPressed: () {
                 Navigator.pop(ctx);
@@ -739,7 +1075,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               icon: const Text('✈️', style: TextStyle(fontSize: 16)),
               label: const Text('تواصل مع المطور للحصول على كود',
-                  style: TextStyle(color: Color(0xFF229ED9), fontSize: 12)),
+                  style:
+                      TextStyle(color: Color(0xFF229ED9), fontSize: 12)),
             ),
           ],
         ),
@@ -814,29 +1151,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       await DatabaseHelper.instance
           .setSetting('drug_dictionary_v2', jsonEncode(dict));
-      if (mounted) showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
+      if (mounted)
+        showSnack(context, 'تم إضافة ${dict.length} صنف للقاموس ✅');
     } catch (e) {
       if (mounted) showSnack(context, 'خطأ في قراءة الملف', isError: true);
     }
   }
 
   Future<void> _exportDictionary() async {
-    final docs = await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
+    final docs =
+        await DatabaseHelper.instance.getSetting('drug_dictionary_v2');
     if (docs == null) {
       if (mounted) showSnack(context, 'القاموس فارغ', isError: true);
       return;
     }
-    
+
     try {
       final List<dynamic> decoded = jsonDecode(docs);
       if (decoded.isEmpty) {
         if (mounted) showSnack(context, 'القاموس فارغ', isError: true);
         return;
       }
-      
+
       var excel = Excel.createExcel();
       var sheet = excel['Sheet1'];
-      
+
       sheet.appendRow([
         TextCellValue('English Name'),
         TextCellValue('Arabic Name'),
@@ -845,7 +1184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         TextCellValue('Price'),
         TextCellValue('Cost Price')
       ]);
-      
+
       for (var item in decoded) {
         sheet.appendRow([
           TextCellValue(item['enName']?.toString() ?? ''),
@@ -856,14 +1195,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextCellValue(item['cost_price']?.toString() ?? '')
         ]);
       }
-      
+
       final bytes = excel.encode();
       if (bytes != null) {
         final dir = await getTemporaryDirectory();
         final path = p.join(dir.path, 'drug_dictionary.xlsx');
         final file = File(path);
         await file.writeAsBytes(bytes);
-        
+
         await Share.shareXFiles([XFile(path)], subject: 'قاموس الأدوية');
       }
     } catch (e) {
@@ -876,12 +1215,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkCard,
-        title: const Text('مسح القاموس', style: TextStyle(color: AppColors.danger)),
-        content: const Text('هل أنت متأكد من مسح جميع الأدوية؟\n⚠️ لا يمكن التراجع.', style: TextStyle(color: AppColors.textMuted)),
+        title: const Text('مسح القاموس',
+            style: TextStyle(color: AppColors.danger)),
+        content: const Text(
+            'هل أنت متأكد من مسح جميع الأدوية؟\n⚠️ لا يمكن التراجع.',
+            style: TextStyle(color: AppColors.textMuted)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('مسح'),
           ),
@@ -907,7 +1252,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             '✅ تم التحسين! الحجم: ${sizeAfter.toStringAsFixed(0)} KB${saved > 0 ? ' (وفّرت ${saved.toStringAsFixed(0)} KB)' : ''}');
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'خطأ في التحسين: $e', isError: true);
+      if (mounted)
+        showSnack(context, 'خطأ في التحسين: $e', isError: true);
     }
   }
 
@@ -919,7 +1265,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Share.shareXFiles([XFile(path)],
             subject: 'نسخة احتياطية - صيدلي PRO');
       } else {
-        if (mounted) showSnack(context, 'لا توجد قاعدة بيانات!', isError: true);
+        if (mounted)
+          showSnack(context, 'لا توجد قاعدة بيانات!', isError: true);
       }
     } catch (e) {
       if (mounted)
@@ -930,12 +1277,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _restoreDB() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType
-            .any, // Android sometimes fails on custom db/sqlite extensions
+        type: FileType.any,
       );
       if (result != null && result.files.single.path != null) {
         final backupPath = result.files.single.path!;
-        if (!backupPath.endsWith('.db') && !backupPath.endsWith('.sqlite')) {
+        if (!backupPath.endsWith('.db') &&
+            !backupPath.endsWith('.sqlite')) {
           if (mounted)
             showSnack(context, 'الرجاء اختيار ملف قاعدة بيانات صالح (.db)',
                 isError: true);
@@ -948,15 +1295,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) {
           showSnack(context,
               'تم استعادة النسخة الاحتياطية بنجاح ✅ - يرجى إعادة تشغيل التطبيق لتحديث البيانات');
-          // Reload settings after restore
           _loadSettings();
         }
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'حدث خطأ أثناء الاستعادة', isError: true);
+      if (mounted)
+        showSnack(context, 'حدث خطأ أثناء الاستعادة', isError: true);
     }
   }
 }
+
+// ─── Helper Models ────────────────────────────────────────────────────────────
+
+class _ToggleItem {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+}
+
+class _NavTile {
+  final IconData icon;
+  final Color iconBg;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool isDanger;
+
+  const _NavTile({
+    required this.icon,
+    required this.iconBg,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.isDanger = false,
+  });
+}
+
+// ─── Column Mapping Dialog ────────────────────────────────────────────────────
 
 class ColumnMappingDialog extends StatefulWidget {
   final List<String> headers;
@@ -980,7 +1367,8 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.darkCard,
-      title: const Text('ربط الأعمدة', style: TextStyle(color: AppColors.primary)),
+      title: const Text('ربط الأعمدة',
+          style: TextStyle(color: AppColors.primary)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -995,12 +1383,16 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء')),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          style:
+              ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
           onPressed: () {
             if (mapping['enName'] == -1) {
-              showSnack(context, 'يجب اختيار عمود الاسم الإنجليزي', isError: true);
+              showSnack(context, 'يجب اختيار عمود الاسم الإنجليزي',
+                  isError: true);
               return;
             }
             Navigator.pop(context, mapping);
@@ -1017,7 +1409,9 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textColor, fontSize: 12)),
+          Text(label,
+              style: const TextStyle(
+                  color: AppColors.textColor, fontSize: 12)),
           const SizedBox(height: 4),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1032,11 +1426,16 @@ class _ColumnMappingDialogState extends State<ColumnMappingDialog> {
               underline: const SizedBox(),
               value: mapping[key],
               items: [
-                const DropdownMenuItem(value: -1, child: Text('تجاهل', style: TextStyle(color: AppColors.textMuted))),
+                const DropdownMenuItem(
+                    value: -1,
+                    child: Text('تجاهل',
+                        style: TextStyle(color: AppColors.textMuted))),
                 ...widget.headers.asMap().entries.map((e) => DropdownMenuItem(
-                  value: e.key,
-                  child: Text(e.value, style: const TextStyle(color: AppColors.textColor)),
-                )),
+                      value: e.key,
+                      child: Text(e.value,
+                          style:
+                              const TextStyle(color: AppColors.textColor)),
+                    )),
               ],
               onChanged: (v) {
                 if (v != null) setState(() => mapping[key] = v);

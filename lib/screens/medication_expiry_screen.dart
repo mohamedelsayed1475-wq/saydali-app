@@ -126,10 +126,10 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
     });
   }
 
-  Future<void> _showAddEditModal({MedicationExpiry? existing, String? initialName}) async {
+  Future<void> _showAddEditModal({MedicationExpiry? existing, String? initialName, String? initialSupplier}) async {
     final nameCtrl = TextEditingController(text: initialName ?? existing?.name ?? '');
     final qtyCtrl = TextEditingController(text: existing?.quantity.toString() ?? '1');
-    final supplierCtrl = TextEditingController(text: existing?.supplierName ?? '');
+    final supplierCtrl = TextEditingController(text: initialSupplier ?? existing?.supplierName ?? '');
     final notesCtrl = TextEditingController(text: existing?.notes ?? '');
     DateTime selectedDate = existing?.expiryDate ?? DateTime.now().add(const Duration(days: 365));
 
@@ -323,7 +323,24 @@ class _MedicationExpiryScreenState extends State<MedicationExpiryScreen>
                           MaterialPageRoute(builder: (_) => const ScannerScreen()),
                         );
                         if (code != null && code.isNotEmpty) {
-                          _showAddEditModal(existing: existing, initialName: code);
+                          // ابحث في القاموس المحلي عن الباركود المطابق
+                          final match = _suggestions.firstWhere(
+                            (s) => s['barcode']?.toString().trim() == code.trim(),
+                            orElse: () => <String, dynamic>{},
+                          );
+                          if (match.isNotEmpty) {
+                            debugPrint('🔍 [EXPIRY_SCANNER] تم العثور على الدواء للرمز $code: ${match['enName']}');
+                            _showAddEditModal(
+                              existing: existing,
+                              initialName: match['enName']?.toString(),
+                              initialSupplier: (match['company'] != null && match['company'].toString() != 'غير محدد')
+                                  ? match['company'].toString()
+                                  : null,
+                            );
+                          } else {
+                            debugPrint('🔍 [EXPIRY_SCANNER] لم يتم العثور على الرمز $code في القاموس المحلي');
+                            _showAddEditModal(existing: existing, initialName: code);
+                          }
                         }
                       },
                       child: Container(

@@ -44,6 +44,8 @@ class SyncService {
     };
     if (_pharmacyCloudId != null && _pharmacyCloudId!.isNotEmpty) {
       h['x-pharmacy-id'] = _pharmacyCloudId!;
+    } else {
+      debugPrint('⚠️ تحذير: تم استخدام _headers والمزامنة نشطة ولكن _pharmacyCloudId غير موجود أو فارغ! قد تفشل طلبات RLS.');
     }
     return h;
   }
@@ -130,6 +132,22 @@ class SyncService {
   /// المساعد يدخل كود الصيدلية → نجلب pharmacy_cloud_id + المساعدين
   Future<({bool success, String? error, List<Map<String, dynamic>> assistants})>
       joinPharmacy(String pharmacyCode) async {
+    final code = pharmacyCode.trim().toUpperCase();
+    if (code.length != 6) {
+      return (
+        success: false,
+        error: 'كود الصيدلية يجب أن يتكون من 6 رموز تماماً',
+        assistants: <Map<String, dynamic>>[]
+      );
+    }
+    if (!RegExp(r'^[A-Z0-9]+$').hasMatch(code)) {
+      return (
+        success: false,
+        error: 'كود الصيدلية يجب أن يحتوي على أحرف وأرقام إنجليزية فقط',
+        assistants: <Map<String, dynamic>>[]
+      );
+    }
+
     if (!isConfigured) {
       return (
         success: false,
@@ -142,7 +160,7 @@ class SyncService {
       final res = await http
           .get(
             Uri.parse(
-                '$_url/pharmacies?pharmacy_code=eq.${pharmacyCode.toUpperCase()}&select=*'),
+                '$_url/pharmacies?pharmacy_code=eq.$code&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -170,7 +188,7 @@ class SyncService {
       // حفظ بيانات الصيدلية محلياً
       final db = DatabaseHelper.instance;
       await db.setSetting('pharmacy_cloud_id', _pharmacyCloudId!);
-      await db.setSetting('pharmacy_code', pharmacyCode.toUpperCase());
+      await db.setSetting('pharmacy_code', code);
       await db.setSetting('pharmacy_name', pharmacy['name'] ?? 'صيدليتي');
       await db.setSetting('is_assistant_device', '1');
 

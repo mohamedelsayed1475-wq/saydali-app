@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
+import '../database/database_helper.dart';
 
 class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
@@ -12,6 +13,18 @@ class SupabaseService {
 
   static const _url = EnvConfig.supabaseUrl;
   static const _key = EnvConfig.supabaseKey;
+
+  String? _pharmacyCloudId;
+
+  Future<void> _ensurePharmacyId() async {
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
+      try {
+        _pharmacyCloudId = await DatabaseHelper.instance.getSetting('pharmacy_cloud_id');
+      } catch (e) {
+        debugPrint('⚠️ Error loading pharmacy_cloud_id in SupabaseService: $e');
+      }
+    }
+  }
 
   bool get isConfigured =>
       _url.isNotEmpty &&
@@ -27,12 +40,18 @@ class SupabaseService {
     return 'الإعدادات تبدو سليمة';
   }
 
-  Map<String, String> get _headers => {
-        'apikey': _key,
-        'Authorization': 'Bearer $_key',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      };
+  Map<String, String> get _headers {
+    final h = <String, String>{
+      'apikey': _key,
+      'Authorization': 'Bearer $_key',
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    };
+    if (_pharmacyCloudId != null && _pharmacyCloudId!.isNotEmpty) {
+      h['x-pharmacy-id'] = _pharmacyCloudId!;
+    }
+    return h;
+  }
 
   // ── إنشاء جلسة جديدة ──────────────────────────────────────────────────
   Future<String?> createSession({
@@ -43,6 +62,7 @@ class SupabaseService {
     String currency = 'ج.م',
   }) async {
     lastError = null;
+    await _ensurePharmacyId();
     if (!isConfigured) {
       debugPrint('⚠️ Supabase مش مضبوط: $configDiagnostic. سيتم استخدام وضع المحاكاة (Mock Mode)');
       await Future.delayed(const Duration(seconds: 1));
@@ -69,6 +89,8 @@ class SupabaseService {
               'expires_at': DateTime.now()
                   .add(const Duration(hours: 2))
                   .toIso8601String(),
+              if (_pharmacyCloudId != null && _pharmacyCloudId!.isNotEmpty)
+                'pharmacy_id': _pharmacyCloudId,
             }),
           )
           .timeout(const Duration(seconds: 10));
@@ -123,6 +145,7 @@ class SupabaseService {
   // ── استقبال رد المندوب بالكود ──────────────────────────────────────────────────
   Future<({RepResponse? response, String? error})> fetchResponseByCode(
       String responseCode) async {
+    await _ensurePharmacyId();
     if (!isConfigured) {
       if (responseCode.toUpperCase().startsWith('MOCK')) {
         await Future.delayed(const Duration(seconds: 1));
@@ -292,6 +315,7 @@ class SupabaseService {
   // ── جلب كل الجلسات النشطة للصيدلية ──────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> fetchPharmacySessions(
       String pharmacyName) async {
+    await _ensurePharmacyId();
     if (!isConfigured) return [];
     try {
       final res = await http
@@ -322,6 +346,7 @@ class SupabaseService {
     required List<Map<String, dynamic>> items,
     String currency = 'ج.م',
   }) async {
+    await _ensurePharmacyId();
     if (!isConfigured) {
       await Future.delayed(const Duration(seconds: 1));
       return 'MOCK${Random().nextInt(9000) + 1000}';
@@ -377,6 +402,7 @@ class SupabaseService {
 
   // ── حذف الجلسة وبياناتها من السحابة ──────────────────
   Future<void> deleteSession(String sessionId) async {
+    await _ensurePharmacyId();
     if (!isConfigured) return;
     try {
       await http
@@ -674,6 +700,7 @@ class SupabaseService {
 
   // ── حذف الجلسات المنتهية تلقائياً (تنظيف) ──────────────────────────────
   Future<int> cleanupExpiredSessions() async {
+    await _ensurePharmacyId();
     if (!isConfigured) return 0;
     try {
       final cutoff = DateTime.now().subtract(const Duration(hours: 24));

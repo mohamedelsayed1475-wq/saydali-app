@@ -723,12 +723,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     });
   }
 
-  void _showAddItemDialog(BuildContext ctx, Function(Map<String, dynamic>) onAdd, {String? initialName}) {
+  void _showAddItemDialog(BuildContext ctx, Function(Map<String, dynamic>) onAdd, {String? initialName, String? initialPrice, String? initialCostPrice}) {
     final itemNameCtrl = TextEditingController(text: initialName ?? '');
 
-    final priceCtrl = TextEditingController(); // Box Price
+    final priceCtrl = TextEditingController(text: initialPrice ?? ''); // Box Price
     final stripPriceCtrl = TextEditingController(); // Strip Price
-    final costPriceCtrl = TextEditingController(); // Box Cost Price
+    final costPriceCtrl = TextEditingController(text: initialCostPrice ?? ''); // Box Cost Price
     final stripCostPriceCtrl = TextEditingController(); // Strip Cost Price
     final boxesCtrl = TextEditingController(text: '1');
     final stripsCtrl = TextEditingController(text: '0');
@@ -752,8 +752,29 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     context,
                     MaterialPageRoute(builder: (_) => const ScannerScreen()),
                   );
-                  if (code != null) {
-                    _showAddItemDialog(ctx, onAdd, initialName: code);
+                  if (code != null && code.isNotEmpty) {
+                    // ابحث في القاموس المحلي عن الباركود المطابق
+                    final match = _suggestions.firstWhere(
+                      (s) => s['barcode']?.toString().trim() == code.trim(),
+                      orElse: () => <String, dynamic>{},
+                    );
+                    if (match.isNotEmpty) {
+                      debugPrint('🔍 [INVOICE_SCANNER] تم العثور على الصنف للرمز $code: ${match['enName']}');
+                      _showAddItemDialog(
+                        ctx, 
+                        onAdd, 
+                        initialName: match['enName']?.toString(),
+                        initialPrice: (match['price'] != null && match['price'].toString() != '0') 
+                            ? match['price'].toString() 
+                            : null,
+                        initialCostPrice: (match['cost_price'] != null && match['cost_price'].toString() != '0')
+                            ? match['cost_price'].toString()
+                            : null,
+                      );
+                    } else {
+                      debugPrint('🔍 [INVOICE_SCANNER] لم يتم العثور على الرمز $code في القاموس المحلي');
+                      _showAddItemDialog(ctx, onAdd, initialName: code);
+                    }
                   }
                 },
               ),

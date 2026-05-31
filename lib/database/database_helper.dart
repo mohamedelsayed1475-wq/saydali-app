@@ -936,6 +936,15 @@ class DatabaseHelper {
 
   Future<Map<String, dynamic>?> getAssistantByPin(String pin) async {
     final db = await database;
+    
+    // تأكيد وجود صيدلية مربوطة لضمان أمان تسجيل الدخول على أجهزة المساعدين
+    final pharmacyCloudId = await getSetting('pharmacy_cloud_id');
+    final isAssistant = await getSetting('is_assistant_device');
+    if (isAssistant == '1' && (pharmacyCloudId == null || pharmacyCloudId.isEmpty)) {
+      debugPrint('⛔ محاولة تسجيل دخول PIN على جهاز مساعد غير مرتبط بصيدلية سحابية!');
+      return null;
+    }
+
     final result = await db.query('assistants',
         where: 'pin = ? AND is_active = 1', whereArgs: [pin]);
     return result.isNotEmpty ? result.first : null;

@@ -121,10 +121,25 @@ DROP POLICY IF EXISTS "secure_insert_response_codes" ON response_codes;
 DROP POLICY IF EXISTS "secure_delete_response_codes" ON response_codes;
 
 -- القراءة والتعديل: تتم حمايتها بحيث لا يمكن قراءة أو تعديل الجلسة إلا عند توفير كود الجلسة (session_code) أو معرّف الجلسة لمنع التجسس.
-CREATE POLICY "secure_select_rep_sessions" ON rep_sessions FOR SELECT USING (true);
-CREATE POLICY "secure_insert_rep_sessions" ON rep_sessions FOR INSERT WITH CHECK (true);
+CREATE POLICY "secure_select_rep_sessions" ON rep_sessions
+FOR SELECT USING (
+  pharmacy_id IS NULL OR  -- توافق رجعي للجلسات القديمة
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+CREATE POLICY "secure_insert_rep_sessions" ON rep_sessions
+FOR INSERT WITH CHECK (
+  pharmacy_id IS NULL OR 
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
 CREATE POLICY "secure_update_rep_sessions" ON rep_sessions FOR UPDATE USING (status = 'pending' OR status = 'responded');
-CREATE POLICY "secure_delete_rep_sessions" ON rep_sessions FOR DELETE USING (true);
+
+CREATE POLICY "secure_delete_rep_sessions" ON rep_sessions
+FOR DELETE USING (
+  pharmacy_id IS NULL OR 
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
 
 CREATE POLICY "secure_select_session_items" ON session_items FOR SELECT USING (true);
 CREATE POLICY "secure_insert_session_items" ON session_items FOR INSERT WITH CHECK (true);

@@ -186,6 +186,11 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _importExcel() async {
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canManageShortages) {
+      showSnack(context, '⛔ ليس لديك صلاحية إدارة النواقص', isError: true);
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls'],
@@ -291,7 +296,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
-  Future<void> _showAddSheet({Shortage? existing, String? initialName}) async {
+  Future<void> _showAddSheet({Shortage? existing, String? initialName, String? initialCompany}) async {
     // فحص صلاحية إدارة النواقص
     final userProvider = context.read<CurrentUserProvider>();
     if (!userProvider.canManageShortages) {
@@ -300,7 +305,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
     final nameCtrl = TextEditingController(text: initialName ?? existing?.name ?? '');
 
-    final companyCtrl = TextEditingController(text: existing?.company);
+    final companyCtrl = TextEditingController(text: initialCompany ?? existing?.company);
     final qtyCtrl =
         TextEditingController(text: existing?.quantity.toString() ?? '1');
     final notesCtrl = TextEditingController(text: existing?.notes);
@@ -487,8 +492,24 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                               context,
                               MaterialPageRoute(
                                   builder: (_) => const ScannerScreen()));
-                          if (code != null) {
-                            _showAddSheet(initialName: code);
+                          if (code != null && code.isNotEmpty) {
+                            // ابحث أولاً في القاموس المحلي عن باركود مطابق
+                            final match = _suggestions.firstWhere(
+                              (s) => s['barcode']?.toString().trim() == code.trim(),
+                              orElse: () => <String, dynamic>{},
+                            );
+                            if (match.isNotEmpty) {
+                              debugPrint('🔍 [SHORTAGES_SCANNER] تم العثور على الدواء المطابق للرمز $code في القاموس: ${match['enName']}');
+                              _showAddSheet(
+                                initialName: match['enName']?.toString(),
+                                initialCompany: (match['company'] != null && match['company'].toString() != 'غير محدد')
+                                    ? match['company'].toString()
+                                    : null,
+                              );
+                            } else {
+                              debugPrint('🔍 [SHORTAGES_SCANNER] لم يتم العثور على الرمز $code في القاموس المحلي');
+                              _showAddSheet(initialName: code);
+                            }
                           }
                         },
                       ),
@@ -663,6 +684,11 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   }
 
   Future<void> _importFromClipboard() async {
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canManageShortages) {
+      showSnack(context, '⛔ ليس لديك صلاحية إدارة النواقص', isError: true);
+      return;
+    }
     final data = await Clipboard.getData('text/plain');
     if (data == null || data.text == null || data.text!.isEmpty) {
       showSnack(context, 'الحافظة فارغة! انسخ الرسالة من واتساب أولاً',
@@ -777,6 +803,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ShortagesProvider>();
+    final userProvider = context.watch<CurrentUserProvider>();
     final _shortages = provider.shortages;
     final _filtered = _getFiltered(_shortages);
     final _loading = provider.loading;
@@ -840,18 +867,20 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                               setState(() => _search = '');
                             },
                           ),
-                        IconButton(
-                          icon: const Icon(Icons.paste_rounded,
-                              color: AppColors.warning),
-                          tooltip: 'إضافة من الحافظة',
-                          onPressed: _importFromClipboard,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.upload_file,
-                              color: AppColors.primary),
-                          tooltip: 'استيراد Excel',
-                          onPressed: _importExcel,
-                        ),
+                        if (userProvider.canManageShortages) ...[
+                          IconButton(
+                            icon: const Icon(Icons.paste_rounded,
+                                color: AppColors.warning),
+                            tooltip: 'إضافة من الحافظة',
+                            onPressed: _importFromClipboard,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.upload_file,
+                                color: AppColors.primary),
+                            tooltip: 'استيراد Excel',
+                            onPressed: _importExcel,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -969,17 +998,19 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'shortages_fab',
-        onPressed: () => _showAddSheet(),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('ناقص جديد',
-            style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo')),
-      ),
+      floatingActionButton: userProvider.canManageShortages
+          ? FloatingActionButton.extended(
+              heroTag: 'shortages_fab',
+              onPressed: () => _showAddSheet(),
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('ناقص جديد',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Cairo')),
+            )
+          : null,
     );
   }
 
