@@ -605,6 +605,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 return;
                               }
                               if (items.isEmpty) return;
+                              final userProvider = context.read<CurrentUserProvider>();
                               await DatabaseHelper.instance.insertInvoice({
                                 'customer_id': selectedCustomer?.id,
                                 'customer_name': nameCtrl.text.trim(),
@@ -616,10 +617,57 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 'remaining': remaining,
                               });
                               SyncService.instance.syncAll(); // مزامنة فورية للفاتورة في الخلفية
+
+                              // لو المدفوع أكتر من الإجمالي والعميل مسجل
+                              if (selectedCustomer != null && paidAmount > total && total > 0) {
+                                final change = paidAmount - total;
+                                final addToAccount = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (dCtx) => AlertDialog(
+                                    backgroundColor: AppColors.darkCard,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                    title: Text(
+                                      'الباقي ${change.toStringAsFixed(2)} $_currency',
+                                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    content: const Text(
+                                      'تريد إضافة الباقي لرصيد العميل أم إعطاءه نقداً؟',
+                                      style: TextStyle(color: AppColors.textLight),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    actionsAlignment: MainAxisAlignment.center,
+                                    actions: [
+                                      ElevatedButton.icon(
+                                        onPressed: () => Navigator.pop(dCtx, true),
+                                        icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
+                                        label: const Text('رصيد العميل ➕'),
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                      ),
+                                      TextButton.icon(
+                                        onPressed: () => Navigator.pop(dCtx, false),
+                                        icon: const Icon(Icons.payments_rounded, size: 16),
+                                        label: const Text('نقداً للعميل'),
+                                        style: TextButton.styleFrom(foregroundColor: AppColors.textMuted),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (addToAccount == true && ctx.mounted) {
+                                  await DatabaseHelper.instance.addDebtTransaction({
+                                    'customer_id': selectedCustomer!.id,
+                                    'amount': change,
+                                    'type': 'payment', // دفعة لصالح العميل = تنزل من دينه
+                                    'description': 'رصيد متبقي من فاتورة',
+                                    'created_by': userProvider.currentName,
+                                  });
+                                  await context.read<CustomersProvider>().load();
+                                }
+                              }
                               
                               // تحويل المتبقي للمديونية حسب اختيار المستخدم
                               if (selectedCustomer != null && remaining > 0) {
-                                final userProvider = context.read<CurrentUserProvider>();
                                 
                                 // إنشاء وصف تفصيلي للأصناف والكميات
                                 final itemsList = items.map((item) {
@@ -651,7 +699,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               }
 
                               // تسجيل النشاط
-                              final userProvider = context.read<CurrentUserProvider>();
                               await DatabaseHelper.instance.logActivity(
                                 assistantId: userProvider.currentAssistantId,
                                 assistantName: userProvider.currentName,

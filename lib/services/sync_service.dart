@@ -605,8 +605,11 @@ class SyncService {
 
   Future<void> _pullCustomers() async {
     final db = await DatabaseHelper.instance.database;
-    final lastSync =
-        await DatabaseHelper.instance.getSetting('last_sync_at') ?? '';
+    final isAssistant = await DatabaseHelper.instance.getSetting('is_assistant_device');
+    // المساعد يجيب كل العملاء مش بس الجدد
+    final lastSync = isAssistant == '1' 
+        ? '' 
+        : await DatabaseHelper.instance.getSetting('last_sync_at') ?? '';
 
     try {
       String url =
@@ -636,7 +639,7 @@ class SyncService {
             'due_date': item['due_date'],
             'photo_url': item['photo_url'],
             'total_debt': 0,
-            'created_by': item['created_by'],
+            'created_by': item['created_by'] ?? 'المالك',
             'created_at': item['created_at'],
             'is_synced': 1,
           });
@@ -728,12 +731,14 @@ class SyncService {
           final customerLocalId = item['customer_local_id'];
           // تحقق إن العميل موجود محلياً
           final customerExists = await db.query('customers',
-              where: 'id = ?', whereArgs: [customerLocalId]);
+              where: 'cloud_id = ? OR id = ?', 
+              whereArgs: [customerLocalId, customerLocalId]);
           if (customerExists.isEmpty) continue;
+          final actualCustomerId = customerExists.first['id'];
 
           await DatabaseHelper.instance.addDebtTransaction({
             'cloud_id': cloudId,
-            'customer_id': customerLocalId,
+            'customer_id': actualCustomerId,
             'amount': (item['amount'] as num).toDouble(),
             'type': item['type'],
             'description': item['description'],
