@@ -68,6 +68,7 @@ Future<void> _confirmDeviceSync(String deviceId) async {
     'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
     'Content-Type': 'application/json',
     'Prefer': 'return=minimal',
+    'x-pharmacy-id': pharmacyId,
   };
 
   try {
@@ -95,6 +96,7 @@ Future<void> _tryCleanupCloud() async {
     'apikey': EnvConfig.supabaseKey,
     'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
     'Content-Type': 'application/json',
+    'x-pharmacy-id': pharmacyId,
   };
 
   try {
@@ -223,6 +225,7 @@ class ScheduledSyncService {
       'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal',
+      'x-pharmacy-id': pharmacyId,
     };
 
     try {

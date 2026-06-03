@@ -25,70 +25,121 @@ ALTER TABLE pharmacy_customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_debt_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pharmacy_medication_expiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE renewal_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync_confirmations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync_devices ENABLE ROW LEVEL SECURITY;
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- ⚠️ تنظيف ديناميكي شامل لجميع السياسات القديمة في الـ public schema لمنع التكرار وأي سياسات غير آمنة
+-- ══════════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN 
+    SELECT policyname, tablename 
+    FROM pg_policies 
+    WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+  END LOOP;
+END $$;
+
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 0. جدول الصيدليات (pharmacies) — سياسات الوصول
 -- ══════════════════════════════════════════════════════════════════════════════
--- القراءة: مفتوحة للجميع (مطلوبة لربط جهاز المساعد بالصيدلية)
--- الإضافة: مفتوحة لتسجيل الصيدليات الجديدة عند الاشتراك
--- التعديل: مقيدة بـ pharmacy_id المُرسل في الهيدر x-pharmacy-id فقط
+-- القراءة: مفتوحة للـ authenticated والمساعدين (الممررين في الهيدر x-pharmacy-id)، ومغلقة للـ anon المباشر
+-- الإضافة: مفتوحة للـ authenticated فقط (تسجيل صيدلية جديدة) أو الـ service_role
+-- التعديل/الحذف: مقيدة بـ pharmacy_id أو الـ authenticated/service_role
 
+DROP POLICY IF EXISTS "anon_all" ON pharmacies;
 DROP POLICY IF EXISTS "secure_select_pharmacies" ON pharmacies;
+DROP POLICY IF EXISTS "secure_select_pharmacies_anon" ON pharmacies;
 DROP POLICY IF EXISTS "secure_insert_pharmacies" ON pharmacies;
 DROP POLICY IF EXISTS "secure_update_pharmacies" ON pharmacies;
+DROP POLICY IF EXISTS "secure_update_pharmacies_anon" ON pharmacies;
+DROP POLICY IF EXISTS "secure_delete_pharmacies" ON pharmacies;
 
+-- القراءة للـ authenticated والـ service_role
 CREATE POLICY "secure_select_pharmacies" ON pharmacies
-FOR SELECT USING (true);
+FOR SELECT TO authenticated, service_role USING (auth.uid() IS NOT NULL);
 
-CREATE POLICY "secure_insert_pharmacies" ON pharmacies
-FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "secure_update_pharmacies" ON pharmacies
-FOR UPDATE USING (
+-- القراءة للـ anon فقط عند إرسال الهيدر الصحيح المطابق لمعرف الصيدلية
+CREATE POLICY "secure_select_pharmacies_anon" ON pharmacies
+FOR SELECT TO anon USING (
   id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
+
+-- الإضافة للـ authenticated والـ service_role
+CREATE POLICY "secure_insert_pharmacies" ON pharmacies
+FOR INSERT TO authenticated, service_role WITH CHECK (auth.uid() IS NOT NULL);
+
+-- التعديل للـ authenticated والـ service_role
+CREATE POLICY "secure_update_pharmacies" ON pharmacies
+FOR UPDATE TO authenticated, service_role USING (auth.uid() IS NOT NULL);
+
+-- التعديل للـ anon فقط عند إرسال الهيدر الصحيح المطابق لمعرف الصيدلية
+CREATE POLICY "secure_update_pharmacies_anon" ON pharmacies
+FOR UPDATE TO anon USING (
+  id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+-- الحذف للـ authenticated والـ service_role
+CREATE POLICY "secure_delete_pharmacies" ON pharmacies
+FOR DELETE TO authenticated, service_role USING (auth.uid() IS NOT NULL);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- 1. جدول مساعدي الصيدلية (pharmacy_assistants)
 -- ══════════════════════════════════════════════════════════════════════════════
--- الحماية: يُسمح بالقراءة/الكتابة/التعديل/الحذف فقط عند تطابق pharmacy_id مع الهيدر x-pharmacy-id.
--- هذا الهيدر يُرسل من التطبيق ويحتوي على UUID الصيدلية (غير قابل للتخمين).
+-- الحماية: يُسمح للـ authenticated والـ service_role بالوصول الكامل.
+-- بالنسبة للـ anon، يُشترط تطابق pharmacy_id مع الهيدر x-pharmacy-id فقط لمنع الوصول المباشر.
 -- ══════════════════════════════════════════════════════════════════════════════
 
 -- تحديث الهيكل: إضافة الأعمدة المفقودة لجدول المساعدين
 ALTER TABLE pharmacy_assistants ADD COLUMN IF NOT EXISTS can_manage_shortages BOOLEAN DEFAULT TRUE;
 ALTER TABLE pharmacy_assistants ADD COLUMN IF NOT EXISTS can_manage_reps BOOLEAN DEFAULT FALSE;
 
+DROP POLICY IF EXISTS "anon_all" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_read_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_insert_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_update_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "allow_delete_pharmacy_assistants" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_read_pharmacy_assistants" ON pharmacy_assistants;
+DROP POLICY IF EXISTS "secure_all_pharmacy_assistants_auth" ON pharmacy_assistants;
+DROP POLICY IF EXISTS "secure_select_pharmacy_assistants_anon" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_insert_pharmacy_assistants" ON pharmacy_assistants;
+DROP POLICY IF EXISTS "secure_insert_pharmacy_assistants_anon" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_update_pharmacy_assistants" ON pharmacy_assistants;
+DROP POLICY IF EXISTS "secure_update_pharmacy_assistants_anon" ON pharmacy_assistants;
 DROP POLICY IF EXISTS "secure_delete_pharmacy_assistants" ON pharmacy_assistants;
+DROP POLICY IF EXISTS "secure_delete_pharmacy_assistants_anon" ON pharmacy_assistants;
 
--- القراءة: يُسمح فقط لمن يعرف pharmacy_id (UUID آمن)
-CREATE POLICY "secure_read_pharmacy_assistants" ON pharmacy_assistants
-FOR SELECT USING (
+-- وصول كامل للـ authenticated والـ service_role
+CREATE POLICY "secure_all_pharmacy_assistants_auth" ON pharmacy_assistants
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+-- القراءة للـ anon فقط عند إرسال الهيدر المطابق
+CREATE POLICY "secure_select_pharmacy_assistants_anon" ON pharmacy_assistants
+FOR SELECT TO anon USING (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
--- الإضافة: يُسمح فقط لمن يعرف pharmacy_id
-CREATE POLICY "secure_insert_pharmacy_assistants" ON pharmacy_assistants
-FOR INSERT WITH CHECK (
+-- الإضافة للـ anon فقط عند إرسال الهيدر المطابق
+CREATE POLICY "secure_insert_pharmacy_assistants_anon" ON pharmacy_assistants
+FOR INSERT TO anon WITH CHECK (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
--- التعديل: يُسمح فقط لمن يعرف pharmacy_id
-CREATE POLICY "secure_update_pharmacy_assistants" ON pharmacy_assistants
-FOR UPDATE USING (
+-- التعديل للـ anon فقط عند إرسال الهيدر المطابق
+CREATE POLICY "secure_update_pharmacy_assistants_anon" ON pharmacy_assistants
+FOR UPDATE TO anon USING (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
--- الحذف: يُسمح فقط لمن يعرف pharmacy_id
-CREATE POLICY "secure_delete_pharmacy_assistants" ON pharmacy_assistants
-FOR DELETE USING (
+-- الحذف للـ anon فقط عند إرسال الهيدر المطابق
+CREATE POLICY "secure_delete_pharmacy_assistants_anon" ON pharmacy_assistants
+FOR DELETE TO anon USING (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
@@ -129,7 +180,7 @@ FOR SELECT USING (is_active = true);
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- 4. جداول جلسات المندوب والردود (rep_sessions, session_items, response_codes)
+-- 4. جداول جلسات المندوب والردود (rep_sessions, session_items, response_codes, renewal_requests)
 -- ══════════════════════════════════════════════════════════════════════════════
 DROP POLICY IF EXISTS "allow_all_rep_sessions" ON rep_sessions;
 DROP POLICY IF EXISTS "secure_select_rep_sessions" ON rep_sessions;
@@ -148,35 +199,159 @@ DROP POLICY IF EXISTS "secure_select_response_codes" ON response_codes;
 DROP POLICY IF EXISTS "secure_insert_response_codes" ON response_codes;
 DROP POLICY IF EXISTS "secure_delete_response_codes" ON response_codes;
 
--- القراءة والتعديل: تتم حمايتها بحيث لا يمكن قراءة أو تعديل الجلسة إلا عند توفير كود الجلسة (session_code) أو معرّف الجلسة لمنع التجسس.
+DROP POLICY IF EXISTS "secure_select_renewal_requests" ON renewal_requests;
+DROP POLICY IF EXISTS "secure_insert_renewal_requests" ON renewal_requests;
+DROP POLICY IF EXISTS "secure_update_renewal_requests" ON renewal_requests;
+DROP POLICY IF EXISTS "secure_delete_renewal_requests" ON renewal_requests;
+
+-- ─── 4.1 جدول جلسات المندوب (rep_sessions) ───
+-- القراءة: يُسمح للصيدلية بقراءة جلساتها الخاصة، ويُسمح للمندوبين بقراءة الجلسات النشطة أو المنتهية حديثاً (أقل من 3 أيام)
 CREATE POLICY "secure_select_rep_sessions" ON rep_sessions
 FOR SELECT USING (
-  pharmacy_id IS NULL OR  -- توافق رجعي للجلسات القديمة
+  pharmacy_id IS NULL OR
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  OR expires_at > now() - interval '3 days'
 );
 
+-- الإضافة: تُضاف الجلسات فقط من قِبل الصيدلية المالكة لها
 CREATE POLICY "secure_insert_rep_sessions" ON rep_sessions
 FOR INSERT WITH CHECK (
-  pharmacy_id IS NULL OR 
+  pharmacy_id IS NULL OR
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
-CREATE POLICY "secure_update_rep_sessions" ON rep_sessions FOR UPDATE USING (status = 'pending' OR status = 'responded');
+-- التعديل: تُعدل الجلسة من قِبل الصيدلية، أو من قِبل المندوب (فقط لتحديث الحالة ومدة الصلاحية إذا كانت الجلسة معلقة ولم تنتهِ صلاحيتها بعد)
+CREATE POLICY "secure_update_rep_sessions" ON rep_sessions
+FOR UPDATE USING (
+  pharmacy_id IS NULL OR
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  OR (status = 'pending' AND expires_at > now())
+);
 
+-- الحذف: متاح فقط للصيدلية المالكة للجلسة
 CREATE POLICY "secure_delete_rep_sessions" ON rep_sessions
 FOR DELETE USING (
-  pharmacy_id IS NULL OR 
+  pharmacy_id IS NULL OR
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
-CREATE POLICY "secure_select_session_items" ON session_items FOR SELECT USING (true);
-CREATE POLICY "secure_insert_session_items" ON session_items FOR INSERT WITH CHECK (true);
-CREATE POLICY "secure_update_session_items" ON session_items FOR UPDATE USING (true);
-CREATE POLICY "secure_delete_session_items" ON session_items FOR DELETE USING (true);
 
-CREATE POLICY "secure_select_response_codes" ON response_codes FOR SELECT USING (true);
-CREATE POLICY "secure_insert_response_codes" ON response_codes FOR INSERT WITH CHECK (true);
-CREATE POLICY "secure_delete_response_codes" ON response_codes FOR DELETE USING (true);
+-- ─── 4.2 جدول عناصر الجلسة (session_items) ───
+-- القراءة: للصيدلية المالكة أو للمندوبين المهتمين بالجلسات النشطة/المعدلة حديثاً
+CREATE POLICY "secure_select_session_items" ON session_items
+FOR SELECT USING (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL 
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+    OR expires_at > now() - interval '3 days'
+  )
+);
+
+-- الإضافة: الصيدلية فقط هي من تضيف أصناف إلى الجلسة
+CREATE POLICY "secure_insert_session_items" ON session_items
+FOR INSERT WITH CHECK (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
+
+-- التعديل: الصيدلية تعدل الأصناف، أو المندوب يملأ ردوده طالما الجلسة نشطة ومعلقة
+CREATE POLICY "secure_update_session_items" ON session_items
+FOR UPDATE USING (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+    OR (status = 'pending' AND expires_at > now())
+  )
+);
+
+-- الحذف: الصيدلية فقط من تحذف أصناف من الجلسة
+CREATE POLICY "secure_delete_session_items" ON session_items
+FOR DELETE USING (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
+
+
+-- ─── 4.3 جدول أكواد الردود (response_codes) ───
+-- القراءة: للصيدلية أو للمندوب للحصول على كود الرد المسجل للجلسة النشطة
+CREATE POLICY "secure_select_response_codes" ON response_codes
+FOR SELECT USING (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+    OR expires_at > now() - interval '3 days'
+  )
+);
+
+-- الإضافة: المندوب أو الصيدلية تسجل كود الرد عند إنهاء الجلسة النشطة بنجاح
+CREATE POLICY "secure_insert_response_codes" ON response_codes
+FOR INSERT WITH CHECK (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+    OR (status = 'pending' AND expires_at > now())
+  )
+);
+
+-- الحذف: متاح فقط للصيدلية عند إدارة أو حذف السجلات
+CREATE POLICY "secure_delete_response_codes" ON response_codes
+FOR DELETE USING (
+  session_id IN (
+    SELECT id FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
+
+
+-- ─── 4.4 جدول طلبات التجديد (renewal_requests) ───
+-- القراءة: للصيدلية لمتابعة طلبات تجديد الجلسات المنتهية الخاصة بها
+CREATE POLICY "secure_select_renewal_requests" ON renewal_requests
+FOR SELECT USING (
+  session_code IN (
+    SELECT session_code FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
+
+-- الإضافة: يُسمح للمندوب بتقديم طلب تجديد إذا كان كود الجلسة صحيحاً وموجوداً بقاعدة البيانات
+CREATE POLICY "secure_insert_renewal_requests" ON renewal_requests
+FOR INSERT WITH CHECK (
+  session_code IN (
+    SELECT session_code FROM rep_sessions
+  )
+);
+
+-- التعديل: للصيدلية فقط لتغيير حالة الطلب (مثلاً من معلق إلى تم التجديد)
+CREATE POLICY "secure_update_renewal_requests" ON renewal_requests
+FOR UPDATE USING (
+  session_code IN (
+    SELECT session_code FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
+
+-- الحذف: للصيدلية فقط لمسح الطلبات القديمة
+CREATE POLICY "secure_delete_renewal_requests" ON renewal_requests
+FOR DELETE USING (
+  session_code IN (
+    SELECT session_code FROM rep_sessions 
+    WHERE pharmacy_id IS NULL
+    OR pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+  )
+);
 
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -194,9 +369,20 @@ FOR ALL USING (
 );
 
 -- جدول العملاء (pharmacy_customers)
+DROP POLICY IF EXISTS "anon_all" ON pharmacy_customers;
 DROP POLICY IF EXISTS "secure_pharmacy_customers" ON pharmacy_customers;
-CREATE POLICY "secure_pharmacy_customers" ON pharmacy_customers
-FOR ALL USING (
+DROP POLICY IF EXISTS "secure_all_pharmacy_customers_auth" ON pharmacy_customers;
+DROP POLICY IF EXISTS "secure_all_pharmacy_customers_anon" ON pharmacy_customers;
+
+-- وصول كامل للـ authenticated والـ service_role
+CREATE POLICY "secure_all_pharmacy_customers_auth" ON pharmacy_customers
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+-- وصول للـ anon مقيد فقط بمطابقة الهيدر x-pharmacy-id
+CREATE POLICY "secure_all_pharmacy_customers_anon" ON pharmacy_customers
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
@@ -331,3 +517,96 @@ BEGIN
   END IF;
 END $$;
 
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 6. إصلاح مشكلة Function Search Path Mutable في الدوال الأمنية (جميع الدوال)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- لتفادي هجمات حقن مسار البحث (Search Path Hijacking)، نقوم بتثبيت مسار البحث 
+-- على public و pg_temp لجميع الدوال التي تعمل بصلاحيات المنشئ (SECURITY DEFINER)
+DO $$
+DECLARE
+  func_record RECORD;
+BEGIN
+  FOR func_record IN 
+    SELECT p.oid::regprocedure AS func_signature
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.prosecdef = true
+  LOOP
+    EXECUTE 'ALTER FUNCTION ' || func_record.func_signature || ' SET search_path = public, pg_temp';
+  END LOOP;
+END $$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 7. إصلاح مشكلة Public Can Execute SECURITY DEFINER (جميع الدوال)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- الدوال التي تعمل بصلاحيات المنشئ يجب سحب إمكانية تنفيذها من العامة (PUBLIC)
+-- ونمنح الصلاحية بشكل صريح للأدوار المسموح لها:
+-- (المستخدمين الموثقين والـ service_role، ونسمح لـ anon فقط على دوال تقديم ردود المندوب)
+DO $$
+DECLARE
+  func_record RECORD;
+BEGIN
+  FOR func_record IN 
+    SELECT p.oid::regprocedure AS func_signature, p.proname
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' AND p.prosecdef = true
+  LOOP
+    -- إلغاء صلاحية التنفيذ من العامة (PUBLIC)
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || func_record.func_signature || ' FROM PUBLIC';
+    
+    -- منح الصلاحية للأدوار الآمنة
+    EXECUTE 'GRANT EXECUTE ON FUNCTION ' || func_record.func_signature || ' TO authenticated, service_role';
+    
+    -- إذا كانت دالة رد المندوب، يجب السماح للـ anon بتنفيذها
+    IF func_record.proname LIKE 'submit_rep_response%' THEN
+      EXECUTE 'GRANT EXECUTE ON FUNCTION ' || func_record.func_signature || ' TO anon';
+    END IF;
+  END LOOP;
+END $$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 8. حماية Storage Bucket (ads-images) ومنع سرد الملفات (Listing) للعامة
+-- ══════════════════════════════════════════════════════════════════════════════
+-- نقوم بحذف أي سياسة تسمح للعامة (anon) بسرد أو استعلام جدول storage.objects للـ bucket 'ads-images'
+-- ونسمح فقط بالوصول للمستخدمين الموثقين أو الـ service_role
+-- (ملاحظة: تظل الصور قابلة للتحميل للعامة عبر روابطها المباشرة لأن الـ Bucket معرف كـ Public)
+DROP POLICY IF EXISTS "Allow public select on ads-images" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public listing on ads-images" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public read on ads-images" ON storage.objects;
+DROP POLICY IF EXISTS "Give public access to ads-images" ON storage.objects;
+DROP POLICY IF EXISTS "ads-images-public-listing" ON storage.objects;
+DROP POLICY IF EXISTS "Allow authenticated listing of ads-images" ON storage.objects;
+
+-- إنشاء سياسة تسمح للموثقين والـ service_role فقط بسرد واستعلام الملفات
+CREATE POLICY "Allow authenticated listing of ads-images" ON storage.objects
+FOR SELECT TO authenticated, service_role
+USING (bucket_id = 'ads-images');
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 9. حماية جداول المزامنة والأجهزة (sync_confirmations, sync_devices)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- وصول كامل للـ authenticated والـ service_role، وللـ anon مقيد بـ x-pharmacy-id
+CREATE POLICY "secure_all_sync_confirmations_auth" ON sync_confirmations
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "secure_all_sync_confirmations_anon" ON sync_confirmations
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+CREATE POLICY "secure_all_sync_devices_auth" ON sync_devices
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "secure_all_sync_devices_anon" ON sync_devices
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
