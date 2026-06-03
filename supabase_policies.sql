@@ -610,3 +610,49 @@ FOR ALL TO anon USING (
 ) WITH CHECK (
   pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 10. تعديل الدوال الأمنية لتكون SECURITY INVOKER وتقييد تنفيذها
+-- ══════════════════════════════════════════════════════════════════════════════
+-- الدوال المستهدفة:
+-- add_ad_rpc, add_subscription_code, add_subscription_code_rpc,
+-- delete_subscription_code, delete_subscription_code_rpc,
+-- submit_rep_response, update_subscription_code, update_subscription_code_rpc
+--
+-- نقوم بتحويلها إلى SECURITY INVOKER وسحب صلاحيات التنفيذ من الجميع باستثناء service_role
+DO $$
+DECLARE
+  func_record RECORD;
+BEGIN
+  FOR func_record IN 
+    SELECT p.oid::regprocedure AS func_signature, p.proname
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' 
+      AND p.proname IN (
+        'add_ad_rpc', 
+        'add_subscription_code', 
+        'add_subscription_code_rpc',
+        'delete_subscription_code', 
+        'delete_subscription_code_rpc',
+        'submit_rep_response', 
+        'update_subscription_code', 
+        'update_subscription_code_rpc'
+      )
+  LOOP
+    -- تغيير الصلاحية لتكون SECURITY INVOKER
+    EXECUTE 'ALTER FUNCTION ' || func_record.func_signature || ' SECURITY INVOKER';
+    
+    -- سحب صلاحية التنفيذ من العامة (PUBLIC) والمستخدمين anon و authenticated
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || func_record.func_signature || ' FROM PUBLIC';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || func_record.func_signature || ' FROM anon';
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || func_record.func_signature || ' FROM authenticated';
+    
+    -- منح الصلاحية حصرياً للـ service_role
+    EXECUTE 'GRANT EXECUTE ON FUNCTION ' || func_record.func_signature || ' TO service_role';
+    
+    RAISE NOTICE 'Secured function: %', func_record.func_signature;
+  END LOOP;
+END $$;
+
