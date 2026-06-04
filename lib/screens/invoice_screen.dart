@@ -672,6 +672,48 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               }
                               if (items.isEmpty) return;
                               final userProvider = context.read<CurrentUserProvider>();
+                              // Construct payment details for PDF
+                              Map<String, dynamic>? paymentDetails;
+                              if (selectedCustomer != null) {
+                                final double debtBefore = selectedCustomer!.totalDebt;
+                                if (paidAmount > total && total > 0 && excessOption == 'deduct_debt') {
+                                  final change = paidAmount - total;
+                                  final deductAmount = change > debtBefore ? debtBefore : change;
+                                  paymentDetails = {
+                                    'case_type': 'deduct_debt',
+                                    'total': total,
+                                    'paid_cash': paidAmount,
+                                    'deducted_amount': deductAmount,
+                                    'debt_before': debtBefore,
+                                    'debt_after': debtBefore - deductAmount,
+                                  };
+                                } else if (remaining > 0 && (debtOption == 'full_debt' || debtOption == 'partial_debt')) {
+                                  final addAmount = debtOption == 'full_debt' ? remaining : partialDebtAmount.clamp(0, remaining);
+                                  paymentDetails = {
+                                    'case_type': 'add_debt',
+                                    'total': total,
+                                    'paid_cash': paidAmount,
+                                    'added_amount': addAmount,
+                                    'debt_before': debtBefore,
+                                    'debt_after': debtBefore + addAmount,
+                                  };
+                                } else {
+                                  paymentDetails = {
+                                    'case_type': 'cash',
+                                    'total': total,
+                                    'paid_cash': paidAmount,
+                                    'change': paidAmount > total ? paidAmount - total : 0.0,
+                                  };
+                                }
+                              } else {
+                                paymentDetails = {
+                                  'case_type': 'cash',
+                                  'total': total,
+                                  'paid_cash': paidAmount,
+                                  'change': paidAmount > total ? paidAmount - total : 0.0,
+                                };
+                              }
+
                               await DatabaseHelper.instance.insertInvoice({
                                 'customer_id': selectedCustomer?.id,
                                 'customer_name': nameCtrl.text.trim(),
@@ -681,6 +723,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 'total': total,
                                 'paid_amount': paidAmount,
                                 'remaining': remaining,
+                                'notes': jsonEncode(paymentDetails),
                               });
                               SyncService.instance.syncAll(); // مزامنة فورية للفاتورة في الخلفية
 
@@ -802,6 +845,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   total: total,
                                   paidAmount: paidAmount,
                                   remaining: remaining,
+                                  paymentDetails: paymentDetails,
                                 );
                               }
                             },
@@ -1103,7 +1147,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _generatePDF(String customerName,
       List<Map<String, dynamic>> items, double subtotal, double discount,
-      double total) async {
+      double total, {double paidAmount = 0.0, double remaining = 0.0, Map<String, dynamic>? paymentDetails}) async {
     final pdf = pw.Document();
     final pharmacyName =
         await DatabaseHelper.instance.getSetting('pharmacy_name') ??
@@ -1118,6 +1162,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
         textDirection: pw.TextDirection.rtl,
         build: (pw.Context context) {
+          final String caseType = paymentDetails?['case_type'] ?? '';
+          final double paidCash = (paymentDetails?['paid_cash'] as num?)?.toDouble() ?? paidAmount;
+          final double change = (paymentDetails?['change'] as num?)?.toDouble() ?? 0.0;
+          final double deductedAmount = (paymentDetails?['deducted_amount'] as num?)?.toDouble() ?? 0.0;
+          final double addedAmount = (paymentDetails?['added_amount'] as num?)?.toDouble() ?? remaining;
+          final double debtBefore = (paymentDetails?['debt_before'] as num?)?.toDouble() ?? 0.0;
+          final double debtAfter = (paymentDetails?['debt_after'] as num?)?.toDouble() ?? 0.0;
+
+          // Fallback if paymentDetails is null (e.g. old invoices)
+          String resolvedCaseType = caseType;
+          if (resolvedCaseType.isEmpty) {
+            if (remaining > 0) {
+              resolvedCaseType = 'add_debt';
+            } else {
+              resolvedCaseType = 'cash';
+            }
+          }
+
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
@@ -1240,6 +1302,76 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                 fontSize: 16, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
+                    if (resolvedCaseType == 'cash') ...[
+                      pw.Divider(),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('المدفوع نقداً:'),
+                          pw.Text('${paidCash.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                      if (change > 0) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text('الباقي (فكة):'),
+                            pw.Text('${change.toStringAsFixed(2)} $_currency'),
+                          ],
+                        ),
+                      ],
+                    ] else if (resolvedCaseType == 'deduct_debt') ...[
+                      pw.Divider(),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('خصم من المديونية:'),
+                          pw.Text('${deductedAmount.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('المديونية قبل:'),
+                          pw.Text('${debtBefore.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('المديونية بعد:'),
+                          pw.Text('${debtAfter.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                    ] else if (resolvedCaseType == 'add_debt') ...[
+                      pw.Divider(),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('المدفوع نقداً:'),
+                          pw.Text('${paidCash.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('أضيف للمديونية:'),
+                          pw.Text('${addedAmount.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('المديونية الجديدة:'),
+                          pw.Text('${debtAfter.toStringAsFixed(2)} $_currency'),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1262,7 +1394,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _generateThermalPDF(String customerName,
       List<Map<String, dynamic>> items, double subtotal, double discount,
-      double total, {double paidAmount = 0.0, double remaining = 0.0}) async {
+      double total, {double paidAmount = 0.0, double remaining = 0.0, Map<String, dynamic>? paymentDetails}) async {
     final pdf = pw.Document();
     final pharmacyName =
         await DatabaseHelper.instance.getSetting('pharmacy_name') ??
@@ -1276,6 +1408,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicBold),
         textDirection: pw.TextDirection.rtl,
         build: (pw.Context context) {
+          final String caseType = paymentDetails?['case_type'] ?? '';
+          final double paidCash = (paymentDetails?['paid_cash'] as num?)?.toDouble() ?? paidAmount;
+          final double change = (paymentDetails?['change'] as num?)?.toDouble() ?? 0.0;
+          final double deductedAmount = (paymentDetails?['deducted_amount'] as num?)?.toDouble() ?? 0.0;
+          final double addedAmount = (paymentDetails?['added_amount'] as num?)?.toDouble() ?? remaining;
+          final double debtBefore = (paymentDetails?['debt_before'] as num?)?.toDouble() ?? 0.0;
+          final double debtAfter = (paymentDetails?['debt_after'] as num?)?.toDouble() ?? 0.0;
+
+          // Fallback if paymentDetails is null (e.g. old invoices)
+          String resolvedCaseType = caseType;
+          if (resolvedCaseType.isEmpty) {
+            if (remaining > 0) {
+              resolvedCaseType = 'add_debt';
+            } else {
+              resolvedCaseType = 'cash';
+            }
+          }
+
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
@@ -1361,21 +1511,73 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   pw.Text('${total.toStringAsFixed(2)} $_currency', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
-              pw.SizedBox(height: 2),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text('المدفوع:', style: const pw.TextStyle(fontSize: 9)),
-                  pw.Text('${paidAmount.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
-                ],
-              ),
-              if (remaining > 0) ...[
+              if (resolvedCaseType == 'cash') ...[
                 pw.SizedBox(height: 2),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('المتبقي (آجل):', style: pw.TextStyle(fontSize: 9, color: PdfColors.red700)),
-                    pw.Text('${remaining.toStringAsFixed(2)} $_currency', style: pw.TextStyle(fontSize: 9, color: PdfColors.red700)),
+                    pw.Text('المدفوع نقداً:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${paidCash.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+                if (change > 0) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text('الباقي (فكة):', style: const pw.TextStyle(fontSize: 9)),
+                      pw.Text('${change.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                    ],
+                  ),
+                ],
+              ] else if (resolvedCaseType == 'deduct_debt') ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('خصم من المديونية:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${deductedAmount.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('المديونية قبل:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${debtBefore.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('المديونية بعد:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${debtAfter.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+              ] else if (resolvedCaseType == 'add_debt') ...[
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('المدفوع نقداً:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${paidCash.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('أضيف للمديونية:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${addedAmount.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                ),
+                pw.SizedBox(height: 2),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('المديونية الجديدة:', style: const pw.TextStyle(fontSize: 9)),
+                    pw.Text('${debtAfter.toStringAsFixed(2)} $_currency', style: const pw.TextStyle(fontSize: 9)),
                   ],
                 ),
               ],
@@ -1406,6 +1608,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     required double total,
     double paidAmount = 0.0,
     double remaining = 0.0,
+    Map<String, dynamic>? paymentDetails,
   }) async {
     await showDialog(
       context: context,
@@ -1424,7 +1627,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              _generateThermalPDF(customerName, items, subtotal, discount, total, paidAmount: paidAmount, remaining: remaining);
+              _generateThermalPDF(customerName, items, subtotal, discount, total,
+                  paidAmount: paidAmount, remaining: remaining, paymentDetails: paymentDetails);
             },
             icon: const Icon(Icons.print_rounded, size: 18),
             label: const Text('طباعة إيصال حراري (80 مم) 🖨️', style: TextStyle(fontFamily: 'Cairo')),
@@ -1436,7 +1640,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              _generatePDF(customerName, items, subtotal, discount, total);
+              _generatePDF(customerName, items, subtotal, discount, total,
+                  paidAmount: paidAmount, remaining: remaining, paymentDetails: paymentDetails);
             },
             icon: const Icon(Icons.share_rounded, size: 18),
             label: const Text('مشاركة ملف PDF قياسي (A4) 📄', style: TextStyle(fontFamily: 'Cairo')),
@@ -1718,8 +1923,18 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _generatePDF(invoice['customer_name'], items, (invoice['subtotal'] as num).toDouble(),
-                          (invoice['discount'] as num).toDouble(), (invoice['total'] as num).toDouble());
+                      _generatePDF(
+                        invoice['customer_name'],
+                        items,
+                        (invoice['subtotal'] as num).toDouble(),
+                        (invoice['discount'] as num).toDouble(),
+                        (invoice['total'] as num).toDouble(),
+                        paidAmount: (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
+                        remaining: (invoice['remaining'] as num?)?.toDouble() ?? 0.0,
+                        paymentDetails: invoice['notes'] != null && invoice['notes'].toString().isNotEmpty
+                            ? jsonDecode(invoice['notes'])
+                            : null,
+                      );
                     },
                     icon: const Icon(Icons.share_rounded, size: 16),
                     label: const Text('مشاركة A4 📄', style: TextStyle(fontSize: 12, fontFamily: 'Cairo')),
@@ -1739,6 +1954,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         (invoice['total'] as num).toDouble(),
                         paidAmount: (invoice['paid_amount'] as num?)?.toDouble() ?? 0.0,
                         remaining: (invoice['remaining'] as num?)?.toDouble() ?? 0.0,
+                        paymentDetails: invoice['notes'] != null && invoice['notes'].toString().isNotEmpty
+                            ? jsonDecode(invoice['notes'])
+                            : null,
                       );
                     },
                     icon: const Icon(Icons.print_rounded, size: 16),
@@ -1835,6 +2053,62 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   itemBuilder: (ctx, i) {
                     final inv = _invoices[i];
                     final date = DateTime.tryParse(inv['created_at'] ?? '');
+
+                    // Parse payment status and layout config
+                    final String? notesStr = inv['notes'];
+                    Map<String, dynamic>? paymentDetails;
+                    if (notesStr != null && notesStr.isNotEmpty) {
+                      try {
+                        paymentDetails = jsonDecode(notesStr);
+                      } catch (_) {}
+                    }
+
+                    final rem = (inv['remaining'] as num?)?.toDouble() ?? 0.0;
+                    final customerId = inv['customer_id'];
+
+
+                    String caseType = paymentDetails?['case_type'] ?? '';
+                    
+                    // Fallback logic for old invoices
+                    if (caseType.isEmpty) {
+                      if (rem > 0) {
+                        if (customerId != null) {
+                          caseType = 'add_debt';
+                        } else {
+                          caseType = 'cash_remaining';
+                        }
+                      } else {
+                        caseType = 'cash';
+                      }
+                    }
+
+                    String statusLabel = '';
+                    Color statusColor;
+                    Color tintColor;
+                    String statusEmoji = '🧾';
+
+                    if (caseType == 'deduct_debt') {
+                      statusLabel = '💳 خصم من المديونية';
+                      statusColor = AppColors.accent; // البرتقالي
+                      tintColor = AppColors.accent.withValues(alpha: 0.12);
+                      statusEmoji = '💳';
+                    } else if (caseType == 'add_debt') {
+                      statusLabel = '⚠️ متبقي على الحساب: ${rem.toStringAsFixed(2)} $_currency';
+                      statusColor = AppColors.warning; // الأصفر/البرتقالي التحذيري
+                      tintColor = AppColors.warning.withValues(alpha: 0.12);
+                      statusEmoji = '⚠️';
+                    } else if (rem > 0) {
+                      statusLabel = '🔴 متبقي: ${rem.toStringAsFixed(2)} $_currency';
+                      statusColor = AppColors.danger; // الأحمر
+                      tintColor = AppColors.danger.withValues(alpha: 0.12);
+                      statusEmoji = '🔴';
+                    } else {
+                      statusLabel = '✅ مدفوع بالكامل';
+                      statusColor = AppColors.primary; // الأخضر
+                      tintColor = AppColors.primary.withValues(alpha: 0.12);
+                      statusEmoji = '✅';
+                    }
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       child: Slidable(
@@ -1884,11 +2158,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.12),
+                                    color: tintColor,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Center(
-                                    child: Text('🧾', style: TextStyle(fontSize: 20)),
+                                  child: Center(
+                                    child: Text(statusEmoji, style: const TextStyle(fontSize: 20)),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -1943,41 +2217,23 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                         style: const TextStyle(
                                             color: AppColors.warning, fontSize: 11),
                                       ),
-                                    // حالة الدفع
-                                    () {
-                                      final paid = (inv['paid_amount'] as num?)?.toDouble() ?? 0;
-                                      final rem = (inv['remaining'] as num?)?.toDouble() ?? 0;
-                                      final total = (inv['total'] as num).toDouble();
-                                      if (rem > 0) {
-                                        return Container(
-                                          margin: const EdgeInsets.only(top: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.danger.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            'متبقي: ${rem.toStringAsFixed(0)}',
-                                            style: const TextStyle(color: AppColors.danger, fontSize: 10, fontWeight: FontWeight.w700),
-                                          ),
-                                        );
-                                      } else if (paid > 0 || total == 0) {
-                                        return Container(
-                                          margin: const EdgeInsets.only(top: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(alpha: 0.15),
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: const Text(
-                                            'مدفوع بالكامل ✅',
-                                            style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w700),
-                                          ),
-                                        );
-                                      } else {
-                                        return const SizedBox.shrink();
-                                      }
-                                    }(),
+                                    // حالة الدفع الذكية
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: tintColor,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        statusLabel,
+                                        style: TextStyle(
+                                          color: statusColor,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(width: 6),
@@ -1992,6 +2248,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                       (inv['subtotal'] as num).toDouble(),
                                       (inv['discount'] as num).toDouble(),
                                       (inv['total'] as num).toDouble(),
+                                      paymentDetails: paymentDetails,
                                     );
                                   },
                                 ),
