@@ -1026,7 +1026,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
     }
     String formattedPhone = CountryConfig.formatPhone(phone, _countryCode);
     final message = Uri.encodeComponent(
-        'مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي لكم هو ${debt.toStringAsFixed(2)} $_currency.\nشكراً لكم.');
+        'مرحباً أ. $name،\nنود تذكيركم بأن الرصيد المتبقي عليكم هو ${debt.toStringAsFixed(2)} $_currency.\nشكراً لكم.');
     final url =
         Uri.parse('whatsapp://send?phone=$formattedPhone&text=$message');
     if (await canLaunchUrl(url)) {
