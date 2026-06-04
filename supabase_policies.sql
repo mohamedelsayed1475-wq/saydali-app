@@ -656,3 +656,66 @@ BEGIN
   END LOOP;
 END $$;
 
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 11. سياسات الحماية لجداول delegates, orders, pharmacists
+-- ══════════════════════════════════════════════════════════════════════════════
+-- هذه الجداول عندها RLS مفعّل بدون سياسات (مما يمنع الوصول تماماً).
+-- نضيف سياسات مناسبة حسب طبيعة كل جدول.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ─── 11.1 جدول المندوبين (delegates) ───
+DROP POLICY IF EXISTS "secure_all_delegates_auth" ON delegates;
+DROP POLICY IF EXISTS "secure_all_delegates_anon" ON delegates;
+
+CREATE POLICY "secure_all_delegates_auth" ON delegates
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "secure_all_delegates_anon" ON delegates
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+
+-- ─── 11.2 جدول الطلبات (orders) ───
+DROP POLICY IF EXISTS "secure_all_orders_auth" ON orders;
+DROP POLICY IF EXISTS "secure_all_orders_anon" ON orders;
+
+CREATE POLICY "secure_all_orders_auth" ON orders
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "secure_all_orders_anon" ON orders
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+
+-- ─── 11.3 جدول الصيادلة (pharmacists) ───
+DROP POLICY IF EXISTS "secure_all_pharmacists_auth" ON pharmacists;
+DROP POLICY IF EXISTS "secure_all_pharmacists_anon" ON pharmacists;
+
+CREATE POLICY "secure_all_pharmacists_auth" ON pharmacists
+FOR ALL TO authenticated, service_role USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "secure_all_pharmacists_anon" ON pharmacists
+FOR ALL TO anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+) WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 12. تقييد سرد ملفات ads-images من قبل anon (حل تحذير Security Advisor)
+-- ══════════════════════════════════════════════════════════════════════════════
+-- الصور تظل قابلة للتحميل عبر روابطها المباشرة لأن الـ Bucket عام
+-- لكن نمنع الـ anon من استعلام/سرد كافة الملفات في الـ bucket
+DROP POLICY IF EXISTS "Deny anon listing on ads-images" ON storage.objects;
+CREATE POLICY "Deny anon listing on ads-images" ON storage.objects
+FOR SELECT TO anon USING (
+  bucket_id != 'ads-images'
+);
