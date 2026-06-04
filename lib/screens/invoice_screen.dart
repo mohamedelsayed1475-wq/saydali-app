@@ -95,6 +95,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     Customer? selectedCustomer;
     double paidAmount = 0.0;
     String debtOption = 'cash'; // 'cash' | 'full_debt' | 'partial_debt'
+    String excessOption = 'return_cash'; // 'return_cash' | 'deduct_debt'
     double partialDebtAmount = 0.0;
 
     await showModalBottomSheet(
@@ -521,6 +522,71 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   ],
                                 ),
                               ),
+                              // خيارات التصرف في الباقي عند وجود مديونية قديمة
+                              if (selectedCustomer!.totalDebt > 0) ...[
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.warning.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'العميل عليه مديونية: ${selectedCustomer!.totalDebt.toStringAsFixed(2)} $_currency',
+                                        style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const Text('ماذا تريد أن تفعل بالباقي؟',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                                      const SizedBox(height: 6),
+                                      Wrap(
+                                        spacing: 6,
+                                        children: [
+                                          _debtChip('💰 إرجاع الفكة', 'return_cash', excessOption, (v) => setBS(() => excessOption = v)),
+                                          _debtChip('📥 خصم من المديونية', 'deduct_debt', excessOption, (v) => setBS(() => excessOption = v)),
+                                        ],
+                                      ),
+                                      if (excessOption == 'deduct_debt') ...[
+                                        const SizedBox(height: 6),
+                                        Builder(builder: (_) {
+                                          final change = paidAmount - total;
+                                          final deductible = change > selectedCustomer!.totalDebt ? selectedCustomer!.totalDebt : change;
+                                          final newDebt = selectedCustomer!.totalDebt - deductible;
+                                          final cashBack = change - deductible;
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                '✅ سيتم خصم ${deductible.toStringAsFixed(2)} $_currency من المديونية',
+                                                style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600),
+                                              ),
+                                              Text(
+                                                '📊 المديونية بعد الخصم: ${newDebt.toStringAsFixed(2)} $_currency',
+                                                style: const TextStyle(color: AppColors.textLight, fontSize: 11),
+                                              ),
+                                              if (cashBack > 0.01)
+                                                Text(
+                                                  '💰 فكة متبقية للعميل: ${cashBack.toStringAsFixed(2)} $_currency',
+                                                  style: const TextStyle(color: AppColors.primary, fontSize: 11),
+                                                ),
+                                            ],
+                                          );
+                                        }),
+                                      ] else ...[
+                                        const SizedBox(height: 4),
+                                        const Text(
+                                          '💵 سيتم إعطاء الباقي نقداً للعميل - بدون تأثير على المديونية',
+                                          style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ] else if (remaining > 0) ...[
                               // المتبقي على العميل
                               Container(
@@ -621,48 +687,66 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               // لو المدفوع أكتر من الإجمالي والعميل مسجل
                               if (selectedCustomer != null && paidAmount > total && total > 0) {
                                 final change = paidAmount - total;
-                                final addToAccount = await showDialog<bool>(
-                                  context: ctx,
-                                  builder: (dCtx) => AlertDialog(
-                                    backgroundColor: AppColors.darkCard,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                    title: Text(
-                                      'الباقي ${change.toStringAsFixed(2)} $_currency',
-                                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    content: const Text(
-                                      'تريد إضافة الباقي لرصيد العميل أم إعطاءه نقداً؟',
-                                      style: TextStyle(color: AppColors.textLight),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    actionsAlignment: MainAxisAlignment.center,
-                                    actions: [
-                                      ElevatedButton.icon(
-                                        onPressed: () => Navigator.pop(dCtx, true),
-                                        icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
-                                        label: const Text('رصيد العميل ➕'),
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                if (selectedCustomer!.totalDebt > 0) {
+                                  // العميل عليه مديونية - استخدام الاختيار المحدد مسبقاً في الفاتورة
+                                  if (excessOption == 'deduct_debt') {
+                                    // خصم الباقي من المديونية القديمة (الحد الأقصى = رصيد المديونية)
+                                    final deductAmount = change > selectedCustomer!.totalDebt ? selectedCustomer!.totalDebt : change;
+                                    await DatabaseHelper.instance.addDebtTransaction({
+                                      'customer_id': selectedCustomer!.id,
+                                      'amount': deductAmount,
+                                      'type': 'payment',
+                                      'description': 'خصم من المديونية - باقي فاتورة',
+                                      'created_by': userProvider.currentName,
+                                    });
+                                    await context.read<CustomersProvider>().load();
+                                  }
+                                  // excessOption == 'return_cash' → إرجاع الفكة نقداً - لا تأثير على المديونية
+                                } else {
+                                  // العميل ليس عليه مديونية - عرض خيار إضافة الباقي كرصيد
+                                  final addToAccount = await showDialog<bool>(
+                                    context: ctx,
+                                    builder: (dCtx) => AlertDialog(
+                                      backgroundColor: AppColors.darkCard,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                      title: Text(
+                                        'الباقي ${change.toStringAsFixed(2)} $_currency',
+                                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                                        textAlign: TextAlign.center,
                                       ),
-                                      TextButton.icon(
-                                        onPressed: () => Navigator.pop(dCtx, false),
-                                        icon: const Icon(Icons.payments_rounded, size: 16),
-                                        label: const Text('نقداً للعميل'),
-                                        style: TextButton.styleFrom(foregroundColor: AppColors.textMuted),
+                                      content: const Text(
+                                        'تريد إضافة الباقي لرصيد العميل أم إعطاءه نقداً؟',
+                                        style: TextStyle(color: AppColors.textLight),
+                                        textAlign: TextAlign.center,
                                       ),
-                                    ],
-                                  ),
-                                );
+                                      actionsAlignment: MainAxisAlignment.center,
+                                      actions: [
+                                        ElevatedButton.icon(
+                                          onPressed: () => Navigator.pop(dCtx, true),
+                                          icon: const Icon(Icons.account_balance_wallet_rounded, size: 16),
+                                          label: const Text('رصيد العميل ➕'),
+                                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: () => Navigator.pop(dCtx, false),
+                                          icon: const Icon(Icons.payments_rounded, size: 16),
+                                          label: const Text('نقداً للعميل'),
+                                          style: TextButton.styleFrom(foregroundColor: AppColors.textMuted),
+                                        ),
+                                      ],
+                                    ),
+                                  );
 
-                                if (addToAccount == true && ctx.mounted) {
-                                  await DatabaseHelper.instance.addDebtTransaction({
-                                    'customer_id': selectedCustomer!.id,
-                                    'amount': change,
-                                    'type': 'payment', // دفعة لصالح العميل = تنزل من دينه
-                                    'description': 'رصيد متبقي من فاتورة',
-                                    'created_by': userProvider.currentName,
-                                  });
-                                  await context.read<CustomersProvider>().load();
+                                  if (addToAccount == true && ctx.mounted) {
+                                    await DatabaseHelper.instance.addDebtTransaction({
+                                      'customer_id': selectedCustomer!.id,
+                                      'amount': change,
+                                      'type': 'payment',
+                                      'description': 'رصيد متبقي من فاتورة',
+                                      'created_by': userProvider.currentName,
+                                    });
+                                    await context.read<CustomersProvider>().load();
+                                  }
                                 }
                               }
                               
