@@ -10,1137 +10,619 @@
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
   <style>
-    /* ══════════════════════ RESET & BASE ══════════════════════ */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --primary: #6C63FF;
       --primary-light: #8B85FF;
-      --primary-glow: rgba(108, 99, 255, 0.3);
+      --primary-glow: rgba(108,99,255,0.28);
       --success: #22C55E;
-      --success-light: rgba(34, 197, 94, 0.15);
+      --success-light: rgba(34,197,94,0.15);
       --danger: #EF4444;
-      --danger-light: rgba(239, 68, 68, 0.15);
+      --danger-light: rgba(239,68,68,0.15);
       --warning: #F59E0B;
-      --warning-light: rgba(245, 158, 11, 0.15);
       --dark: #0D0D1A;
       --dark-card: #141428;
       --dark-card2: #1A1A35;
-      --dark-border: rgba(108, 99, 255, 0.2);
+      --dark-border: rgba(108,99,255,0.2);
       --text: #E8E8F0;
       --text-muted: #7A7A9A;
       --text-light: #B0B0CC;
-      --glass: rgba(255, 255, 255, 0.04);
-      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass: rgba(255,255,255,0.04);
+      --glass-border: rgba(255,255,255,0.08);
     }
 
-    html, body {
-      min-height: 100vh;
-      background: var(--dark);
-      font-family: 'Cairo', sans-serif;
-      color: var(--text);
-      line-height: 1.6;
-    }
+    html, body { min-height: 100vh; background: var(--dark); font-family: 'Cairo', sans-serif; color: var(--text); }
 
     body {
-      background: radial-gradient(ellipse at 20% 10%, rgba(108, 99, 255, 0.08) 0%, transparent 50%),
-                  radial-gradient(ellipse at 80% 80%, rgba(108, 99, 255, 0.05) 0%, transparent 50%),
-                  var(--dark);
+      background:
+        radial-gradient(ellipse at 20% 10%, rgba(108,99,255,0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(108,99,255,0.05) 0%, transparent 50%),
+        var(--dark);
     }
 
-    /* ══════════════════════ SCROLLBAR ══════════════════════ */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: var(--dark-card); }
     ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
 
-    /* ══════════════════════ HEADER ══════════════════════ */
+    /* HEADER */
     .header {
       background: linear-gradient(135deg, var(--dark-card) 0%, var(--dark-card2) 100%);
       border-bottom: 1px solid var(--dark-border);
-      padding: 20px 24px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      padding: 18px 20px;
+      position: sticky; top: 0; z-index: 100;
       backdrop-filter: blur(20px);
     }
-
-    .header-inner {
-      max-width: 700px;
-      margin: 0 auto;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
+    .header-inner { max-width: 680px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
     .logo {
-      width: 44px;
-      height: 44px;
+      width: 42px; height: 42px;
       background: linear-gradient(135deg, var(--primary), var(--primary-light));
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 0 20px var(--primary-glow);
-      flex-shrink: 0;
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; box-shadow: 0 0 18px var(--primary-glow); flex-shrink: 0;
     }
+    .header h1 { font-size: 17px; font-weight: 800; color: var(--text); line-height: 1.2; }
+    .header p  { font-size: 11px; color: var(--text-muted); }
 
-    .header-text h1 {
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--text);
-      line-height: 1.2;
+    /* CONTAINER */
+    .container { max-width: 680px; margin: 0 auto; padding: 22px 14px 110px; }
+
+    /* STATES */
+    .state-screen {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 60vh; gap: 16px; text-align: center; padding: 24px;
     }
+    .state-icon { font-size: 64px; }
+    .state-title { font-size: 22px; font-weight: 800; }
+    .state-msg { font-size: 14px; color: var(--text-muted); max-width: 300px; line-height: 1.7; }
 
-    .header-text p {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    /* ══════════════════════ CONTAINER ══════════════════════ */
-    .container {
-      max-width: 700px;
-      margin: 0 auto;
-      padding: 24px 16px 100px;
-    }
-
-    /* ══════════════════════ LOADING STATE ══════════════════════ */
-    #loading-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      gap: 20px;
-    }
-
-    .spinner {
-      width: 56px;
-      height: 56px;
-      border: 3px solid var(--dark-border);
-      border-top-color: var(--primary);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
+    /* LOADING */
+    #loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 18px; }
+    .spinner { width: 52px; height: 52px; border: 3px solid var(--dark-border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.75s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: var(--text-muted); font-size: 14px; }
 
-    .loading-text {
-      color: var(--text-muted);
-      font-size: 15px;
+    /* BUTTONS */
+    .action-btn {
+      background: var(--primary-glow); border: 1px solid var(--dark-border);
+      border-radius: 12px; padding: 11px 24px;
+      color: var(--primary-light); font-family: 'Cairo', sans-serif;
+      font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 8px;
     }
+    .action-btn:hover { background: var(--primary); color: #fff; }
 
-    /* ══════════════════════ ERROR STATE ══════════════════════ */
-    #error-screen {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      gap: 16px;
-      text-align: center;
-      padding: 24px;
-    }
-
-    .error-icon {
-      font-size: 60px;
-      animation: shake 0.5s ease;
-    }
-
-    @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-8px); }
-      75% { transform: translateX(8px); }
-    }
-
-    .error-title {
-      font-size: 22px;
-      font-weight: 800;
-      color: var(--danger);
-    }
-
-    .error-msg {
-      font-size: 14px;
-      color: var(--text-muted);
-      max-width: 320px;
-    }
-
-    /* ══════════════════════ SUCCESS STATE ══════════════════════ */
-    #success-screen {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      gap: 20px;
-      text-align: center;
-      padding: 24px;
-    }
-
-    .success-icon {
-      font-size: 70px;
-      animation: bounce 0.6s ease;
-    }
-
-    @keyframes bounce {
-      0% { transform: scale(0.3); opacity: 0; }
-      60% { transform: scale(1.1); }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .success-title {
-      font-size: 26px;
-      font-weight: 900;
-      color: var(--success);
-    }
-
-    .success-subtitle {
-      font-size: 14px;
-      color: var(--text-muted);
-    }
-
-    .response-code-card {
-      background: var(--dark-card2);
-      border: 2px solid var(--success);
-      border-radius: 20px;
-      padding: 24px 32px;
-      text-align: center;
-      box-shadow: 0 0 30px rgba(34, 197, 94, 0.2);
-      margin-top: 8px;
-    }
-
-    .response-code-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .response-code-value {
-      font-size: 38px;
-      font-weight: 900;
-      color: var(--success);
-      letter-spacing: 6px;
-      direction: ltr;
-      display: block;
-    }
-
-    .response-code-hint {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 10px;
-    }
-
-    /* ══════════════════════ MAIN CONTENT ══════════════════════ */
-    #main-screen {
-      display: none;
-    }
-
-    /* ══════════════════════ SESSION INFO CARD ══════════════════════ */
+    /* SESSION CARD */
     .session-card {
       background: linear-gradient(135deg, var(--dark-card) 0%, var(--dark-card2) 100%);
-      border: 1px solid var(--dark-border);
-      border-radius: 20px;
-      padding: 20px;
-      margin-bottom: 20px;
-      position: relative;
-      overflow: hidden;
+      border: 1px solid var(--dark-border); border-radius: 20px;
+      padding: 20px; margin-bottom: 18px; position: relative; overflow: hidden;
     }
-
     .session-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 100px;
-      height: 100px;
+      content:''; position: absolute; top:0; right:0;
+      width: 90px; height: 90px;
       background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
       pointer-events: none;
     }
-
-    .session-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--primary-glow);
-      border: 1px solid var(--dark-border);
-      border-radius: 99px;
-      padding: 4px 12px;
-      font-size: 11px;
-      color: var(--primary-light);
-      margin-bottom: 12px;
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--primary-glow); border: 1px solid var(--dark-border);
+      border-radius: 99px; padding: 3px 12px; font-size: 11px;
+      color: var(--primary-light); margin-bottom: 12px;
     }
+    .live-dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
 
-    .session-badge .dot {
-      width: 6px;
-      height: 6px;
-      background: var(--primary);
-      border-radius: 50%;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.8); }
-    }
-
-    .pharmacy-name {
-      font-size: 22px;
-      font-weight: 900;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    .session-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
+    .pharmacy-name { font-size: 21px; font-weight: 900; color: var(--text); margin-bottom: 8px; }
+    .session-meta  { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .meta-chip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--glass);
-      border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      padding: 6px 12px;
-      font-size: 12px;
-      color: var(--text-light);
+      display: flex; align-items: center; gap: 5px;
+      background: var(--glass); border: 1px solid var(--glass-border);
+      border-radius: 10px; padding: 5px 11px; font-size: 12px; color: var(--text-light);
     }
 
-    /* ══════════════════════ SECTION TITLE ══════════════════════ */
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 24px 0 14px;
+    /* PROGRESS */
+    .progress-box {
+      background: var(--dark-card); border: 1px solid var(--dark-border);
+      border-radius: 16px; padding: 14px 18px; margin-bottom: 18px;
     }
+    .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+    .progress-label span:last-child { color: var(--primary-light); font-weight: 700; }
+    .progress-track { height: 7px; background: var(--dark-card2); border-radius: 99px; overflow: hidden; }
+    .progress-fill  { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light)); border-radius: 99px; transition: width .35s ease; box-shadow: 0 0 8px var(--primary-glow); }
 
-    .section-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: var(--text);
-    }
+    /* SECTION */
+    .section-header { display: flex; align-items: center; gap: 8px; margin: 20px 0 12px; }
+    .section-title  { font-size: 15px; font-weight: 800; color: var(--text); }
+    .section-count  { background: var(--primary-glow); border: 1px solid var(--dark-border); color: var(--primary-light); font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 99px; }
 
-    .section-count {
-      background: var(--primary-glow);
-      border: 1px solid var(--dark-border);
-      color: var(--primary-light);
-      font-size: 12px;
-      font-weight: 700;
-      padding: 2px 10px;
-      border-radius: 99px;
-    }
-
-    /* ══════════════════════ ITEM CARD ══════════════════════ */
+    /* ITEM CARD */
     .item-card {
-      background: var(--dark-card);
-      border: 1px solid var(--dark-border);
-      border-radius: 16px;
-      margin-bottom: 12px;
-      overflow: hidden;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      background: var(--dark-card); border: 1px solid var(--dark-border);
+      border-radius: 16px; margin-bottom: 10px; overflow: hidden;
+      transition: border-color .2s;
     }
+    .item-card:hover   { border-color: var(--primary); }
+    .item-card.avail   { border-color: rgba(34,197,94,.45); }
+    .item-card.unavail { border-color: rgba(239,68,68,.35); }
 
-    .item-card:hover { border-color: var(--primary); }
-    .item-card.available { border-color: rgba(34, 197, 94, 0.4); }
-    .item-card.unavailable { border-color: rgba(239, 68, 68, 0.3); }
-
-    .item-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      cursor: pointer;
-      user-select: none;
+    .item-header { display: flex; align-items: center; gap: 10px; padding: 13px 14px; cursor: pointer; user-select: none; }
+    .item-num {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: var(--dark-card2); border: 1px solid var(--dark-border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--primary-light); flex-shrink: 0;
     }
-
-    .item-number {
-      width: 32px;
-      height: 32px;
-      border-radius: 10px;
-      background: var(--dark-card2);
-      border: 1px solid var(--dark-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--primary-light);
-      flex-shrink: 0;
-    }
-
     .item-info { flex: 1; min-width: 0; }
+    .item-name { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-sub  { font-size: 11px; color: var(--text-muted); }
 
-    .item-name {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .avail-btns { display: flex; gap: 6px; flex-shrink: 0; }
+    .tbtn {
+      border: none; border-radius: 9px; padding: 5px 12px;
+      font-family: 'Cairo', sans-serif; font-size: 11px; font-weight: 700;
+      cursor: pointer; transition: all .18s;
     }
+    .tbtn-yes { background: var(--success-light); color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+    .tbtn-yes.on { background: var(--success); color: #fff; box-shadow: 0 0 10px rgba(34,197,94,.4); }
+    .tbtn-no  { background: var(--danger-light);  color: var(--danger);  border: 1px solid rgba(239,68,68,.3); }
+    .tbtn-no.on  { background: var(--danger);  color: #fff; box-shadow: 0 0 10px rgba(239,68,68,.4); }
 
-    .item-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .avail-toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .toggle-btn {
-      border: none;
-      border-radius: 10px;
-      padding: 6px 14px;
-      font-family: 'Cairo', sans-serif;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .toggle-yes {
-      background: var(--success-light);
-      color: var(--success);
-      border: 1px solid rgba(34, 197, 94, 0.3);
-    }
-
-    .toggle-yes.active {
-      background: var(--success);
-      color: #fff;
-      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
-    }
-
-    .toggle-no {
-      background: var(--danger-light);
-      color: var(--danger);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-    }
-
-    .toggle-no.active {
-      background: var(--danger);
-      color: #fff;
-      box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
-    }
-
-    /* ══════════════════════ ITEM DETAILS (expandable) ══════════════════════ */
-    .item-details {
-      display: none;
-      padding: 0 16px 16px;
-      border-top: 1px solid var(--glass-border);
-      margin-top: 0;
-      animation: slideDown 0.2s ease;
-    }
-
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
+    /* ITEM DETAILS */
+    .item-details { display: none; padding: 0 14px 14px; border-top: 1px solid var(--glass-border); animation: slideDown .18s ease; }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
     .item-details.open { display: block; }
 
-    .fields-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 14px;
+    .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+    @media(max-width:460px){ .fields-grid{ grid-template-columns:1fr; } }
+
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    .flabel { font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: .5px; }
+    .finput {
+      background: var(--dark-card2); border: 1px solid var(--dark-border);
+      border-radius: 9px; padding: 9px 11px; color: var(--text);
+      font-family: 'Cairo', sans-serif; font-size: 13px; width: 100%;
+      transition: border-color .18s; direction: ltr;
     }
+    .finput:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+    .finput::placeholder { color: var(--text-muted); }
+    .finput-rtl { direction: rtl; }
+    .finput-notes { resize: none; height: 65px; direction: rtl; }
+    .full { grid-column: 1/-1; }
 
-    @media (max-width: 480px) {
-      .fields-grid { grid-template-columns: 1fr; }
+    /* SUCCESS CODE CARD */
+    .code-card {
+      background: var(--dark-card2); border: 2px solid var(--success);
+      border-radius: 20px; padding: 22px 28px; text-align: center;
+      box-shadow: 0 0 28px rgba(34,197,94,.2); margin-top: 8px;
     }
+    .code-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+    .code-value { font-size: 36px; font-weight: 900; color: var(--success); letter-spacing: 6px; direction: ltr; display: block; }
+    .code-hint  { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
 
-    .field-group { display: flex; flex-direction: column; gap: 6px; }
-
-    .field-label {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .field-input {
-      background: var(--dark-card2);
-      border: 1px solid var(--dark-border);
-      border-radius: 10px;
-      padding: 10px 12px;
-      color: var(--text);
-      font-family: 'Cairo', sans-serif;
-      font-size: 14px;
-      width: 100%;
-      transition: border-color 0.2s;
-      direction: ltr;
-    }
-
-    .field-input:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-glow);
-    }
-
-    .field-input::placeholder { color: var(--text-muted); }
-
-    .notes-input {
-      resize: none;
-      height: 70px;
-      direction: rtl;
-    }
-
-    .alt-input { direction: rtl; }
-
-    .full-col { grid-column: 1 / -1; }
-
-    /* ══════════════════════ PROGRESS BAR ══════════════════════ */
-    .progress-bar-container {
-      background: var(--dark-card);
-      border: 1px solid var(--dark-border);
-      border-radius: 16px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
-    }
-
-    .progress-label {
-      display: flex;
-      justify-content: space-between;
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-
-    .progress-label span:last-child { color: var(--primary-light); font-weight: 700; }
-
-    .progress-track {
-      height: 8px;
-      background: var(--dark-card2);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--primary), var(--primary-light));
-      border-radius: 99px;
-      transition: width 0.4s ease;
-      box-shadow: 0 0 10px var(--primary-glow);
-    }
-
-    /* ══════════════════════ SUBMIT BUTTON ══════════════════════ */
-    .submit-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--dark-card);
-      border-top: 1px solid var(--dark-border);
-      padding: 16px 20px;
-      backdrop-filter: blur(20px);
-      z-index: 99;
-    }
-
-    .submit-inner {
-      max-width: 700px;
-      margin: 0 auto;
-    }
-
-    .submit-btn {
-      width: 100%;
-      padding: 16px;
-      background: linear-gradient(135deg, var(--primary), var(--primary-light));
-      border: none;
-      border-radius: 14px;
-      color: #fff;
-      font-family: 'Cairo', sans-serif;
-      font-size: 16px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 20px var(--primary-glow);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-
-    .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px var(--primary-glow); }
-    .submit-btn:active { transform: translateY(0); }
-    .submit-btn:disabled {
-      background: var(--dark-card2);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-
-    .submit-btn .btn-spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      display: none;
-    }
-
-    .submit-btn.loading .btn-text { display: none; }
-    .submit-btn.loading .btn-spinner { display: block; }
-
-    /* ══════════════════════ COPY BTN ══════════════════════ */
     .copy-btn {
-      background: var(--dark-card2);
-      border: 1px solid var(--dark-border);
-      border-radius: 12px;
-      padding: 12px 20px;
-      color: var(--text);
-      font-family: 'Cairo', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      justify-content: center;
-      margin-top: 12px;
+      background: var(--dark-card2); border: 1px solid var(--dark-border);
+      border-radius: 12px; padding: 11px 20px; color: var(--text);
+      font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+      display: flex; align-items: center; gap: 7px;
+      width: 100%; justify-content: center; margin-top: 10px;
     }
-
     .copy-btn:hover { border-color: var(--primary); color: var(--primary-light); }
 
-    /* ══════════════════════ NO CODE STATE ══════════════════════ */
-    #nocode-screen {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      gap: 16px;
-      text-align: center;
-      padding: 24px;
+    /* SUBMIT BAR */
+    .submit-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--dark-card); border-top: 1px solid var(--dark-border);
+      padding: 14px 18px; backdrop-filter: blur(20px); z-index: 99;
     }
-
-    /* ══════════════════════ ALREADY RESPONDED ══════════════════════ */
-    #responded-screen {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 60vh;
-      gap: 16px;
-      text-align: center;
-      padding: 24px;
+    .submit-inner { max-width: 680px; margin: 0 auto; }
+    .submit-btn {
+      width: 100%; padding: 15px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border: none; border-radius: 13px; color: #fff;
+      font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 800;
+      cursor: pointer; transition: all .2s; box-shadow: 0 4px 18px var(--primary-glow);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
-
-    .renew-btn {
-      background: var(--primary-glow);
-      border: 1px solid var(--dark-border);
-      border-radius: 12px;
-      padding: 12px 28px;
-      color: var(--primary-light);
-      font-family: 'Cairo', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-top: 8px;
-    }
-
-    .renew-btn:hover { background: var(--primary); color: #fff; }
-
-    /* ══════════════════════ UTILITY ══════════════════════ */
-    .text-muted { color: var(--text-muted); font-size: 14px; }
-    .mt-8 { margin-top: 8px; }
-    .mt-16 { margin-top: 16px; }
+    .submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px var(--primary-glow); }
+    .submit-btn:disabled { background: var(--dark-card2); color: var(--text-muted); cursor: not-allowed; box-shadow: none; }
+    .btn-spinner { width: 17px; height: 17px; border: 2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:none; }
+    .submit-btn.loading .btn-text { display: none; }
+    .submit-btn.loading .btn-spinner { display: block; }
   </style>
 </head>
 <body>
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="header-inner">
-      <div class="logo">💊</div>
-      <div class="header-text">
-        <h1>صيدلي برو</h1>
-        <p>بوابة ردود المندوبين</p>
-      </div>
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">💊</div>
+    <div>
+      <h1>صيدلي برو</h1>
+      <p>بوابة ردود المندوبين</p>
     </div>
   </div>
+</div>
 
-  <!-- MAIN CONTAINER -->
-  <div class="container">
+<div class="container">
 
-    <!-- LOADING -->
-    <div id="loading-screen">
-      <div class="spinner"></div>
-      <p class="loading-text">جاري تحميل البيانات...</p>
-    </div>
-
-    <!-- NO CODE -->
-    <div id="nocode-screen">
-      <div style="font-size:60px">🔗</div>
-      <div class="error-title" style="color:var(--warning)">رابط غير صحيح</div>
-      <p class="text-muted">هذا الرابط لا يحتوي على كود جلسة صحيح.<br/>يرجى التواصل مع الصيدلية للحصول على الرابط الصحيح.</p>
-    </div>
-
-    <!-- ERROR -->
-    <div id="error-screen">
-      <div class="error-icon">❌</div>
-      <div class="error-title">حدث خطأ</div>
-      <p class="error-msg" id="error-message">تعذّر تحميل البيانات. تحقق من الإنترنت وأعد المحاولة.</p>
-      <button class="renew-btn" onclick="location.reload()">🔄 إعادة المحاولة</button>
-    </div>
-
-    <!-- ALREADY RESPONDED -->
-    <div id="responded-screen">
-      <div style="font-size:60px">✅</div>
-      <div class="success-title">تم الرد مسبقاً</div>
-      <p class="text-muted">لقد قمت بالرد على هذا الطلب من قبل.<br/>إذا أردت تجديد الجلسة، تواصل مع الصيدلية.</p>
-      <button class="renew-btn" id="renew-btn">🔄 طلب تجديد الجلسة</button>
-    </div>
-
-    <!-- SUCCESS -->
-    <div id="success-screen">
-      <div class="success-icon">🎉</div>
-      <div class="success-title">شكراً! تم إرسال ردك</div>
-      <p class="success-subtitle" id="pharmacy-name-success">استلمت الصيدلية ردك بنجاح</p>
-      <div class="response-code-card">
-        <div class="response-code-label">كود الاستلام (أرسله للصيدلية)</div>
-        <span class="response-code-value" id="response-code-display">--------</span>
-        <div class="response-code-hint">📋 احفظ هذا الكود - الصيدلية ستطلبه لاستلام ردك</div>
-      </div>
-      <button class="copy-btn" id="copy-code-btn">
-        <span>📋</span>
-        <span>نسخ الكود</span>
-      </button>
-    </div>
-
-    <!-- MAIN FORM -->
-    <div id="main-screen">
-
-      <!-- Session Info -->
-      <div class="session-card">
-        <div class="session-badge">
-          <div class="dot"></div>
-          <span>جلسة نشطة</span>
-        </div>
-        <div class="pharmacy-name" id="pharmacy-name">...</div>
-        <div class="session-meta">
-          <div class="meta-chip">👤 <span id="rep-name">...</span></div>
-          <div class="meta-chip">💰 <span id="currency-display">ج.م</span></div>
-          <div class="meta-chip">📦 <span id="items-count">0</span> صنف</div>
-        </div>
-      </div>
-
-      <!-- Progress Bar -->
-      <div class="progress-bar-container">
-        <div class="progress-label">
-          <span>تقدم الرد</span>
-          <span id="progress-text">0 / 0</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-        </div>
-      </div>
-
-      <!-- Items Section Title -->
-      <div class="section-header">
-        <span>📋</span>
-        <span class="section-title">قائمة الأصناف المطلوبة</span>
-        <span class="section-count" id="total-count">0</span>
-      </div>
-
-      <!-- Items List -->
-      <div id="items-list"></div>
-
-    </div><!-- /main-screen -->
-  </div><!-- /container -->
-
-  <!-- SUBMIT BAR -->
-  <div class="submit-bar" id="submit-bar" style="display:none">
-    <div class="submit-inner">
-      <button class="submit-btn" id="submit-btn" onclick="submitResponse()">
-        <div class="btn-spinner"></div>
-        <span class="btn-text">✅ إرسال الردود</span>
-      </button>
-    </div>
+  <!-- LOADING -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+    <p class="loading-text">جاري تحميل بيانات الجلسة...</p>
   </div>
 
-  <script>
-    // ═══════════════════════════════════════════════════════════
-    //  CONFIG  –  نفس بيانات Supabase المستخدمة في التطبيق
-    // ═══════════════════════════════════════════════════════════
-    const SUPABASE_URL  = 'https://kmrszdvsdqfaaksqhnqf.supabase.co/rest/v1';
-    const SUPABASE_BASE = 'https://kmrszdvsdqfaaksqhnqf.supabase.co';
-    const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcnN6ZHZzZHFmYWFrc3FobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTYwNTIsImV4cCI6MjA5MzA3MjA1Mn0.ac8p574OhOG9OPuHzCDOxeHNdEiUkFEtFG_l535Pl3A';
+  <!-- NO CODE -->
+  <div class="state-screen" id="nocode-screen">
+    <div class="state-icon">🔗</div>
+    <div class="state-title" style="color:var(--warning)">رابط غير صحيح</div>
+    <p class="state-msg">هذا الرابط لا يحتوي على كود جلسة صحيح.<br/>يرجى التواصل مع الصيدلية للحصول على الرابط الصحيح.</p>
+  </div>
 
-    const HEADERS = {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
+  <!-- ERROR -->
+  <div class="state-screen" id="error-screen">
+    <div class="state-icon">❌</div>
+    <div class="state-title" style="color:var(--danger)">حدث خطأ</div>
+    <p class="state-msg" id="error-message">تعذّر تحميل البيانات.</p>
+    <button class="action-btn" onclick="location.reload()">🔄 إعادة المحاولة</button>
+  </div>
+
+  <!-- EXPIRED -->
+  <div class="state-screen" id="expired-screen">
+    <div class="state-icon">⏰</div>
+    <div class="state-title" style="color:var(--warning)">انتهت الصلاحية</div>
+    <p class="state-msg">انتهت صلاحية هذا الطلب. تواصل مع الصيدلية لإعادة الإرسال.</p>
+  </div>
+
+  <!-- ALREADY RESPONDED -->
+  <div class="state-screen" id="responded-screen">
+    <div class="state-icon">✅</div>
+    <div class="state-title" style="color:var(--success)">تم الرد مسبقاً</div>
+    <p class="state-msg">لقد قمت بالرد على هذا الطلب من قبل.<br/>إذا أردت تجديد الجلسة، تواصل مع الصيدلية.</p>
+    <button class="action-btn" id="renew-btn">🔄 طلب تجديد الجلسة</button>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="state-screen" id="success-screen">
+    <div class="state-icon" style="animation:bounce .6s ease">🎉</div>
+    <div class="state-title" style="color:var(--success)">شكراً! تم إرسال ردك</div>
+    <p class="state-msg" id="pharmacy-success">استلمت الصيدلية ردك بنجاح</p>
+    <div class="code-card">
+      <div class="code-label">كود الاستلام (أرسله للصيدلية)</div>
+      <span class="code-value" id="code-display">--------</span>
+      <div class="code-hint">📋 احفظ هذا الكود — الصيدلية ستطلبه لاستلام ردك</div>
+    </div>
+    <button class="copy-btn" id="copy-btn"><span>📋</span><span>نسخ الكود</span></button>
+  </div>
+
+  <!-- MAIN FORM -->
+  <div id="main-screen" style="display:none">
+
+    <div class="session-card">
+      <div class="live-badge"><div class="live-dot"></div><span>جلسة نشطة</span></div>
+      <div class="pharmacy-name" id="pharm-name">...</div>
+      <div class="session-meta">
+        <div class="meta-chip">👤 <span id="rep-name">...</span></div>
+        <div class="meta-chip">💰 <span id="currency">ج.م</span></div>
+        <div class="meta-chip">📦 <span id="items-count">0</span> صنف</div>
+      </div>
+    </div>
+
+    <div class="progress-box">
+      <div class="progress-label"><span>تقدم الرد</span><span id="prog-text">0 / 0</span></div>
+      <div class="progress-track"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="section-header">
+      <span>📋</span>
+      <span class="section-title">قائمة الأصناف المطلوبة</span>
+      <span class="section-count" id="total-count">0</span>
+    </div>
+
+    <div id="items-list"></div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- SUBMIT BAR -->
+<div class="submit-bar" id="submit-bar" style="display:none">
+  <div class="submit-inner">
+    <button class="submit-btn" id="submit-btn" onclick="submitResponse()">
+      <div class="btn-spinner"></div>
+      <span class="btn-text">✅ إرسال الردود</span>
+    </button>
+  </div>
+</div>
+
+<style>
+  @keyframes bounce {
+    0%{transform:scale(.3);opacity:0} 60%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1}
+  }
+</style>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  كل صيدلية تستخدم Supabase الخاص بها.
+//  بيانات الاتصال تأتي من الـ ?cfg= في الرابط (base64Url).
+//  لو مفيش cfg — يستخدم Fallback (للصيدلية المطور/التجربة).
+// ═══════════════════════════════════════════════════════════════
+
+// ── قراءة config من الرابط ──────────────────────────────────
+const _params = new URLSearchParams(window.location.search);
+const SESSION_CODE = (_params.get('code') || '').trim().toUpperCase();
+const CFG_B64      = _params.get('cfg') || '';
+
+let SUPABASE_URL = 'https://kmrszdvsdqfaaksqhnqf.supabase.co/rest/v1'; // fallback
+let SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcnN6ZHZzZHFmYWFrc3FobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTYwNTIsImV4cCI6MjA5MzA3MjA1Mn0.ac8p574OhOG9OPuHzCDOxeHNdEiUkFEtFG_l535Pl3A'; // fallback
+
+if (CFG_B64) {
+  try {
+    // base64Url → JSON → {u: url, k: key}
+    const decoded = atob(CFG_B64.replace(/-/g, '+').replace(/_/g, '/'));
+    const cfg = JSON.parse(decoded);
+    if (cfg.u) SUPABASE_URL = cfg.u;
+    if (cfg.k) SUPABASE_KEY = cfg.k;
+  } catch(e) {
+    console.warn('⚠️ فشل فك تشفير الـ cfg — سيتم استخدام الـ fallback', e);
+  }
+}
+
+const SUPABASE_BASE = SUPABASE_URL.replace('/rest/v1', '');
+const HEADERS = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+};
+
+// ── State ────────────────────────────────────────────────────
+let sessionData  = null;
+let sessionItems = [];
+let responses    = {}; // { itemId: {...} }
+
+// ── Helpers ──────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function show(id) { $(id).style.display = 'flex'; }
+function hide(id) { $(id).style.display = 'none'; }
+function hideAll() {
+  ['loading-screen','nocode-screen','error-screen','expired-screen',
+   'responded-screen','success-screen','main-screen','submit-bar'].forEach(hide);
+}
+function generateCode(n=8) {
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:n},()=>c[Math.floor(Math.random()*c.length)]).join('');
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch(SUPABASE_URL + path, { headers: HEADERS });
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch(SUPABASE_URL + path, { method:'POST', headers:HEADERS, body:JSON.stringify(body) });
+  if (!r.ok) throw new Error(`POST ${path} → ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function apiPatch(path, body) {
+  await fetch(SUPABASE_URL + path, { method:'PATCH', headers:HEADERS, body:JSON.stringify(body) });
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+async function init() {
+  if (!SESSION_CODE) { hideAll(); show('nocode-screen'); return; }
+
+  try {
+    const sessions = await apiGet(
+      `/rep_sessions?session_code=eq.${encodeURIComponent(SESSION_CODE)}&select=*`
+    );
+
+    if (!sessions || sessions.length === 0) {
+      hideAll();
+      $('error-message').textContent = `لم يتم العثور على الجلسة (${SESSION_CODE}). تأكد من الرابط.`;
+      show('error-screen'); return;
+    }
+
+    sessionData = sessions[0];
+
+    // منتهية؟
+    if (sessionData.status !== 'responded' && new Date(sessionData.expires_at) < new Date()) {
+      hideAll(); show('expired-screen'); return;
+    }
+
+    // تم الرد مسبقاً؟
+    if (sessionData.status === 'responded') {
+      hideAll();
+      $('renew-btn').onclick = () => requestRenewal(SESSION_CODE);
+      show('responded-screen'); return;
+    }
+
+    // جلب الأصناف
+    sessionItems = await apiGet(
+      `/session_items?session_id=eq.${sessionData.id}&is_private=eq.0&select=*`
+    );
+
+    renderUI();
+
+  } catch(err) {
+    console.error(err);
+    hideAll();
+    $('error-message').textContent = 'خطأ في الاتصال: ' + err.message;
+    show('error-screen');
+  }
+}
+
+// ── RENDER ───────────────────────────────────────────────────
+function renderUI() {
+  hideAll();
+  $('pharm-name').textContent   = sessionData.pharmacy_name || 'الصيدلية';
+  $('rep-name').textContent     = sessionData.rep_name || '';
+  $('currency').textContent     = sessionData.currency || 'ج.م';
+  $('items-count').textContent  = sessionItems.length;
+  $('total-count').textContent  = sessionItems.length;
+  $('pharmacy-success').textContent = `استلمت ${sessionData.pharmacy_name || 'الصيدلية'} ردك بنجاح`;
+
+  const list = $('items-list');
+  list.innerHTML = '';
+  sessionItems.forEach((item, idx) => {
+    responses[item.id] = { is_available:null, quantity:item.quantity||1, price:'', discount:'', rep_notes:'', rep_alternative:'' };
+    list.appendChild(buildCard(item, idx+1));
+  });
+
+  updateProgress();
+  $('main-screen').style.display  = 'block';
+  $('submit-bar').style.display   = 'block';
+}
+
+// ── BUILD CARD ───────────────────────────────────────────────
+function buildCard(item, num) {
+  const cur = sessionData.currency || 'ج.م';
+  const el  = document.createElement('div');
+  el.className = 'item-card';
+  el.id = `card-${item.id}`;
+  el.innerHTML = `
+    <div class="item-header" onclick="toggleDet('${item.id}')">
+      <div class="item-num">${num}</div>
+      <div class="item-info">
+        <div class="item-name">${esc(item.drug_name||item.name||'صنف')}</div>
+        <div class="item-sub">${esc(item.company||'')} · ${item.quantity||1} علبة</div>
+      </div>
+      <div class="avail-btns" onclick="event.stopPropagation()">
+        <button class="tbtn tbtn-yes" id="yes-${item.id}" onclick="setAvail('${item.id}',true)">✓ متوفر</button>
+        <button class="tbtn tbtn-no"  id="no-${item.id}"  onclick="setAvail('${item.id}',false)">✗ ناقص</button>
+      </div>
+    </div>
+    <div class="item-details" id="det-${item.id}">
+      <div class="fields-grid">
+        <div class="fg">
+          <span class="flabel">الكمية المتوفرة</span>
+          <input class="finput" type="number" min="0" placeholder="${item.quantity||1}"
+            oninput="upd('${item.id}','quantity',this.value)">
+        </div>
+        <div class="fg">
+          <span class="flabel">السعر (${cur})</span>
+          <input class="finput" type="number" min="0" step="0.01" placeholder="0.00"
+            oninput="upd('${item.id}','price',this.value)">
+        </div>
+        <div class="fg">
+          <span class="flabel">الخصم (%)</span>
+          <input class="finput" type="number" min="0" max="100" placeholder="0"
+            oninput="upd('${item.id}','discount',this.value)">
+        </div>
+        <div class="fg">
+          <span class="flabel">بديل مقترح</span>
+          <input class="finput finput-rtl" type="text" placeholder="اسم البديل..."
+            oninput="upd('${item.id}','rep_alternative',this.value)">
+        </div>
+        <div class="fg full">
+          <span class="flabel">ملاحظات</span>
+          <textarea class="finput finput-notes" placeholder="أي ملاحظة إضافية..."
+            oninput="upd('${item.id}','rep_notes',this.value)"></textarea>
+        </div>
+      </div>
+    </div>`;
+  return el;
+}
+
+function toggleDet(id) { $(`det-${id}`).classList.toggle('open'); }
+
+function setAvail(id, val) {
+  responses[id].is_available = val;
+  $(`yes-${id}`).classList.toggle('on', val);
+  $(`no-${id}`).classList.toggle('on', !val);
+  const card = $(`card-${id}`);
+  card.className = `item-card ${val ? 'avail' : 'unavail'}`;
+  if (val) $(`det-${id}`).classList.add('open');
+  else     $(`det-${id}`).classList.remove('open');
+  updateProgress();
+}
+
+function upd(id, field, val) { responses[id][field] = val; }
+
+function updateProgress() {
+  const total    = sessionItems.length;
+  const answered = Object.values(responses).filter(r => r.is_available !== null).length;
+  const pct      = total > 0 ? Math.round(answered/total*100) : 0;
+  $('prog-text').textContent = `${answered} / ${total}`;
+  $('prog-fill').style.width = pct + '%';
+  $('submit-btn').disabled   = answered < total;
+}
+
+// ── SUBMIT ───────────────────────────────────────────────────
+async function submitResponse() {
+  const unanswered = sessionItems.filter(i => responses[i.id]?.is_available === null);
+  if (unanswered.length) { alert(`يرجى تحديد توفر ${unanswered.length} صنف لم يُرد عليه`); return; }
+
+  const btn = $('submit-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+
+  try {
+    // 1. تحديث كل صنف
+    for (const item of sessionItems) {
+      const r = responses[item.id];
+      await apiPatch(
+        `/session_items?id=eq.${item.id}&session_id=eq.${sessionData.id}`,
+        {
+          is_available:    r.is_available ? 1 : 0,
+          quantity:        r.quantity  ? Number(r.quantity)  : 0,
+          price:           r.price     ? Number(r.price)     : 0,
+          discount:        r.discount  ? Number(r.discount)  : 0,
+          rep_notes:       r.rep_notes || '',
+          rep_alternative: r.rep_alternative || ''
+        }
+      );
+    }
+
+    // 2. تحديث حالة الجلسة
+    await apiPatch(`/rep_sessions?id=eq.${sessionData.id}`, {
+      status: 'responded',
+      responded_at: new Date().toISOString()
+    });
+
+    // 3. توليد كود الاستلام وحفظه
+    const responseCode = generateCode(8);
+    await apiPost('/response_codes', { response_code: responseCode, session_id: sessionData.id });
+
+    // 4. عرض شاشة النجاح
+    hideAll();
+    $('code-display').textContent = responseCode;
+    show('success-screen');
+
+    $('copy-btn').onclick = () => {
+      navigator.clipboard.writeText(responseCode)
+        .then(() => { $('copy-btn').innerHTML='<span>✅</span><span>تم النسخ!</span>'; setTimeout(()=>{ $('copy-btn').innerHTML='<span>📋</span><span>نسخ الكود</span>'; },2000); })
+        .catch(() => alert('كود الاستلام: ' + responseCode));
     };
 
-    // ─── State ───────────────────────────────────────────────
-    let sessionData   = null;
-    let sessionItems  = [];
-    let itemResponses = {}; // { itemId: { is_available, quantity, price, discount, rep_notes, rep_alternative } }
+  } catch(err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    alert('خطأ أثناء الإرسال:\n' + err.message + '\n\nتحقق من الإنترنت وأعد المحاولة.');
+  }
+}
 
-    // ─── Helpers ─────────────────────────────────────────────
-    const $ = id => document.getElementById(id);
+// ── RENEWAL ──────────────────────────────────────────────────
+async function requestRenewal(code) {
+  const btn = $('renew-btn');
+  btn.disabled = true; btn.textContent = 'جاري الإرسال...';
+  try {
+    await fetch(`${SUPABASE_BASE}/functions/v1/submit-response`, {
+      method:'POST', headers:{...HEADERS,'Content-Type':'application/json'},
+      body: JSON.stringify({ action:'renew', session_code:code })
+    });
+    btn.textContent = '✅ تم إرسال طلب التجديد';
+  } catch(e) {
+    btn.textContent = '❌ فشل — حاول مجدداً'; btn.disabled = false;
+  }
+}
 
-    function show(id)  { $(id).style.display = 'flex'; }
-    function hide(id)  { $(id).style.display = 'none'; }
-    function showBlock(id) { $(id).style.display = 'block'; }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-    function hideAll() {
-      ['loading-screen','error-screen','nocode-screen','responded-screen','success-screen','main-screen']
-        .forEach(hide);
-      hide('submit-bar');
-    }
-
-    function generateCode(len = 8) {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      return Array.from({length: len}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    }
-
-    // ─── API Calls ────────────────────────────────────────────
-    async function apiFetch(endpoint, options = {}) {
-      const res = await fetch(SUPABASE_URL + endpoint, {
-        headers: HEADERS,
-        ...options
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
-      }
-      return res.json();
-    }
-
-    async function apiPost(endpoint, body) {
-      return apiFetch(endpoint, { method: 'POST', body: JSON.stringify(body) });
-    }
-
-    async function apiPatch(endpoint, body) {
-      const res = await fetch(SUPABASE_URL + endpoint, {
-        method: 'PATCH',
-        headers: HEADERS,
-        body: JSON.stringify(body)
-      });
-      return res;
-    }
-
-    // ─── INIT ─────────────────────────────────────────────────
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const code   = (params.get('code') || '').trim().toUpperCase();
-
-      if (!code) {
-        hideAll();
-        show('nocode-screen');
-        return;
-      }
-
-      try {
-        // 1. جلب بيانات الجلسة
-        const sessions = await apiFetch(
-          `/rep_sessions?session_code=eq.${encodeURIComponent(code)}&select=*`
-        );
-
-        if (!sessions || sessions.length === 0) {
-          hideAll();
-          $('error-message').textContent = `لم يتم العثور على الجلسة بالكود: ${code}. تأكد من الرابط أو تواصل مع الصيدلية.`;
-          show('error-screen');
-          return;
-        }
-
-        sessionData = sessions[0];
-
-        // 2. تحقق من الصلاحية
-        const expiresAt = new Date(sessionData.expires_at);
-        if (expiresAt < new Date() && sessionData.status !== 'responded') {
-          hideAll();
-          $('error-message').textContent = 'انتهت صلاحية هذا الطلب. يرجى التواصل مع الصيدلية لتجديده.';
-          show('error-screen');
-          return;
-        }
-
-        // 3. تحقق إذا تم الرد مسبقاً
-        if (sessionData.status === 'responded') {
-          hideAll();
-          show('responded-screen');
-          $('renew-btn').onclick = () => requestRenewal(code);
-          return;
-        }
-
-        // 4. جلب الأصناف
-        const items = await apiFetch(
-          `/session_items?session_id=eq.${sessionData.id}&is_private=eq.0&select=*`
-        );
-
-        sessionItems = items || [];
-
-        // 5. عرض الواجهة
-        renderUI();
-
-      } catch (err) {
-        console.error(err);
-        hideAll();
-        $('error-message').textContent = 'حدث خطأ في الاتصال: ' + err.message;
-        show('error-screen');
-      }
-    }
-
-    // ─── RENDER UI ───────────────────────────────────────────
-    function renderUI() {
-      hideAll();
-
-      $('pharmacy-name').textContent       = sessionData.pharmacy_name || 'الصيدلية';
-      $('pharmacy-name-success').textContent = `استلمت ${sessionData.pharmacy_name || 'الصيدلية'} ردك بنجاح`;
-      $('rep-name').textContent            = sessionData.rep_name || '';
-      $('currency-display').textContent    = sessionData.currency || 'ج.م';
-      $('items-count').textContent         = sessionItems.length;
-      $('total-count').textContent         = sessionItems.length;
-
-      // Render items
-      const list = $('items-list');
-      list.innerHTML = '';
-
-      sessionItems.forEach((item, idx) => {
-        itemResponses[item.id] = {
-          is_available: null,
-          quantity: item.quantity || 1,
-          price: '',
-          discount: '',
-          rep_notes: '',
-          rep_alternative: ''
-        };
-
-        list.appendChild(buildItemCard(item, idx + 1));
-      });
-
-      updateProgress();
-      showBlock('main-screen');
-      showBlock('submit-bar');
-    }
-
-    // ─── BUILD ITEM CARD ─────────────────────────────────────
-    function buildItemCard(item, num) {
-      const card = document.createElement('div');
-      card.className = 'item-card';
-      card.id = `card-${item.id}`;
-
-      const currency = sessionData.currency || 'ج.م';
-
-      card.innerHTML = `
-        <div class="item-header" onclick="toggleDetails('${item.id}')">
-          <div class="item-number">${num}</div>
-          <div class="item-info">
-            <div class="item-name">${escHtml(item.drug_name || item.name || 'صنف')}</div>
-            <div class="item-sub">${escHtml(item.company || '')} · ${item.quantity || 1} علبة</div>
-          </div>
-          <div class="avail-toggle" onclick="event.stopPropagation()">
-            <button class="toggle-btn toggle-yes" id="yes-${item.id}"
-              onclick="setAvailability('${item.id}', true)">✓ متوفر</button>
-            <button class="toggle-btn toggle-no" id="no-${item.id}"
-              onclick="setAvailability('${item.id}', false)">✗ ناقص</button>
-          </div>
-        </div>
-        <div class="item-details" id="details-${item.id}">
-          <div class="fields-grid">
-            <div class="field-group">
-              <label class="field-label">الكمية المتوفرة</label>
-              <input class="field-input" type="number" min="0" placeholder="${item.quantity || 1}"
-                id="qty-${item.id}"
-                oninput="updateField('${item.id}', 'quantity', this.value)" />
-            </div>
-            <div class="field-group">
-              <label class="field-label">السعر (${currency})</label>
-              <input class="field-input" type="number" min="0" step="0.01" placeholder="0.00"
-                id="price-${item.id}"
-                oninput="updateField('${item.id}', 'price', this.value)" />
-            </div>
-            <div class="field-group">
-              <label class="field-label">الخصم (%)</label>
-              <input class="field-input" type="number" min="0" max="100" placeholder="0"
-                id="disc-${item.id}"
-                oninput="updateField('${item.id}', 'discount', this.value)" />
-            </div>
-            <div class="field-group">
-              <label class="field-label">بديل مقترح</label>
-              <input class="field-input alt-input" type="text" placeholder="اسم البديل..."
-                id="alt-${item.id}"
-                oninput="updateField('${item.id}', 'rep_alternative', this.value)" />
-            </div>
-            <div class="field-group full-col">
-              <label class="field-label">ملاحظات</label>
-              <textarea class="field-input notes-input" placeholder="أي ملاحظة إضافية..."
-                id="notes-${item.id}"
-                oninput="updateField('${item.id}', 'rep_notes', this.value)"></textarea>
-            </div>
-          </div>
-        </div>
-      `;
-
-      return card;
-    }
-
-    // ─── TOGGLE DETAILS ──────────────────────────────────────
-    function toggleDetails(itemId) {
-      const det = $(`details-${itemId}`);
-      det.classList.toggle('open');
-    }
-
-    // ─── SET AVAILABILITY ────────────────────────────────────
-    function setAvailability(itemId, available) {
-      itemResponses[itemId].is_available = available;
-
-      const yesBtn = $(`yes-${itemId}`);
-      const noBtn  = $(`no-${itemId}`);
-      const card   = $(`card-${itemId}`);
-
-      yesBtn.classList.toggle('active', available);
-      noBtn.classList.toggle('active', !available);
-      card.className = `item-card ${available ? 'available' : 'unavailable'}`;
-
-      // Auto-open details when marked as available
-      if (available) {
-        $(`details-${itemId}`).classList.add('open');
-      } else {
-        $(`details-${itemId}`).classList.remove('open');
-      }
-
-      updateProgress();
-    }
-
-    // ─── UPDATE FIELD ────────────────────────────────────────
-    function updateField(itemId, field, value) {
-      itemResponses[itemId][field] = value;
-    }
-
-    // ─── PROGRESS ────────────────────────────────────────────
-    function updateProgress() {
-      const total    = sessionItems.length;
-      const answered = Object.values(itemResponses).filter(r => r.is_available !== null).length;
-      const pct      = total > 0 ? Math.round((answered / total) * 100) : 0;
-
-      $('progress-text').textContent = `${answered} / ${total}`;
-      $('progress-fill').style.width = pct + '%';
-
-      const btn = $('submit-btn');
-      btn.disabled = answered < total;
-    }
-
-    // ─── SUBMIT ──────────────────────────────────────────────
-    async function submitResponse() {
-      const unanswered = sessionItems.filter(
-        item => itemResponses[item.id]?.is_available === null
-      );
-
-      if (unanswered.length > 0) {
-        alert(`يرجى تحديد توفر جميع الأصناف (${unanswered.length} صنف لم يتم الرد عليه)`);
-        return;
-      }
-
-      const btn = $('submit-btn');
-      btn.disabled = true;
-      btn.classList.add('loading');
-
-      try {
-        // 1. تحديث كل صنف
-        for (const item of sessionItems) {
-          const resp = itemResponses[item.id];
-          await apiPatch(
-            `/session_items?id=eq.${item.id}&session_id=eq.${sessionData.id}`,
-            {
-              is_available:    resp.is_available ? 1 : 0,
-              quantity:        resp.quantity ? Number(resp.quantity) : 0,
-              price:           resp.price ? Number(resp.price) : 0,
-              discount:        resp.discount ? Number(resp.discount) : 0,
-              rep_notes:       resp.rep_notes || '',
-              rep_alternative: resp.rep_alternative || ''
-            }
-          );
-        }
-
-        // 2. تحديث حالة الجلسة → responded
-        await apiPatch(
-          `/rep_sessions?id=eq.${sessionData.id}`,
-          {
-            status: 'responded',
-            responded_at: new Date().toISOString()
-          }
-        );
-
-        // 3. توليد كود الاستلام وحفظه
-        const responseCode = generateCode(8);
-        await apiPost('/response_codes', {
-          response_code: responseCode,
-          session_id:    sessionData.id
-        });
-
-        // 4. عرض شاشة النجاح
-        hideAll();
-        $('response-code-display').textContent = responseCode;
-        show('success-screen');
-
-        // 5. نسخ الكود
-        $('copy-code-btn').onclick = () => {
-          navigator.clipboard.writeText(responseCode).then(() => {
-            $('copy-code-btn').innerHTML = '<span>✅</span><span>تم النسخ!</span>';
-            setTimeout(() => {
-              $('copy-code-btn').innerHTML = '<span>📋</span><span>نسخ الكود</span>';
-            }, 2000);
-          }).catch(() => {
-            alert('كود الاستلام: ' + responseCode);
-          });
-        };
-
-      } catch (err) {
-        console.error(err);
-        btn.disabled = false;
-        btn.classList.remove('loading');
-        alert('حدث خطأ أثناء الإرسال: ' + err.message + '\nتحقق من الإنترنت وأعد المحاولة.');
-      }
-    }
-
-    // ─── REQUEST RENEWAL ─────────────────────────────────────
-    async function requestRenewal(code) {
-      const btn = $('renew-btn');
-      btn.disabled = true;
-      btn.textContent = 'جاري الإرسال...';
-
-      try {
-        // إرسال طلب تجديد
-        await fetch(`${SUPABASE_BASE}/functions/v1/submit-response`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'renew', session_code: code })
-        });
-        btn.textContent = '✅ تم إرسال طلب التجديد';
-      } catch (e) {
-        btn.textContent = '❌ فشل الإرسال - حاول مجدداً';
-        btn.disabled = false;
-      }
-    }
-
-    // ─── ESCAPE HTML ─────────────────────────────────────────
-    function escHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    // ─── START ───────────────────────────────────────────────
-    init();
-  </script>
-
+// ── START ────────────────────────────────────────────────────
+init();
+</script>
 </body>
 </html>
