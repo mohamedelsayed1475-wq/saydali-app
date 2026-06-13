@@ -341,28 +341,35 @@
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  كل صيدلية تستخدم Supabase الخاص بها.
-//  بيانات الاتصال تأتي من الـ ?cfg= في الرابط (base64Url).
-//  لو مفيش cfg — يستخدم Fallback (للصيدلية المطور/التجربة).
+//  كل صيدلية تستخدم السحابة الخاصة بها (Supabase).
+//  - يمكن لكل صيدلية كتابة بيانات السحابة الخاصة بها أدناه مباشرة.
+//  - إذا كانت الصفحة مستضافة على Supabase Storage، سيتم كشف العنوان تلقائياً.
 // ═══════════════════════════════════════════════════════════════
 
-// ── قراءة config من الرابط ──────────────────────────────────
+// ── إعدادات Supabase الخاصة بالصيدلية (قم بتعديلها هنا إذا كنت تستضيف الصفحة بنفسك) ──
+let SUPABASE_URL = 'https://kmrszdvsdqfaaksqhnqf.supabase.co/rest/v1'; 
+let SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcnN6ZHZzZHFmYWFrc3FobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTYwNTIsImV4cCI6MjA5MzA3MjA1Mn0.ac8p574OhOG9OPuHzCDOxeHNdEiUkFEtFG_l535Pl3A'; 
+
+// ── قراءة المعاملات من الرابط ──────────────────────────────────
 const _params = new URLSearchParams(window.location.search);
 const SESSION_CODE = (_params.get('code') || '').trim().toUpperCase();
 const CFG_B64      = _params.get('cfg') || '';
 
-let SUPABASE_URL = 'https://kmrszdvsdqfaaksqhnqf.supabase.co/rest/v1'; // fallback
-let SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcnN6ZHZzZHFmYWFrc3FobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTYwNTIsImV4cCI6MjA5MzA3MjA1Mn0.ac8p574OhOG9OPuHzCDOxeHNdEiUkFEtFG_l535Pl3A'; // fallback
+// 1. الكشف التلقائي إذا كانت الصفحة مستضافة على Supabase Storage الخاص بالصيدلية
+const hostname = window.location.hostname;
+if (hostname.endsWith('.supabase.co') || hostname.endsWith('.supabase.net')) {
+  SUPABASE_URL = window.location.origin + '/rest/v1';
+}
 
+// 2. قراءة الإعدادات من الرابط إذا تم تمريرها (للتوافق أو الاختبار)
 if (CFG_B64) {
   try {
-    // base64Url → JSON → {u: url, k: key}
     const decoded = atob(CFG_B64.replace(/-/g, '+').replace(/_/g, '/'));
     const cfg = JSON.parse(decoded);
     if (cfg.u) SUPABASE_URL = cfg.u;
     if (cfg.k) SUPABASE_KEY = cfg.k;
   } catch(e) {
-    console.warn('⚠️ فشل فك تشفير الـ cfg — سيتم استخدام الـ fallback', e);
+    console.warn('⚠️ فشل فك تشفير الـ cfg — سيتم استخدام الإعدادات الافتراضية', e);
   }
 }
 

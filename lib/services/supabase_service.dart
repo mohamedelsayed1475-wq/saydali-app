@@ -686,22 +686,17 @@ class SupabaseService {
     }
   }
 
-  // ── رابط الصفحة الويب (يحتوي على بيانات Supabase الخاصة بالصيدلية) ──────
-  // كل صيدلية تستخدم Supabase خاص بها — الرابط self-contained بدون سيرفر مركزي
+  // ── رابط الصفحة الويب (الكود فقط — بدون تمرير المفاتيح) ──────────────
+  // كل صيدلية تضيف السحابة الخاصة بها وتستضيف الصفحة بشكل مستقل
   String buildRepLink(String sessionCode) {
     const fallback = 'https://mohamedelsayed1475-wq.github.io/saydali-app';
     final baseUrl = EnvConfig.webPortalBaseUrl.isNotEmpty
         ? EnvConfig.webPortalBaseUrl
         : fallback;
 
-    // تضمين بيانات Supabase مشفرة بـ base64Url داخل الرابط
-    // الـ anon key عام بطبيعته ومضمّن في الـ APK أصلاً — لا خطر أمني
-    final cfgJson = jsonEncode({'u': _url, 'k': _key});
-    final cfgEncoded = base64Url.encode(utf8.encode(cfgJson));
-
     final separator = baseUrl.endsWith('/') ? '' : '/';
-    final link = '$baseUrl$separator?code=$sessionCode&cfg=$cfgEncoded';
-    debugPrint('🔗 رابط المندوب (self-contained): $link');
+    final link = '$baseUrl$separator?code=$sessionCode';
+    debugPrint('🔗 رابط المندوب: $link');
     return link;
   }
 
