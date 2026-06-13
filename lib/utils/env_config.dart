@@ -40,7 +40,7 @@ class EnvConfig {
 
   // ── Web Portal ──
   static const webPortalBaseUrl =
-      String.fromEnvironment('WEB_PORTAL_URL', defaultValue: 'https://mohamedelsayed1475-wq.github.io/saydali-app1');
+      String.fromEnvironment('WEB_PORTAL_URL', defaultValue: 'https://mohamedelsayed1475-wq.github.io/saydali-app');
 
   // ══════════════════════════════════════════════════════════════
   // فحص هل البيئة مُعدّة صح

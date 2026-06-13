@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
@@ -11,6 +12,16 @@ import '../database/database_helper.dart';
 /// يمنع التلاعب بقيم الاشتراك في قاعدة البيانات المحلية
 class SecurityHelper {
   SecurityHelper._();
+
+  /// ── توليد معرف فريد UUID v4 محلياً ──
+  static String generateUUID() {
+    final random = Random.secure();
+    final values = List<int>.generate(16, (i) => random.nextInt(256));
+    values[6] = (values[6] & 0x0f) | 0x40; // version 4
+    values[8] = (values[8] & 0x3f) | 0x80; // variant 10
+    final hex = values.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+  }
 
   // مفتاح التوقيع (مزيج من مفاتيح البيئة + ثابت)
   static String get _secretKey {

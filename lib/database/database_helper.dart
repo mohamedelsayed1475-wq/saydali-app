@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../utils/security_helper.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
@@ -528,6 +529,7 @@ class DatabaseHelper {
     map['created_at'] = now;
     map['updated_at'] = now;
     map['created_by'] ??= await getCurrentUserName();
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
     map['is_synced'] = 0;
     return await db.insert('shortages', map);
   }
@@ -648,6 +650,7 @@ class DatabaseHelper {
     map['created_at'] = DateTime.now().toIso8601String();
     map['total_debt'] = 0.0;
     map['created_by'] ??= await getCurrentUserName();
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
     map['is_synced'] = 0;
     return await db.insert('customers', map);
   }
@@ -686,6 +689,7 @@ class DatabaseHelper {
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     map['transaction_date'] ??= DateTime.now().toIso8601String();
     map['created_by'] ??= await getCurrentUserName();
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
     map['is_synced'] = 0;
     final txId = await db.insert('debt_transactions', map);
 
@@ -927,6 +931,7 @@ class DatabaseHelper {
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     map['created_at'] ??= DateTime.now().toIso8601String();
     map['created_by'] ??= await getCurrentUserName();
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
     map['is_synced'] = 0;
     return await db.insert('invoices', map);
   }
@@ -952,12 +957,14 @@ class DatabaseHelper {
   // ── المساعدين ────────────────────────────────────────────────────────────────
   Future<int> insertAssistant(Map<String, dynamic> data) async {
     final db = await database;
-    data['created_at'] = DateTime.now().toIso8601String();
-    data['subscription_duration_days'] ??= 30;
-    data['subscription_expiry'] ??= DateTime.now()
-        .add(Duration(days: data['subscription_duration_days'] as int))
+    final map = Map<String, dynamic>.from(data);
+    map['created_at'] = DateTime.now().toIso8601String();
+    map['subscription_duration_days'] ??= 30;
+    map['subscription_expiry'] ??= DateTime.now()
+        .add(Duration(days: map['subscription_duration_days'] as int))
         .toIso8601String();
-    return await db.insert('assistants', data);
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
+    return await db.insert('assistants', map);
   }
 
   Future<void> clearAssistantSession() async {
@@ -1255,6 +1262,7 @@ class DatabaseHelper {
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     map['created_at'] ??= DateTime.now().toIso8601String();
     map['created_by'] ??= await getCurrentUserName();
+    map['cloud_id'] ??= SecurityHelper.generateUUID();
     map['is_synced'] = 0;
     return await db.insert('medication_expiries', map);
   }
@@ -1442,5 +1450,324 @@ class DatabaseHelper {
   Future<int> deleteAlternativeLink(int id) async {
     final db = await database;
     return await db.delete('alternatives', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // ميزات المزامنة المحلية (Wi-Fi)
+  // ══════════════════════════════════════════════════════════════
+
+  /// جلب البيانات التي تم تعديلها أو إنشاؤها بعد وقت معين للمزامنة المحلية
+  Future<Map<String, List<Map<String, dynamic>>>> getLocalSyncData({String? modifiedSince}) async {
+    final db = await database;
+    
+    String queryShortages = "SELECT * FROM shortages";
+    String queryCustomers = "SELECT * FROM customers";
+    String queryTransactions = "SELECT dt.*, c.cloud_id as customer_cloud_id FROM debt_transactions dt JOIN customers c ON dt.customer_id = c.id";
+    String queryInvoices = "SELECT i.*, c.cloud_id as customer_cloud_id FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id";
+    String queryAssistants = "SELECT * FROM assistants";
+    String queryExpiries = "SELECT * FROM medication_expiries";
+
+    if (modifiedSince != null && modifiedSince.isNotEmpty) {
+      queryShortages += " WHERE created_at > ? OR updated_at > ?";
+      queryCustomers += " WHERE created_at > ?";
+      queryTransactions += " WHERE transaction_date > ?";
+      queryInvoices += " WHERE created_at > ?";
+      queryAssistants += " WHERE created_at > ?";
+      queryExpiries += " WHERE created_at > ?";
+    }
+
+    final shortages = await db.rawQuery(queryShortages, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince, modifiedSince] : null);
+    final customers = await db.rawQuery(queryCustomers, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince] : null);
+    final transactions = await db.rawQuery(queryTransactions, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince] : null);
+    final invoices = await db.rawQuery(queryInvoices, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince] : null);
+    final assistants = await db.rawQuery(queryAssistants, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince] : null);
+    final expiries = await db.rawQuery(queryExpiries, modifiedSince != null && modifiedSince.isNotEmpty ? [modifiedSince] : null);
+
+    return {
+      'shortages': shortages,
+      'customers': customers,
+      'debt_transactions': transactions,
+      'invoices': invoices,
+      'assistants': assistants,
+      'medication_expiries': expiries,
+    };
+  }
+
+  /// جلب كافة البيانات المحلية التي لم تُزامن بعد مع السحابة أو محلياً
+  Future<Map<String, List<Map<String, dynamic>>>> getUnsyncedLocalData() async {
+    final db = await database;
+    final shortages = await db.query('shortages', where: 'is_synced = 0 OR is_synced IS NULL');
+    final customers = await db.query('customers', where: 'is_synced = 0 OR is_synced IS NULL');
+    final transactions = await db.rawQuery('''
+      SELECT dt.*, c.cloud_id as customer_cloud_id 
+      FROM debt_transactions dt
+      JOIN customers c ON dt.customer_id = c.id
+      WHERE dt.is_synced = 0 OR dt.is_synced IS NULL
+    ''');
+    final invoices = await db.rawQuery('''
+      SELECT i.*, c.cloud_id as customer_cloud_id 
+      FROM invoices i
+      LEFT JOIN customers c ON i.customer_id = c.id
+      WHERE i.is_synced = 0 OR i.is_synced IS NULL
+    ''');
+    final assistants = await db.query('assistants'); // مزامنة كل المساعدين دائماً لسلامة الصلاحيات
+    final expiries = await db.query('medication_expiries', where: 'is_synced = 0 OR is_synced IS NULL');
+
+    return {
+      'shortages': shortages,
+      'customers': customers,
+      'debt_transactions': transactions,
+      'invoices': invoices,
+      'assistants': assistants,
+      'medication_expiries': expiries,
+    };
+  }
+
+  /// دمج التحديثات الواردة من جهاز المزامنة المحلية الآخر في قاعدة البيانات المحلية
+  Future<void> mergeLocalSyncData(Map<String, dynamic> incomingData) async {
+    final db = await database;
+
+    // 1. العملاء
+    if (incomingData['customers'] != null) {
+      for (final item in incomingData['customers']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+        final existing = await db.query('customers', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'name': item['name'],
+          'phone': item['phone'],
+          'address': item['address'],
+          'due_date': item['due_date'],
+          'photo_url': item['photo_url'],
+          'created_by': item['created_by'],
+          'created_at': item['created_at'],
+          'is_synced': 1,
+        };
+        if (existing.isEmpty) {
+          await db.insert('customers', data);
+        } else {
+          final localCreated = existing.first['created_at']?.toString() ?? '';
+          final remoteCreated = item['created_at']?.toString() ?? '';
+          if (remoteCreated.compareTo(localCreated) > 0) {
+            await db.update('customers', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+    }
+
+    // 2. النواقص
+    if (incomingData['shortages'] != null) {
+      for (final item in incomingData['shortages']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+        final existing = await db.query('shortages', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'name': item['name'],
+          'company': item['company'] ?? 'غير محدد',
+          'quantity': item['quantity'] ?? 1,
+          'status': item['status'] ?? 'pending',
+          'is_urgent': item['is_urgent'] ?? 0,
+          'notes': item['notes'],
+          'created_by': item['created_by'],
+          'created_at': item['created_at'],
+          'updated_at': item['updated_at'],
+          'is_synced': 1,
+        };
+        if (existing.isEmpty) {
+          await db.insert('shortages', data);
+        } else {
+          final localUpdated = existing.first['updated_at']?.toString() ?? '';
+          final remoteUpdated = item['updated_at']?.toString() ?? '';
+          if (remoteUpdated.compareTo(localUpdated) > 0) {
+            await db.update('shortages', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+    }
+
+    // 3. معاملات الديون
+    if (incomingData['debt_transactions'] != null) {
+      for (final item in incomingData['debt_transactions']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+        
+        final customerCloudId = item['customer_cloud_id'];
+        int? localCustomerId;
+        if (customerCloudId != null) {
+          final customer = await db.query('customers', where: 'cloud_id = ?', whereArgs: [customerCloudId]);
+          if (customer.isNotEmpty) {
+            localCustomerId = customer.first['id'] as int?;
+          }
+        }
+        if (localCustomerId == null) continue; // لا يوجد العميل محلياً بعد
+
+        final existing = await db.query('debt_transactions', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'customer_id': localCustomerId,
+          'amount': item['amount'],
+          'type': item['type'],
+          'description': item['description'],
+          'receipt_url': item['receipt_url'],
+          'created_by': item['created_by'],
+          'transaction_date': item['transaction_date'],
+          'is_synced': 1,
+        };
+        if (existing.isEmpty) {
+          await db.insert('debt_transactions', data);
+        } else {
+          final localDate = existing.first['transaction_date']?.toString() ?? '';
+          final remoteDate = item['transaction_date']?.toString() ?? '';
+          if (remoteDate.compareTo(localDate) > 0) {
+            await db.update('debt_transactions', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+      await recalculateAllDebts();
+    }
+
+    // 4. الفواتير
+    if (incomingData['invoices'] != null) {
+      for (final item in incomingData['invoices']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+
+        final customerCloudId = item['customer_cloud_id'];
+        int? localCustomerId;
+        if (customerCloudId != null) {
+          final customer = await db.query('customers', where: 'cloud_id = ?', whereArgs: [customerCloudId]);
+          if (customer.isNotEmpty) {
+            localCustomerId = customer.first['id'] as int?;
+          }
+        }
+
+        final existing = await db.query('invoices', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'customer_id': localCustomerId,
+          'customer_name': item['customer_name'],
+          'items': item['items'],
+          'subtotal': item['subtotal'],
+          'discount': item['discount'],
+          'total': item['total'],
+          'paid_amount': item['paid_amount'] ?? 0,
+          'remaining': item['remaining'] ?? 0,
+          'notes': item['notes'],
+          'created_by': item['created_by'],
+          'created_at': item['created_at'],
+          'is_synced': 1,
+        };
+        if (existing.isEmpty) {
+          await db.insert('invoices', data);
+        } else {
+          final localDate = existing.first['created_at']?.toString() ?? '';
+          final remoteDate = item['created_at']?.toString() ?? '';
+          if (remoteDate.compareTo(localDate) > 0) {
+            await db.update('invoices', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+    }
+
+    // 5. المساعدين
+    if (incomingData['assistants'] != null) {
+      for (final item in incomingData['assistants']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+        final existing = await db.query('assistants', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'name': item['name'],
+          'phone': item['phone'],
+          'pin': item['pin'],
+          'role': item['role'] ?? 'assistant',
+          'can_add_debt': item['can_add_debt'] ?? 1,
+          'can_edit_debt': item['can_edit_debt'] ?? 0,
+          'can_delete': item['can_delete'] ?? 0,
+          'can_view_reports': item['can_view_reports'] ?? 0,
+          'can_manage_invoices': item['can_manage_invoices'] ?? 1,
+          'can_manage_shortages': item['can_manage_shortages'] ?? 1,
+          'can_manage_reps': item['can_manage_reps'] ?? 0,
+          'is_active': item['is_active'] ?? 1,
+          'subscription_expiry': item['subscription_expiry'],
+          'subscription_duration_days': item['subscription_duration_days'] ?? 30,
+          'created_at': item['created_at'],
+        };
+        if (existing.isEmpty) {
+          await db.insert('assistants', data);
+        } else {
+          final localDate = existing.first['created_at']?.toString() ?? '';
+          final remoteDate = item['created_at']?.toString() ?? '';
+          if (remoteDate.compareTo(localDate) > 0) {
+            await db.update('assistants', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+    }
+
+    // 6. صلاحية الأدوية
+    if (incomingData['medication_expiries'] != null) {
+      for (final item in incomingData['medication_expiries']) {
+        final cloudId = item['cloud_id'];
+        if (cloudId == null || cloudId.toString().isEmpty) continue;
+        final existing = await db.query('medication_expiries', where: 'cloud_id = ?', whereArgs: [cloudId]);
+        final data = {
+          'cloud_id': cloudId,
+          'name': item['name'],
+          'quantity': item['quantity'] ?? 1,
+          'expiry_date': item['expiry_date'],
+          'supplier_name': item['supplier_name'],
+          'notes': item['notes'],
+          'created_by': item['created_by'],
+          'created_at': item['created_at'],
+          'is_synced': 1,
+        };
+        if (existing.isEmpty) {
+          await db.insert('medication_expiries', data);
+        } else {
+          final localDate = existing.first['created_at']?.toString() ?? '';
+          final remoteDate = item['created_at']?.toString() ?? '';
+          if (remoteDate.compareTo(localDate) > 0) {
+            await db.update('medication_expiries', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
+          }
+        }
+      }
+    }
+  }
+
+  /// إعادة حساب مديونيات كافة العملاء من جدول حركات الديون لضمان سلامة الأرقام بعد الدمج
+  Future<void> recalculateAllDebts() async {
+    final db = await database;
+    final customers = await db.query('customers');
+    for (final c in customers) {
+      final id = c['id'];
+      final result = await db.rawQuery(
+        """SELECT 
+            COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE 0 END), 0) -
+            COALESCE(SUM(CASE WHEN type='payment' THEN amount ELSE 0 END), 0) 
+            as net
+           FROM debt_transactions WHERE customer_id = ?""",
+        [id],
+      );
+      final newDebt = (result.first['net'] as num?)?.toDouble() ?? 0.0;
+      await db.update(
+        'customers',
+        {'total_debt': newDebt < 0 ? 0.0 : newDebt},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  /// تعليم كافة السجلات المحلية كـ "تمت مزامنتها"
+  Future<void> markLocalDataAsSynced() async {
+    final db = await database;
+    await db.update('shortages', {'is_synced': 1});
+    await db.update('customers', {'is_synced': 1});
+    await db.update('debt_transactions', {'is_synced': 1});
+    await db.update('invoices', {'is_synced': 1});
+    await db.update('medication_expiries', {'is_synced': 1});
   }
 }

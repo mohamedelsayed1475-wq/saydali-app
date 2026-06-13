@@ -12,6 +12,7 @@ import 'dev_panel_screen.dart';
 import 'pin_lock_screen.dart';
 import 'assistants_screen.dart';
 import 'sync_schedule_screen.dart';
+import 'local_sync_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -191,6 +192,14 @@ class _SettingsScreenState extends State<SettingsScreen>
               subtitle: 'مزامنة تلقائية في الخلفية بين الأجهزة',
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const SyncScheduleScreen())),
+            ),
+            _NavTile(
+              icon: Icons.wifi_rounded,
+              iconBg: const Color(0xFF00C896),
+              title: 'مزامنة Wi-Fi محلية',
+              subtitle: 'ربط ومزامنة الأجهزة بدون إنترنت',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const LocalSyncScreen())),
             ),
           ]),
           const SizedBox(height: 20),
