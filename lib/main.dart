@@ -20,6 +20,7 @@ import 'widgets/pharmacy_logo.dart';
 import 'models/models.dart';
 import 'database/database_helper.dart';
 import 'utils/security_helper.dart';
+import 'utils/env_config.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
 import 'services/scheduled_sync_service.dart';
@@ -124,7 +125,18 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     // ── 2. فحص هل التطبيق مفعّل؟ ──
-    final isActivated = await db.getSetting('is_activated');
+    String? isActivated = await db.getSetting('is_activated');
+    if (isActivated != '1') {
+      // إذا كان هذا تحديثاً لتطبيق مثبت مسبقاً (أي توجد بيانات صيدلية مخزنة)، نقوم بالتفعيل التلقائي
+      final existingCloudId = await db.getSetting('pharmacy_cloud_id');
+      final existingName = await db.getSetting('pharmacy_name');
+      if ((existingCloudId != null && existingCloudId.isNotEmpty) || 
+          (existingName != null && existingName.isNotEmpty)) {
+        await db.setSetting('is_activated', '1');
+        isActivated = '1';
+      }
+    }
+
     if (isActivated != '1') {
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -135,7 +147,26 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     // ── 3. فحص هل تم إعداد السحابة؟ ──
-    final supabaseUrl = await db.getSetting('supabase_url');
+    String? supabaseUrl = await db.getSetting('supabase_url');
+    if (supabaseUrl == null || supabaseUrl.isEmpty) {
+      // إذا كان الكود يحتوي على إعدادات سحابية افتراضية صالحة (وليست REPLACE)، نقوم بحفظها وتجاوز شاشة الإعداد
+      final defaultUrl = EnvConfig.supabaseUrl;
+      final defaultKey = EnvConfig.supabaseKey;
+      if (defaultUrl.isNotEmpty && 
+          !defaultUrl.contains('REPLACE') && 
+          defaultKey.isNotEmpty && 
+          !defaultKey.contains('REPLACE')) {
+        await db.setSetting('supabase_url', defaultUrl);
+        await db.setSetting('supabase_key', defaultKey);
+        await db.setSetting('web_portal_url', EnvConfig.webPortalBaseUrl);
+        supabaseUrl = defaultUrl;
+        // إعادة تهيئة الخدمات بالقيم الجديدة المحفوظة
+        try {
+          await SupabaseService.instance.initializeDynamic();
+        } catch (_) {}
+      }
+    }
+
     if (supabaseUrl == null || supabaseUrl.isEmpty) {
       if (!mounted) return;
       Navigator.pushReplacement(
