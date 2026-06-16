@@ -11,6 +11,7 @@ import 'pin_lock_screen.dart';
 import 'assistants_screen.dart';
 import 'sync_schedule_screen.dart';
 import 'local_sync_screen.dart';
+import 'cloud_setup_screen.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
@@ -197,6 +198,14 @@ class _SettingsScreenState extends State<SettingsScreen>
               subtitle: 'ربط ومزامنة الأجهزة بدون إنترنت',
               onTap: () => Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const LocalSyncScreen())),
+            ),
+            _NavTile(
+              icon: Icons.cloud_sync_rounded,
+              iconBg: const Color(0xFFF59E0B),
+              title: 'إعدادات السحابة وبوابة الويب',
+              subtitle: 'ربط قاعدة بيانات سحابة الصيدلية والموقع الإلكتروني',
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const CloudSetupScreen())),
             ),
           ]),
           const SizedBox(height: 20),
