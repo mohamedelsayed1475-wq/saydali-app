@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 import '../utils/env_config.dart';
@@ -8,7 +7,6 @@ import '../services/supabase_service.dart';
 import '../utils/security_helper.dart';
 import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
-import 'dev_panel_screen.dart';
 import 'pin_lock_screen.dart';
 import 'assistants_screen.dart';
 import 'sync_schedule_screen.dart';
@@ -41,7 +39,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _notificationsEnabled = true;
   bool _pinEnabled = false;
   bool _loading = true;
-  int _devTapCount = 0;
   String _selectedCountryCode = 'EG';
   bool _autoCloseEnabled = false;
   late AnimationController _animCtrl;
@@ -266,23 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen>
           // ─── About ────────────────────────────────────────────
           _sectionLabel('ℹ️ عن التطبيق'),
           _buildAboutCard(),
-          const SizedBox(height: 20),
-
-          // ─── Dev Panel (debug only) ───────────────────────────
-          if (kDebugMode) ...[
-            _buildNavTilesGroup([
-              _NavTile(
-                icon: Icons.developer_mode_rounded,
-                iconBg: const Color(0xFF6B7280),
-                title: 'لوحة المطور',
-                subtitle: 'للمطور فقط - مقيدة بكلمة مرور',
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const DevPanelScreen())),
-              ),
-            ]),
-            const SizedBox(height: 20),
-          ],
-
           const SizedBox(height: 20),
         ],
       ),
@@ -744,21 +724,11 @@ class _SettingsScreenState extends State<SettingsScreen>
       decoration: _cardDecoration(),
       child: Column(
         children: [
-          GestureDetector(
-            onTap: () {
-              _devTapCount++;
-              if (_devTapCount >= 5) {
-                _devTapCount = 0;
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const DevPanelScreen()));
-              }
-            },
-            child: _aboutRow(
-                icon: Icons.tag_rounded,
-                iconColor: AppColors.primary,
-                label: 'الإصدار',
-                value: '1.0.0'),
-          ),
+          _aboutRow(
+              icon: Icons.tag_rounded,
+              iconColor: AppColors.primary,
+              label: 'الإصدار',
+              value: '1.0.0'),
           const Divider(color: AppColors.darkBorder, height: 1, indent: 16),
           _aboutRow(
               icon: Icons.person_pin_rounded,

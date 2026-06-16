@@ -13,11 +13,14 @@ import 'screens/settings_screen.dart';
 import 'screens/subscription_screen.dart';
 import 'screens/pin_lock_screen.dart';
 import 'screens/assistant_pin_login_screen.dart';
+import 'screens/activation_screen.dart';
+import 'screens/cloud_setup_screen.dart';
 import 'widgets/subscription_guard.dart';
 import 'widgets/pharmacy_logo.dart';
 import 'models/models.dart';
 import 'database/database_helper.dart';
 import 'utils/security_helper.dart';
+import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
 import 'services/scheduled_sync_service.dart';
 import 'services/notification_service.dart';
@@ -111,7 +114,40 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    // ── فحص أمان الجهاز (Root Detection) ──
+    final db = DatabaseHelper.instance;
+
+    // ── 1. تحميل الإعدادات الديناميكية للسحابة ──
+    try {
+      await SupabaseService.instance.initializeDynamic();
+    } catch (e) {
+      debugPrint('⚠️ خطأ في تحميل إعدادات السحابة: $e');
+    }
+
+    // ── 2. فحص هل التطبيق مفعّل؟ ──
+    final isActivated = await db.getSetting('is_activated');
+    if (isActivated != '1') {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ActivationScreen()),
+      );
+      return;
+    }
+
+    // ── 3. فحص هل تم إعداد السحابة؟ ──
+    final supabaseUrl = await db.getSetting('supabase_url');
+    if (supabaseUrl == null || supabaseUrl.isEmpty) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const CloudSetupScreen()),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    // ── 4. فحص أمان الجهاز (Root Detection) ──
     final warnings = await SecurityHelper.runSecurityChecks();
     if (warnings.isNotEmpty && mounted) {
       await showDialog(
@@ -152,39 +188,19 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    bool isValid = false;
-    try {
-      // ── فحص أمني محلي (HMAC + server time) ──
-      isValid = await SecurityHelper.isSubscriptionValid();
-
-      // ── تحقق سحابي (لو فيه إنترنت) ──
-      if (isValid) {
-        final cloudResult = await SecurityHelper.verifySubscriptionCloud();
-        if (cloudResult == false) {
-          isValid = false;
-        }
-      }
-    } catch (e) {
-      debugPrint('خطأ في قراءة إعدادات الاشتراك: $e');
-    }
-
-    if (isValid) {
-      final hasPIN = await PinLockScreen.isPinEnabled();
-      if (hasPIN && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (ctx) => PinLockScreen(
-              onSuccess: () => _goToUserSelectionOrMain(ctx),
-            ),
+    // ── 5. التطبيق مفعّل والسحابة جاهزة → دخول مباشر ──
+    final hasPIN = await PinLockScreen.isPinEnabled();
+    if (hasPIN && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => PinLockScreen(
+            onSuccess: () => _goToUserSelectionOrMain(ctx),
           ),
-        );
-      } else if (mounted) {
-        await _goToUserSelectionOrMain(context);
-      }
-    } else {
-      Navigator.pushReplacement(context,
-          MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+        ),
+      );
+    } else if (mounted) {
+      await _goToUserSelectionOrMain(context);
     }
   }
 

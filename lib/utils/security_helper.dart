@@ -110,82 +110,12 @@ class SecurityHelper {
   /// ── فحص الاشتراك المحلي مع حماية ──
   /// يرجع true لو الاشتراك صالح وما تمش التلاعب بيه
   static Future<bool> isSubscriptionValid() async {
-    final expiryStr = await readSignedSetting('subscription_expiry');
-    if (expiryStr == null || expiryStr.isEmpty) return false;
-
-    final expiry = DateTime.tryParse(expiryStr);
-    if (expiry == null) return false;
-
-    // محاولة استخدام وقت السيرفر
-    final serverTime = await getServerTime();
-    final now = serverTime ?? DateTime.now();
-
-    // لو فرق الوقت بين الجهاز والسيرفر أكتر من يوم ← مشبوه
-    if (serverTime != null) {
-      final diff = DateTime.now().difference(serverTime).abs();
-      if (diff.inHours > 24) {
-        debugPrint('🚨 فرق التوقيت مشبوه: ${diff.inHours} ساعة');
-        return expiry.isAfter(serverTime);
-      }
-    }
-
-    return expiry.isAfter(now);
+    return true; // تفعيل دائم مدى الحياة للمشتري محلياً
   }
 
   /// ── التحقق السحابي من الاشتراك ──
   static Future<bool?> verifySubscriptionCloud() async {
-    if (!EnvConfig.isConfigured) return null;
-
-    try {
-      final pharmacyCode =
-          await DatabaseHelper.instance.getSetting('pharmacy_code');
-      if (pharmacyCode == null || pharmacyCode.isEmpty) return null;
-
-      final res = await http
-          .get(
-            Uri.parse(
-                '${EnvConfig.supabaseUrl}/pharmacies?pharmacy_code=eq.$pharmacyCode&select=subscription_expiry'),
-            headers: {
-              'apikey': EnvConfig.supabaseKey,
-              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-            },
-          )
-          .timeout(const Duration(seconds: 8));
-
-      if (res.statusCode != 200) return null;
-      final data = jsonDecode(res.body) as List;
-      if (data.isEmpty) {
-        // ⚠️ تم حذف الصيدلية من السحابة! نقوم بمسح تفعيل التطبيق محلياً فوراً
-        final db = DatabaseHelper.instance;
-        await db.setSetting('pharmacy_code', '');
-        await db.setSetting('pharmacy_cloud_id', '');
-        await db.setSetting('is_assistant_device', '0');
-        await db.setSetting('subscription_expiry', '');
-        await db.setSetting('subscription_expiry_sig', '');
-        await db.setSetting('assistants_activated', '0');
-        await db.setSetting('assistant_slots', '0');
-        await db.setSetting('extra_assistant_slots', '0');
-        await db.setSetting('last_sync_at', '');
-        return false;
-      }
-
-      final cloudExpiry = data[0]['subscription_expiry'];
-      if (cloudExpiry == null) return null;
-
-      final expiry = DateTime.tryParse(cloudExpiry.toString());
-      if (expiry == null) return null;
-
-      final serverTime = await getServerTime();
-      final now = serverTime ?? DateTime.now();
-
-      await saveSignedSetting(
-          'subscription_expiry', expiry.toIso8601String());
-
-      return expiry.isAfter(now);
-    } catch (e) {
-      debugPrint('⚠️ verifySubscriptionCloud error: $e');
-      return null;
-    }
+    return true; // تفعيل دائم
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -213,13 +143,9 @@ class SecurityHelper {
 
     try {
       final jailbroken = await FlutterJailbreakDetection.jailbroken;
-      final developerMode = await FlutterJailbreakDetection.developerMode;
 
       if (jailbroken) {
         warnings.add('📱 جهازك يحتوي على صلاحيات الروت (Root) - قد تكون بياناتك معرضة للخطر');
-      }
-      if (developerMode) {
-        warnings.add('🛠️ وضع خيارات المطور (Developer Options) نشط في جهازك');
       }
     } catch (e) {
       debugPrint('⚠️ فحص أمان الجهاز فشل: $e');

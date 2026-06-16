@@ -699,3 +699,63 @@ CREATE POLICY "Deny anon listing on ads-images" ON storage.objects
 FOR SELECT TO anon USING (
   bucket_id != 'ads-images'
 );
+
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- 13. جدول منشورات مجتمع الصيدلية وسياسات الحماية ومخزن الصور
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- ─── 13.1 جدول منشورات المجتمع ───
+CREATE TABLE IF NOT EXISTS pharmacy_community_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pharmacy_id UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
+  sender_name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  image_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- تفعيل RLS
+ALTER TABLE pharmacy_community_posts ENABLE ROW LEVEL SECURITY;
+
+-- حذف السياسات إذا كانت موجودة مسبقاً
+DROP POLICY IF EXISTS "select_community_posts" ON pharmacy_community_posts;
+DROP POLICY IF EXISTS "insert_community_posts" ON pharmacy_community_posts;
+DROP POLICY IF EXISTS "delete_community_posts" ON pharmacy_community_posts;
+
+-- سياسات الوصول المبنية على معرف الصيدلية x-pharmacy-id الممرر بالترويسات
+CREATE POLICY "select_community_posts" ON pharmacy_community_posts
+FOR SELECT TO authenticated, anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+CREATE POLICY "insert_community_posts" ON pharmacy_community_posts
+FOR INSERT TO authenticated, anon WITH CHECK (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+CREATE POLICY "delete_community_posts" ON pharmacy_community_posts
+FOR DELETE TO authenticated, anon USING (
+  pharmacy_id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
+
+-- ─── 13.2 تهيئة مخزن الصور السحابي للمجتمع (community-photos) سياساته ───
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('community-photos', 'community-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- حذف السياسات القديمة للمخزن إن وجدت
+DROP POLICY IF EXISTS "allow_select_community_photos" ON storage.objects;
+DROP POLICY IF EXISTS "allow_insert_community_photos" ON storage.objects;
+DROP POLICY IF EXISTS "allow_delete_community_photos" ON storage.objects;
+
+-- سياسات مخزن الصور للـ community-photos
+CREATE POLICY "allow_select_community_photos" ON storage.objects
+FOR SELECT TO authenticated, anon USING (bucket_id = 'community-photos');
+
+CREATE POLICY "allow_insert_community_photos" ON storage.objects
+FOR INSERT TO authenticated, anon WITH CHECK (bucket_id = 'community-photos');
+
+CREATE POLICY "allow_delete_community_photos" ON storage.objects
+FOR DELETE TO authenticated, anon USING (bucket_id = 'community-photos');
+

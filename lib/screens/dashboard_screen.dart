@@ -14,6 +14,7 @@ import 'documents_screen.dart';
 import 'statistics_screen.dart';
 import 'rep_message_parser_screen.dart';
 import 'medication_expiry_screen.dart';
+import 'community_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -776,6 +777,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: const Color(0xFFEC4899),
                   onTap: () {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicationExpiryScreen()));
+                  },
+                ),
+                _quickActionItem(
+                  icon: Icons.forum_outlined,
+                  label: 'المجتمع',
+                  color: const Color(0xFF06B6D4),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityScreen()));
                   },
                 ),
               ],

@@ -14,8 +14,8 @@ class SyncService {
   static final SyncService instance = SyncService._internal();
   SyncService._internal();
 
-  static const _url = EnvConfig.supabaseUrl;
-  static const _key = EnvConfig.supabaseKey;
+  static String get _url => EnvConfig.supabaseUrl;
+  static String get _key => EnvConfig.supabaseKey;
 
   Timer? _syncTimer;
   bool _isSyncing = false;

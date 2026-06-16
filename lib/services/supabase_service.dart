@@ -11,10 +11,34 @@ class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
   SupabaseService._internal();
 
-  static const _url = EnvConfig.supabaseUrl;
-  static const _key = EnvConfig.supabaseKey;
+  static String get _url => EnvConfig.supabaseUrl;
+  static String get _key => EnvConfig.supabaseKey;
 
   String? _pharmacyCloudId;
+
+  Future<void> initializeDynamic() async {
+    try {
+      final db = DatabaseHelper.instance;
+      final savedUrl = await db.getSetting('supabase_url');
+      final savedKey = await db.getSetting('supabase_key');
+      final savedWebUrl = await db.getSetting('web_portal_url');
+
+      if (savedUrl != null && savedUrl.isNotEmpty) {
+        EnvConfig.supabaseUrl = savedUrl;
+      }
+      if (savedKey != null && savedKey.isNotEmpty) {
+        EnvConfig.supabaseKey = savedKey;
+      }
+      if (savedWebUrl != null && savedWebUrl.isNotEmpty) {
+        EnvConfig.webPortalBaseUrl = savedWebUrl;
+      }
+
+      await _ensurePharmacyId();
+      debugPrint('Initialized dynamic configurations successfully: URL=${EnvConfig.supabaseUrl}');
+    } catch (e) {
+      debugPrint('⚠️ Error initializing dynamic configurations: $e');
+    }
+  }
 
   Future<void> _ensurePharmacyId() async {
     if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) {
@@ -795,7 +819,120 @@ class SupabaseService {
       return null;
     }
   }
+
+  // ── رفع صورة للمجتمع ──────────────────────────────────────────────────
+  Future<String?> uploadCommunityPhoto(String filePath) async {
+    if (!isConfigured) return null;
+    try {
+      final file = File(filePath);
+      final fileName = 'community_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bytes = await file.readAsBytes();
+
+      final res = await http
+          .post(
+            Uri.parse(
+                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/community-photos/$fileName'),
+            headers: {
+              'apikey': EnvConfig.supabaseKey,
+              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
+              'Content-Type': 'image/jpeg',
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/community-photos/$fileName';
+      }
+      debugPrint('❌ uploadCommunityPhoto failed: ${res.statusCode} - ${res.body}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ uploadCommunityPhoto error: $e');
+      return null;
+    }
+  }
+
+  // ── جلب منشورات المجتمع ───────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> fetchCommunityPosts() async {
+    await _ensurePharmacyId();
+    if (!isConfigured) return [];
+    try {
+      final res = await http
+          .get(
+            Uri.parse('$_url/pharmacy_community_posts?select=*&order=created_at.desc'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List;
+        return data.cast<Map<String, dynamic>>();
+      }
+      debugPrint('❌ fetchCommunityPosts failed: ${res.statusCode} - ${res.body}');
+      return [];
+    } catch (e) {
+      debugPrint('❌ fetchCommunityPosts error: $e');
+      return [];
+    }
+  }
+
+  // ── إضافة منشور جديد للمجتمع ──────────────────────────────────────────
+  Future<bool> insertCommunityPost({
+    required String senderName,
+    required String content,
+    String? imageUrl,
+  }) async {
+    await _ensurePharmacyId();
+    if (!isConfigured) return false;
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_url/pharmacy_community_posts'),
+            headers: _headers,
+            body: jsonEncode({
+              'pharmacy_id': _pharmacyCloudId,
+              'sender_name': senderName,
+              'content': content,
+              if (imageUrl != null) 'image_url': imageUrl,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return true;
+      }
+      debugPrint('❌ insertCommunityPost failed: ${res.statusCode} - ${res.body}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ insertCommunityPost error: $e');
+      return false;
+    }
+  }
+
+  // ── حذف منشور من المجتمع ──────────────────────────────────────────────
+  Future<bool> deleteCommunityPost(String postId) async {
+    await _ensurePharmacyId();
+    if (!isConfigured) return false;
+    try {
+      final res = await http
+          .delete(
+            Uri.parse('$_url/pharmacy_community_posts?id=eq.$postId'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        return true;
+      }
+      debugPrint('❌ deleteCommunityPost failed: ${res.statusCode} - ${res.body}');
+      return false;
+    } catch (e) {
+      debugPrint('❌ deleteCommunityPost error: $e');
+      return false;
+    }
+  }
 }
+
 
 // ── نماذج البيانات ─────────────────────────────────────────────────────────
 class RepResponse {
