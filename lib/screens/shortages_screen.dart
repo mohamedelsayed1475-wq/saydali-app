@@ -349,6 +349,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                   children: [
                     Expanded(
                       child: Autocomplete<Map<String, dynamic>>(
+                        initialValue: TextEditingValue(text: initialName ?? existing?.name ?? ''),
                         optionsBuilder: (v) {
                           if (v.text.isEmpty) {
                             return const Iterable<Map<String, dynamic>>.empty();
@@ -387,10 +388,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                           }
                         },
                         fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
-                          if (existing != null &&
-                              ctrl.text.isEmpty &&
-                              existing.name.isNotEmpty)
-                            ctrl.text = existing.name;
                           return AppTextField(
                             hint: 'اسم الدواء *',
                             controller: ctrl,

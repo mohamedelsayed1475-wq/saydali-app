@@ -5,6 +5,22 @@
 
 ---
 
+## 📱 لقطات الشاشة (Screenshots)
+
+<div align="center">
+
+| لوحة التحكم | النواقص | المندوبون |
+|:-----------:|:-------:|:---------:|
+| <img src="assets/images/screenshots/screen_home.png" width="200"/> | <img src="assets/images/screenshots/screen_shortages.png" width="200"/> | <img src="assets/images/screenshots/screen_reps.png" width="200"/> |
+
+| الإحصائيات والأرباح | التقارير الشهرية | الرئيسية |
+|:-------------------:|:----------------:|:--------:|
+| <img src="assets/images/screenshots/screen_statistics.png" width="200"/> | <img src="assets/images/screenshots/screen_reports.png" width="200"/> | <img src="assets/images/screenshots/screen_dashboard.png" width="200"/> |
+
+</div>
+
+---
+
 ## 📋 دليل المميزات الشاملة والتفصيلية للتطبيق
 
 يحتوي التطبيق على حزمة ضخمة من الميزات المترابطة التي تدير شؤون الصيدلية المالية، التشغيلية، والرقابية:

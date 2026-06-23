@@ -170,7 +170,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       fontSize: 18,
                       fontWeight: FontWeight.w800)),
               const Spacer(),
-              for (final period in ['الديوم', 'الأسبوع', 'الشهر', 'السنة'])
+              for (final period in ['اليوم', 'الأسبوع', 'الشهر', 'السنة'])
                 Padding(
                   padding: const EdgeInsets.only(left: 6),
                   child: GestureDetector(

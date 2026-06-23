@@ -12,7 +12,8 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  late Future<Map<String, dynamic>> _statsFuture;
+  bool _loading = true;
+  Map<String, dynamic> _statsData = {};
   Timer? _refreshTimer;
   String _currency = 'ج.م';
 
@@ -20,14 +21,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   void initState() {
     super.initState();
     _loadCurrency();
-    _statsFuture = DatabaseHelper.instance.getStatisticsSummary();
-    // تحديث تلقائي كل 4 ثوانٍ
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) {
-        setState(() {
-          _statsFuture = DatabaseHelper.instance.getStatisticsSummary();
-        });
-      }
+    _loadStats(isRefresh: false);
+    // تحديث تلقائي كل 15 ثانية بسلاسة في الخلفية لتجنب الحمل الزائد
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _loadStats(isRefresh: true);
     });
   }
 
@@ -37,6 +34,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       setState(() {
         _currency = currency;
       });
+    }
+  }
+
+  Future<void> _loadStats({required bool isRefresh}) async {
+    if (!isRefresh) {
+      setState(() {
+        _loading = true;
+      });
+    }
+    try {
+      final data = await DatabaseHelper.instance.getStatisticsSummary();
+      if (mounted) {
+        setState(() {
+          _statsData = data;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading statistics: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -57,32 +78,31 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _statsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('حدث خطأ أثناء تحميل الإحصائيات', style: TextStyle(color: AppColors.danger)));
-          }
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : _statsData.isEmpty
+              ? const Center(child: Text('حدث خطأ أثناء تحميل الإحصائيات', style: TextStyle(color: AppColors.danger)))
+              : _buildBody(),
+    );
+  }
 
-          final data = snapshot.data!;
-          final totalSales = data['total_sales'] as double;
-          final totalCost = (data['total_cost'] as num?)?.toDouble() ?? 0.0;
-          final grossProfit = (data['gross_profit'] as num?)?.toDouble() ?? 0.0;
-          final netProfit = (data['net_profit'] as num?)?.toDouble() ?? 0.0;
-          final totalDebts = data['total_debts'] as double;
-          final pendingShortages = data['pending_shortages_count'] as int;
-          final topSelling = data['top_selling_items'] as List<Map<String, dynamic>>;
-          final totalExpenses = (data['total_expenses'] as num?)?.toDouble() ?? 0.0;
-          final expensesByCategory = data['expenses_by_category'] as List<Map<String, dynamic>>? ?? [];
+  Widget _buildBody() {
+    final data = _statsData;
+    final totalSales = data['total_sales'] as double;
+    final totalCost = (data['total_cost'] as num?)?.toDouble() ?? 0.0;
+    final grossProfit = (data['gross_profit'] as num?)?.toDouble() ?? 0.0;
+    final netProfit = (data['net_profit'] as num?)?.toDouble() ?? 0.0;
+    final totalDebts = data['total_debts'] as double;
+    final pendingShortages = data['pending_shortages_count'] as int;
+    final topSelling = data['top_selling_items'] as List<Map<String, dynamic>>;
+    final totalExpenses = (data['total_expenses'] as num?)?.toDouble() ?? 0.0;
+    final expensesByCategory = data['expenses_by_category'] as List<Map<String, dynamic>>? ?? [];
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
                 // زر إدارة المصروفات
                 InkWell(
                   onTap: () {
@@ -285,9 +305,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               ],
             ),
           );
-        },
-      ),
-    );
   }
 
   Widget _buildStatCard({required String title, required String value, required IconData icon, required Color color}) {

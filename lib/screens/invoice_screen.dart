@@ -964,6 +964,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   children: [
                     Expanded(
                       child: Autocomplete<Map<String, dynamic>>(
+                        initialValue: TextEditingValue(text: initialName ?? ''),
                         optionsBuilder: (v) {
                           if (v.text.isEmpty) return const Iterable<Map<String, dynamic>>.empty();
                           final query = v.text;
