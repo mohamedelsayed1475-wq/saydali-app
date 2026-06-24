@@ -1,4 +1,4 @@
-﻿name: Build & Release Saydali APK
+name: Build & Release Saydali APK
 
 on:
   push:
@@ -61,7 +61,7 @@ jobs:
       - name: Build APK
         env:
           DEV_PASS: ${{ secrets.DEV_PASS }}
-          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+          GITHUB_PAT: ${{ secrets.GH_PAT }}
         run: |
           flutter build apk --release \
             --obfuscate --split-debug-info=build/debug-info \
