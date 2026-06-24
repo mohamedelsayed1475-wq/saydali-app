@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
-import '../utils/activation_codes.dart';
 import '../utils/activation_service.dart';
 import 'cloud_setup_screen.dart';
 import 'assistant_pin_login_screen.dart';
@@ -74,7 +73,7 @@ class _ActivationScreenState extends State<ActivationScreen>
         return;
       }
 
-      // ── محاولة التحقق أونلاين أولاً ──────────────────────────────────────
+      // ── التحقق أونلاين من GitHub ──────────────────────────────────────────
       final response = await http
           .get(Uri.parse(
               'https://raw.githubusercontent.com/mohamedelsayed1475-wq/saydali-app/main/activation_codes.txt'))
@@ -87,26 +86,17 @@ class _ActivationScreenState extends State<ActivationScreen>
             .where((c) => c.isNotEmpty)
             .toList();
 
-        if (codes.contains(enteredCode) || kActivationCodes.contains(enteredCode)) {
+        if (codes.contains(enteredCode)) {
           await _completeActivation(enteredCode);
         } else {
-          setState(() => _errorMessage = 'كود التفعيل غير صالح. يرجى التأكد من الكود والمحاولة مجدداً.');
+          setState(() => _errorMessage = 'كود التفعيل غير صالح أو تم استخدامه من قبل.');
         }
       } else {
-        // fallback: فحص محلي
-        if (kActivationCodes.contains(enteredCode)) {
-          await _completeActivation(enteredCode);
-        } else {
-          setState(() => _errorMessage = 'تعذّر الاتصال بالخادم (${response.statusCode}). يرجى المحاولة لاحقاً.');
-        }
+        setState(() => _errorMessage = 'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.');
       }
     } catch (_) {
-      // offline fallback
-      if (kActivationCodes.contains(enteredCode)) {
-        await _completeActivation(enteredCode);
-      } else {
-        setState(() => _errorMessage = 'خطأ في الاتصال بالإنترنت. يرجى التأكد من اتصالك والمحاولة مرة أخرى.');
-      }
+      setState(() => _errorMessage =
+          'لا يوجد اتصال بالإنترنت. يرجى الاتصال بالإنترنت لتفعيل التطبيق.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
