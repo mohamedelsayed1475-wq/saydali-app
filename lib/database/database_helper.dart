@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 16,
+      version: 17,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -252,6 +252,15 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE rep_returns ADD COLUMN created_by TEXT');
       } catch (_) {}
     }
+    if (oldVersion < 17) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS used_activation_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          used_at TEXT NOT NULL
+        )
+      ''');
+    }
   }
 
   /// حذف الإعلانات المنتهية تلقائياً
@@ -261,6 +270,33 @@ class DatabaseHelper {
     return await db.delete('ads',
         where: "expires_at IS NOT NULL AND expires_at != '' AND expires_at < ?",
         whereArgs: [now]);
+  }
+
+  // ── Activation code single-use tracking ───────────────────────────────────
+
+  /// Returns true if this code has already been used on this device.
+  Future<bool> isActivationCodeUsed(String code) async {
+    final db = await database;
+    final rows = await db.query(
+      'used_activation_codes',
+      where: 'code = ?',
+      whereArgs: [code],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Marks [code] as used so it cannot be reused.
+  Future<void> markActivationCodeUsed(String code) async {
+    final db = await database;
+    await db.insert(
+      'used_activation_codes',
+      {
+        'code': code,
+        'used_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -519,7 +555,17 @@ class DatabaseHelper {
     await db.insert('settings', {'key': 'pharmacist_name', 'value': 'الصيدلي'});
     await db.insert('settings', {'key': 'theme_color', 'value': '00C896'});
     await db.insert('settings', {'key': 'notifications_enabled', 'value': '1'});
+
+    // جدول أكواد التفعيل المستخدمة (كل كود يشتغل مرة واحدة بس)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS used_activation_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        used_at TEXT NOT NULL
+      )
+    ''');
   }
+
 
   // ── النواقص ──────────────────────────────────────────────────
   Future<int> insertShortage(Map<String, dynamic> data) async {

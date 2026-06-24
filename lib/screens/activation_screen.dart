@@ -64,7 +64,16 @@ class _ActivationScreenState extends State<ActivationScreen>
     });
 
     try {
-      // محاولة التحقق أونلاين أولاً
+      // ── أول حاجة: نتأكد إن الكود مش اتستخدم قبل كده ──────────────────────
+      final alreadyUsed =
+          await DatabaseHelper.instance.isActivationCodeUsed(enteredCode);
+      if (alreadyUsed) {
+        setState(() =>
+            _errorMessage = 'هذا الكود تم استخدامه من قبل. كل كود صالح لمرة واحدة فقط.');
+        return;
+      }
+
+      // ── محاولة التحقق أونلاين أولاً ──────────────────────────────────────
       final response = await http
           .get(Uri.parse(
               'https://raw.githubusercontent.com/mohamedelsayed1475-wq/saydali-app/main/activation_codes.txt'))
@@ -105,6 +114,8 @@ class _ActivationScreenState extends State<ActivationScreen>
   Future<void> _completeActivation(String code) async {
     await DatabaseHelper.instance.setSetting('is_activated', '1');
     await DatabaseHelper.instance.setSetting('activation_code', code);
+    // تسجيل الكود كمستخدم حتى لا يُستخدم مرة أخرى
+    await DatabaseHelper.instance.markActivationCodeUsed(code);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -119,6 +130,7 @@ class _ActivationScreenState extends State<ActivationScreen>
       MaterialPageRoute(builder: (_) => const CloudSetupScreen()),
     );
   }
+
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
