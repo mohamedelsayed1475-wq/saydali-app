@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
 import '../utils/activation_codes.dart';
+import '../utils/activation_service.dart';
 import 'cloud_setup_screen.dart';
 import 'assistant_pin_login_screen.dart';
 
@@ -114,8 +115,10 @@ class _ActivationScreenState extends State<ActivationScreen>
   Future<void> _completeActivation(String code) async {
     await DatabaseHelper.instance.setSetting('is_activated', '1');
     await DatabaseHelper.instance.setSetting('activation_code', code);
-    // تسجيل الكود كمستخدم حتى لا يُستخدم مرة أخرى
+    // تسجيل الكود محلياً (حماية على نفس الجهاز)
     await DatabaseHelper.instance.markActivationCodeUsed(code);
+    // حذف الكود من GitHub (حماية ضد الاستخدام على أجهزة أخرى)
+    await ActivationService.removeCodeFromRemote(code);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

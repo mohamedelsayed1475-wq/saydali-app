@@ -43,6 +43,12 @@ class EnvConfig {
   static String webPortalBaseUrl =
       const String.fromEnvironment('WEB_PORTAL_URL', defaultValue: '');
 
+  // ── GitHub API (لحذف أكواد التفعيل بعد الاستخدام) ──
+  // أنشئ PAT من: GitHub → Settings → Developer Settings → Fine-grained tokens
+  // صلاحية مطلوبة: Contents → Read and Write على repo saydali-app فقط
+  static const githubPat =
+      String.fromEnvironment('GITHUB_PAT', defaultValue: '');
+
   // ══════════════════════════════════════════════════════════════
   // فحص هل البيئة مُعدّة صح
   // ══════════════════════════════════════════════════════════════
