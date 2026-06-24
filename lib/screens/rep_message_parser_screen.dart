@@ -7,6 +7,8 @@ import '../utils/app_theme.dart';
 import '../utils/country_config.dart';
 import '../widgets/common_widgets.dart';
 import 'rep_response_screen.dart';
+import 'cloud_setup_screen.dart';
+import '../utils/env_config.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 
@@ -397,11 +399,66 @@ class _RepMessageParserScreenState extends State<RepMessageParserScreen>
     }
   }
 
+  void _showHostingRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.darkCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'رابط الاستضافة مطلوب 🌐',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'لم يتم إعداد رابط بوابة الويب (Web Portal URL) بعد.\n\nيرجى الذهاب إلى إعدادات السحابة وضبط رابط الاستضافة الخاص بك لتتمكن من إنشاء ومشاركة روابط المندوبين.',
+          textDirection: TextDirection.rtl,
+          style: TextStyle(color: AppColors.textLight, height: 1.6, fontFamily: 'Cairo', fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo')),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CloudSetupScreen()),
+              );
+            },
+            child: const Text('إعداد الآن ⚙️', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _sendOrder() async {
     final selectedItems = _parsedItems.where((i) => i.isSelected).toList();
     if (selectedItems.isEmpty) return;
     if (_selectedRep == null) {
       showSnack(context, 'الرجاء اختيار المندوب أولاً', isError: true);
+      return;
+    }
+
+    if (EnvConfig.webPortalBaseUrl.trim().isEmpty) {
+      _showHostingRequiredDialog();
       return;
     }
 

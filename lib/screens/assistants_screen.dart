@@ -573,51 +573,8 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   }
 
   Widget _buildAssistantSubscriptionBanner(Assistant assistant) {
-    if (assistant.subscriptionExpiry == null) {
-      return const SizedBox.shrink();
-    }
-
-    final expiry = assistant.subscriptionExpiry!;
-    final isExpired = assistant.isSubscriptionExpired;
-    final dateStr = _formatDate(expiry);
-
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isExpired
-            ? AppColors.danger.withValues(alpha: 0.1)
-            : AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isExpired
-              ? AppColors.danger.withValues(alpha: 0.3)
-              : AppColors.primary.withValues(alpha: 0.15),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isExpired ? Icons.warning_amber_rounded : Icons.timer_outlined,
-            size: 14,
-            color: isExpired ? AppColors.danger : AppColors.primary,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              isExpired
-                  ? '⚠️ انتهى الاشتراك في: $dateStr'
-                  : '📅 ينتهي الاشتراك في: $dateStr',
-              style: TextStyle(
-                color: isExpired ? AppColors.danger : AppColors.textColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    // ── ميزة المساعدين مفتوحة للجميع مجاناً — لا يُعرض banner الاشتراك ──
+    return const SizedBox.shrink();
   }
 
   @override
@@ -688,19 +645,11 @@ class _AssistantsScreenState extends State<AssistantsScreen>
 
   /// التحقق من الحد الأقصى قبل إضافة مساعد
   Future<void> _tryAddAssistant() async {
-    if (_maxSlots <= 0) {
-      // لم يشترك في باقة المساعدين أصلاً
-      _showSubscriptionRequired();
-      return;
-    }
-    if (_currentCount >= _maxSlots) {
-      // وصل للحد الأقصى
-      _showSlotLimitReached();
-      return;
-    }
+    // ── ميزة المساعدين مفتوحة للجميع مجاناً ──
     _showAddAssistant();
   }
 
+  // ignore: unused_element
   void _showSubscriptionRequired() {
     final codeCtrl = TextEditingController();
     String error = '';
@@ -1040,6 +989,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
     return true;
   }
 
+  // ignore: unused_element
   void _showSlotLimitReached() {
     final codeCtrl = TextEditingController();
     String error = '';

@@ -713,10 +713,10 @@ class SupabaseService {
   // ── رابط الصفحة الويب (الكود فقط — بدون تمرير المفاتيح) ──────────────
   // كل صيدلية تضيف السحابة الخاصة بها وتستضيف الصفحة بشكل مستقل
   String buildRepLink(String sessionCode) {
-    const fallback = 'https://mohamedelsayed1475-wq.github.io/saydali-app';
-    final baseUrl = EnvConfig.webPortalBaseUrl.isNotEmpty
-        ? EnvConfig.webPortalBaseUrl
-        : fallback;
+    final baseUrl = EnvConfig.webPortalBaseUrl.trim();
+    if (baseUrl.isEmpty) {
+      return '';
+    }
 
     final separator = baseUrl.endsWith('/') ? '' : '/';
     final link = '$baseUrl$separator?code=$sessionCode';

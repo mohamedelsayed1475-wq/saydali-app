@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' hide Border;
 import 'dart:io';
@@ -39,6 +39,13 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   final _searchController = TextEditingController();
   Timer? _refreshTimer;
 
+  // Wizard quick add variables
+  int _wizardStep = 1;
+  final _wizardNameCtrl = TextEditingController();
+  int _wizardQty = 1;
+  bool _wizardIsUrgent = false;
+  bool _showSearchField = false;
+
   final _filters = [
     ('all', 'الكل'),
     ('pending', 'انتظار'),
@@ -51,6 +58,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _searchController.dispose();
+    _wizardNameCtrl.dispose();
     super.dispose();
   }
 
@@ -797,6 +805,152 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     }
   }
 
+  Future<void> _addQuickShortage(String name) async {
+    final provider = context.read<ShortagesProvider>();
+    final alreadyExists = provider.shortages.any((s) => s.name.trim().toLowerCase() == name.trim().toLowerCase() && s.status != 'covered');
+    if (alreadyExists) {
+      showSnack(context, 'الدواء موجود بالفعل في النواقص ⚠️', isError: true);
+      return;
+    }
+    final userProvider = context.read<CurrentUserProvider>();
+    final data = {
+      'name': name,
+      'company': 'غير محدد',
+      'quantity': 1,
+      'is_urgent': 0,
+      'notes': 'إضافة سريعة',
+      'status': 'pending',
+    };
+    await provider.add(data);
+    await _saveDrugToDictionary(name, company: 'غير محدد');
+    await DatabaseHelper.instance.logActivity(
+      assistantId: userProvider.currentAssistantId,
+      assistantName: userProvider.currentName,
+      action: 'إضافة ناقص',
+      details: 'تم إضافة الناقص (سريع): $name',
+      screen: 'shortages',
+    );
+    await _loadShortages();
+    showSnack(context, 'تم إضافة $name بنجاح ✅', durationMs: 800);
+  }
+
+  Future<void> _submitWizardAdd() async {
+    final name = _wizardNameCtrl.text.trim();
+    if (name.isEmpty) {
+      showSnack(context, 'الرجاء إدخال اسم الدواء', isError: true);
+      return;
+    }
+    final userProvider = context.read<CurrentUserProvider>();
+    final data = {
+      'name': name,
+      'company': 'غير محدد',
+      'quantity': _wizardQty,
+      'is_urgent': _wizardIsUrgent ? 1 : 0,
+      'notes': 'إضافة سريعة',
+      'status': 'pending',
+    };
+    await context.read<ShortagesProvider>().add(data);
+    await _saveDrugToDictionary(name, company: 'غير محدد');
+    await DatabaseHelper.instance.logActivity(
+      assistantId: userProvider.currentAssistantId,
+      assistantName: userProvider.currentName,
+      action: 'إضافة ناقص',
+      details: 'تم إضافة الناقص (سريع): $name',
+      screen: 'shortages',
+    );
+    setState(() {
+      _wizardStep = 1;
+      _wizardNameCtrl.clear();
+      _wizardQty = 1;
+      _wizardIsUrgent = false;
+    });
+    await _loadShortages();
+    showSnack(context, 'تم إضافة $name بنجاح ✅', durationMs: 800);
+  }
+
+  Widget _buildStepDot(int step) {
+    final isActive = _wizardStep == step;
+    final isDone = _wizardStep > step;
+    return Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: isActive
+            ? AppColors.primary
+            : isDone
+                ? AppColors.accent
+                : AppColors.dark,
+        shape: BoxShape.circle,
+        border: Border.all(color: isActive ? AppColors.primary : AppColors.darkBorder),
+      ),
+      child: Center(
+        child: Text(
+          '$step',
+          style: TextStyle(
+            color: isActive || isDone ? Colors.white : AppColors.textMuted,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openScanner() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const ScannerScreen()),
+    );
+    if (code != null && code.isNotEmpty) {
+      final match = _suggestions.firstWhere(
+        (s) => s['barcode']?.toString().trim() == code.trim(),
+        orElse: () => <String, dynamic>{},
+      );
+      if (match.isNotEmpty) {
+        debugPrint('🔍 [SHORTAGES_SCANNER] تم العثور على الدواء المطابق للرمز $code في القاموس: ${match['enName']}');
+        _showAddSheet(
+          initialName: match['enName']?.toString(),
+          initialCompany: (match['company'] != null && match['company'].toString() != 'غير محدد')
+              ? match['company'].toString()
+              : null,
+        );
+      } else {
+        debugPrint('🔍 [SHORTAGES_SCANNER] لم يتم العثور على الرمز $code في القاموس المحلي');
+        _showAddSheet(initialName: code);
+      }
+    }
+  }
+
+  Future<void> _updateQuantity(Shortage item, int newQty) async {
+    if (newQty < 1) return;
+    final data = {
+      'quantity': newQty,
+    };
+    await context.read<ShortagesProvider>().update(item.id!, data);
+    await _loadShortages();
+  }
+
+  Future<void> _deleteShortage(Shortage item) async {
+    final userProvider = context.read<CurrentUserProvider>();
+    if (!userProvider.canDelete) {
+      showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
+      return;
+    }
+    final confirm = await showDeleteDialog(context, item.name);
+    if (confirm == true && item.id != null) {
+      await context.read<ShortagesProvider>().delete(item.id!);
+      await DatabaseHelper.instance.logActivity(
+        assistantId: userProvider.currentAssistantId,
+        assistantName: userProvider.currentName,
+        action: 'حذف ناقص',
+        details: 'تم حذف الناقص: ${item.name}',
+        screen: 'shortages',
+      );
+      await _loadShortages();
+      if (mounted) showSnack(context, 'تم الحذف');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ShortagesProvider>();
@@ -814,168 +968,746 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       backgroundColor: AppColors.dark,
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Column(
-              children: [
-                // كاردات إحصائية
-                Row(
-                  children: [
-                    Expanded(
-                      child: _statCard('إجمالي النواقص',
-                          totalCount.toString(), 'صنف',
-                          Icons.inventory_2_rounded, AppColors.accent),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _statCard('بانتظار الرد',
-                          pendingCount.toString(), 'صنف',
-                          Icons.hourglass_empty_rounded, Colors.amber),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _statCard('تم الإرسال',
-                          sentCount.toString(), 'صنف',
-                          Icons.check_circle_outline_rounded, AppColors.primary),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+          // Custom Header
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Badges / Status pills (Left side under RTL)
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFBBF24), // Gold
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.star_rounded, color: Colors.white, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              'المالك',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Cairo'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified_user_rounded, color: AppColors.primary, size: 12),
+                            SizedBox(width: 4),
+                            Text(
+                              'احترافي',
+                              style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Cairo'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
 
-                // Search
-                TextField(
-                  onChanged: (v) => setState(() => _search = v),
-                  controller: _searchController,
-                  style: const TextStyle(color: AppColors.textColor),
-                  decoration: InputDecoration(
-                    hintText: 'ابحث عن دواء...',
-                    prefixIcon:
-                        const Icon(Icons.search, color: AppColors.textMuted),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_search.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear,
-                                color: AppColors.textMuted, size: 20),
-                            tooltip: 'مسح البحث',
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _search = '');
-                            },
+                  // Logo and Title (Right side under RTL)
+                  Row(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.primary, width: 1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'PRO',
+                                  style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Text(
+                                'صيدلي',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Cairo'),
+                              ),
+                            ],
                           ),
-                        if (userProvider.canManageShortages) ...[
-                          IconButton(
-                            icon: const Icon(Icons.paste_rounded,
-                                color: AppColors.warning),
-                            tooltip: 'إضافة من الحافظة',
-                            onPressed: _importFromClipboard,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.upload_file,
-                                color: AppColors.primary),
-                            tooltip: 'استيراد Excel',
-                            onPressed: _importExcel,
+                          const Text(
+                            'نواقص اليوم',
+                            style: TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 10,
+                                fontFamily: 'Cairo'),
                           ),
                         ],
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primary, width: 1.5),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.eco_rounded,
+                            color: AppColors.primary,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Combined Stats Bar
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.darkCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: Row(
+              children: [
+                // 1. إجمالي النواقص
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            totalCount.toString(),
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800),
+                          ),
+                          const Text(
+                            'النواقص',
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 9, fontFamily: 'Cairo'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.inventory_2_rounded, color: AppColors.accent, size: 14),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                // Divider
+                Container(
+                  width: 1,
+                  height: 24,
+                  color: AppColors.darkBorder,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                ),
 
-                // Action Buttons Row
+                // 2. بانتظار الرد
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            pendingCount.toString(),
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800),
+                          ),
+                          const Text(
+                            'انتظار',
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 9, fontFamily: 'Cairo'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.hourglass_empty_rounded, color: Colors.amber, size: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                // Divider
+                Container(
+                  width: 1,
+                  height: 24,
+                  color: AppColors.darkBorder,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+
+                // 3. تم الإرسال
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            sentCount.toString(),
+                            style: const TextStyle(
+                                color: AppColors.textColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800),
+                          ),
+                          const Text(
+                            'مرسل',
+                            style: TextStyle(color: AppColors.textMuted, fontSize: 9, fontFamily: 'Cairo'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary, size: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                // Divider
+                Container(
+                  width: 1,
+                  height: 24,
+                  color: AppColors.darkBorder,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                ),
+
+                // 4. أزرار البحث والمسح وخيارات الضبط
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: _actionBtn(
-                        icon: Icons.send_rounded,
-                        label: 'إرسال لمندوب',
-                        color: AppColors.primary,
-                        onTap: _showSelectRepDialog,
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showSearchField = !_showSearchField;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: _showSearchField ? AppColors.primary.withOpacity(0.2) : AppColors.dark,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _showSearchField ? AppColors.primary : AppColors.darkBorder),
+                        ),
+                        child: Icon(Icons.search, color: _showSearchField ? AppColors.primary : AppColors.textMuted, size: 15),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _actionBtn(
-                        icon: Icons.share_rounded,
-                        label: 'مشاركة للمدير',
-                        color: AppColors.accent,
-                        onTap: _shareShortages,
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: _openScanner,
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: AppColors.dark,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.darkBorder),
+                        ),
+                        child: const Icon(Icons.qr_code_scanner, color: AppColors.primary, size: 15),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _actionBtn(
-                        icon: Icons.swap_vert_rounded,
-                        label: 'ترتيب',
-                        color: AppColors.textLight,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    const RepMessageParserScreen()),
-                          );
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: AppColors.dark,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 15),
+                        color: AppColors.darkCard,
+                        tooltip: 'خيارات',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        itemBuilder: (_) => [
+                          const PopupMenuItem(
+                              value: 'send_rep',
+                              child: Row(children: [
+                                Icon(Icons.send_rounded, color: AppColors.primary, size: 16),
+                                SizedBox(width: 8),
+                                Text('إرسال لمندوب', style: TextStyle(color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 13)),
+                              ])),
+                          const PopupMenuItem(
+                              value: 'share_manager',
+                              child: Row(children: [
+                                Icon(Icons.share_rounded, color: AppColors.accent, size: 16),
+                                SizedBox(width: 8),
+                                Text('مشاركة للمدير', style: TextStyle(color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 13)),
+                              ])),
+                          const PopupMenuItem(
+                              value: 'parse_msg',
+                              child: Row(children: [
+                                Icon(Icons.swap_vert_rounded, color: AppColors.textLight, size: 16),
+                                SizedBox(width: 8),
+                                Text('ترتيب رسالة مندوب', style: TextStyle(color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 13)),
+                              ])),
+                          if (userProvider.canManageShortages) ...[
+                            const PopupMenuItem(
+                                value: 'import_excel',
+                                child: Row(children: [
+                                  Icon(Icons.upload_file, color: AppColors.primary, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('استيراد Excel', style: TextStyle(color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 13)),
+                                ])),
+                            const PopupMenuItem(
+                                value: 'import_clipboard',
+                                child: Row(children: [
+                                  Icon(Icons.paste_rounded, color: AppColors.warning, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('إضافة من الحافظة', style: TextStyle(color: AppColors.textColor, fontFamily: 'Cairo', fontSize: 13)),
+                                ])),
+                          ],
+                        ],
+                        onSelected: (v) {
+                          if (v == 'send_rep') _showSelectRepDialog();
+                          if (v == 'share_manager') _shareShortages();
+                          if (v == 'parse_msg') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const RepMessageParserScreen()),
+                            );
+                          }
+                          if (v == 'import_excel') _importExcel();
+                          if (v == 'import_clipboard') _importFromClipboard();
                         },
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+              ],
+            ),
+          ),
 
-                // Filter Tabs
+          // Search Field if expanded
+          if (_showSearchField)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: TextField(
+                onChanged: (v) => setState(() => _search = v),
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: AppColors.textColor),
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن دواء...',
+                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Cairo'),
+                  prefixIcon: const Icon(Icons.search, color: AppColors.textMuted, size: 18),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_search.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: AppColors.textMuted, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _search = '');
+                          },
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: AppColors.danger, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _search = '';
+                            _showSearchField = false;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // "نواقص سريعة" (Quick Shortages) Row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'نواقص سريعة ⚡',
+                  style: TextStyle(color: AppColors.textLight, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                ),
+                const SizedBox(height: 6),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
+                  reverse: true, // For RTL flow layout
                   child: Row(
                     children: [
-                      // Bulk Delete - only show when a specific filter is active
-                      if (_filter != 'all' && _filtered.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: ActionChip(
-                            avatar: const Icon(Icons.delete_sweep,
-                                size: 16, color: Colors.white),
-                            label: Text('حذف ${_filtered.length}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600)),
-                            backgroundColor: AppColors.danger,
-                            onPressed: _bulkDeleteFiltered,
-                          ),
+                      // + إضافة pill
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.add, size: 14, color: Colors.white),
+                          label: const Text('إضافة صنف',
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                          backgroundColor: AppColors.primary,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          onPressed: () => _showAddSheet(),
                         ),
-                      ..._filters.map((f) {
-                        final isActive = _filter == f.$1;
-                        final count = f.$1 == 'all'
-                            ? _shortages.length
-                            : _shortages.where((s) => s.status == f.$1).length;
+                      ),
+                      // Common items
+                      ...['بنادول', 'فلاجيل 500', 'أوجمنتين', 'كونجستال', 'كولونا', 'سولبادين', 'بروفين 400'].map((name) {
                         return Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: FilterChip(
-                            label: Text('${f.$2} ($count)'),
-                            selected: isActive,
-                            onSelected: (_) => setState(() => _filter = f.$1),
-                            selectedColor: AppColors.primary,
+                          padding: const EdgeInsets.only(left: 6),
+                          child: ActionChip(
+                            label: Text(name,
+                                style: const TextStyle(color: AppColors.textColor, fontSize: 11, fontFamily: 'Cairo')),
                             backgroundColor: AppColors.darkCard,
-                            side: BorderSide(
-                                color: isActive
-                                    ? AppColors.primary
-                                    : AppColors.darkBorder),
-                            labelStyle: TextStyle(
-                                color: isActive
-                                    ? Colors.white
-                                    : AppColors.textMuted,
-                                fontWeight: FontWeight.w600),
+                            side: const BorderSide(color: AppColors.darkBorder),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            onPressed: () => _addQuickShortage(name),
                           ),
                         );
                       }).toList(),
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
               ],
             ),
           ),
+
+          // "إضافة سريعة" Wizard Box
+          if (userProvider.canManageShortages)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.darkCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Title + Steps indicator
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          _buildStepDot(1),
+                          const SizedBox(width: 4),
+                          _buildStepDot(2),
+                          const SizedBox(width: 4),
+                          _buildStepDot(3),
+                        ],
+                      ),
+                      const Text(
+                        'إضافة سريعة ⚡',
+                        style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // Step content
+                  if (_wizardStep == 1) ...[
+                    // Step 1: Drug Name with Autocomplete
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Autocomplete<Map<String, dynamic>>(
+                            optionsBuilder: (TextEditingValue v) {
+                              if (v.text.isEmpty) {
+                                return const Iterable<Map<String, dynamic>>.empty();
+                              }
+                              return _suggestions.where((s) {
+                                final en = s['enName']?.toString().toLowerCase() ?? '';
+                                final ar = s['arName']?.toString().toLowerCase() ?? '';
+                                final q = v.text.toLowerCase();
+                                return en.contains(q) || ar.contains(q);
+                              }).take(8);
+                            },
+                            displayStringForOption: (option) => option['enName']?.toString() ?? '',
+                            onSelected: (option) {
+                              _wizardNameCtrl.text = option['enName']?.toString() ?? '';
+                            },
+                            fieldViewBuilder: (ctx, ctrl, fn, onSubmit) {
+                              // Sync controller
+                              ctrl.text = _wizardNameCtrl.text;
+                              ctrl.addListener(() {
+                                _wizardNameCtrl.text = ctrl.text;
+                              });
+                              return TextField(
+                                controller: ctrl,
+                                focusNode: fn,
+                                style: const TextStyle(color: AppColors.textColor, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'اسم الدواء أو الباركود...',
+                                  hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo'),
+                                  filled: true,
+                                  fillColor: AppColors.dark,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                                ),
+                              );
+                            },
+                            optionsViewBuilder: (context, onSelected, options) {
+                              return Align(
+                                alignment: Alignment.topRight,
+                                child: Material(
+                                  color: AppColors.darkCard,
+                                  elevation: 4.0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: const BorderSide(color: AppColors.darkBorder),
+                                  ),
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(maxHeight: 180, maxWidth: 280),
+                                    child: ListView.builder(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      itemCount: options.length,
+                                      itemBuilder: (BuildContext context, int index) {
+                                        final option = options.elementAt(index);
+                                        final en = option['enName']?.toString() ?? '';
+                                        return InkWell(
+                                          onTap: () => onSelected(option),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(10.0),
+                                            child: Text(en, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (_wizardNameCtrl.text.trim().isEmpty) {
+                              showSnack(context, 'الرجاء إدخال اسم الدواء', isError: true);
+                              return;
+                            }
+                            setState(() => _wizardStep = 2);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Text('التالي', style: TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ] else if (_wizardStep == 2) ...[
+                    // Step 2: Quantity counter
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => setState(() => _wizardStep = 1),
+                              child: const Text('السابق', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo', fontSize: 12)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () => setState(() => _wizardStep = 3),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('التالي', style: TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Text('الكمية المطلوبة:', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo')),
+                            const SizedBox(width: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.dark,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.darkBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove, color: AppColors.primary, size: 16),
+                                    onPressed: () {
+                                      if (_wizardQty > 1) {
+                                        setState(() => _wizardQty--);
+                                      }
+                                    },
+                                    constraints: const BoxConstraints(),
+                                    padding: const EdgeInsets.all(6),
+                                  ),
+                                  Text(
+                                    '$_wizardQty',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add, color: AppColors.primary, size: 16),
+                                    onPressed: () => setState(() => _wizardQty++),
+                                    constraints: const BoxConstraints(),
+                                    padding: const EdgeInsets.all(6),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else if (_wizardStep == 3) ...[
+                    // Step 3: Urgency and add
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => setState(() => _wizardStep = 2),
+                              child: const Text('السابق', style: TextStyle(color: AppColors.textMuted, fontFamily: 'Cairo', fontSize: 12)),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: _submitWizardAdd,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.accent,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Text('إضافة للجدول ✅', style: TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Text('صنف عاجل جداً؟', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Cairo')),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _wizardIsUrgent,
+                              onChanged: (v) => setState(() => _wizardIsUrgent = v),
+                              activeThumbColor: AppColors.danger,
+                              activeTrackColor: AppColors.danger.withOpacity(0.3),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+          // Filter Tabs
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // Bulk Delete - only show when a specific filter is active
+                  if (_filter != 'all' && _filtered.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.delete_sweep,
+                            size: 16, color: Colors.white),
+                        label: Text('حذف ${_filtered.length}',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600)),
+                        backgroundColor: AppColors.danger,
+                        onPressed: _bulkDeleteFiltered,
+                      ),
+                    ),
+                  ..._filters.map((f) {
+                    final isActive = _filter == f.$1;
+                    final count = f.$1 == 'all'
+                        ? _shortages.length
+                        : _shortages.where((s) => s.status == f.$1).length;
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: FilterChip(
+                        label: Text('${f.$2} ($count)'),
+                        selected: isActive,
+                        onSelected: (_) => setState(() => _filter = f.$1),
+                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.darkCard,
+                        side: BorderSide(
+                            color: isActive
+                                ? AppColors.primary
+                                : AppColors.darkBorder),
+                        labelStyle: TextStyle(
+                            color: isActive
+                                ? Colors.white
+                                : AppColors.textMuted,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+
           Expanded(
             child: _loading
                 ? const Center(
@@ -995,88 +1727,20 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
           ),
         ],
       ),
-      floatingActionButton: userProvider.canManageShortages
-          ? FloatingActionButton.extended(
-              heroTag: 'shortages_fab',
-              onPressed: () => _showAddSheet(),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('ناقص جديد',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: 'Cairo')),
+      bottomNavigationBar: userProvider.canManageShortages
+          ? Container(
+              color: AppColors.dark,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: PrimaryButton(
+                text: '+ إضافة صنف جديد',
+                onTap: () => _showAddSheet(),
+              ),
             )
           : null,
     );
   }
 
-  Widget _statCard(String title, String value, String unit, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.darkCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 6),
-          Text(title,
-              style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(value,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800)),
-            ],
-          ),
-          Text(unit,
-              style:
-                  const TextStyle(color: AppColors.textMuted, fontSize: 10)),
-        ],
-      ),
-    );
-  }
 
-  Widget _actionBtn({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.darkCard,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -1088,9 +1752,9 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
             height: 140,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primary.withValues(alpha: 0.08),
+              color: AppColors.primary.withOpacity(0.08),
               border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.15), width: 2),
+                  color: AppColors.primary.withOpacity(0.15), width: 2),
             ),
             child: Stack(
               alignment: Alignment.center,
@@ -1171,227 +1835,251 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
   Widget _buildCard(Shortage item) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Slidable(
-        endActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (_) => _showAddSheet(existing: item),
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              icon: Icons.edit_rounded,
-              label: 'تعديل',
-              borderRadius:
-                  const BorderRadius.horizontal(right: Radius.circular(14)),
-            ),
-            SlidableAction(
-              onPressed: (_) async {
-                final userProvider = context.read<CurrentUserProvider>();
-                if (!userProvider.canDelete) {
-                  showSnack(context, '⛔ ليس لديك صلاحية الحذف', isError: true);
-                  return;
-                }
-                final confirm = await showDeleteDialog(context, item.name);
-                if (confirm == true && item.id != null) {
-                  await context.read<ShortagesProvider>().delete(item.id!);
-                  // تسجيل النشاط
-                  await DatabaseHelper.instance.logActivity(
-                    assistantId: userProvider.currentAssistantId,
-                    assistantName: userProvider.currentName,
-                    action: 'حذف ناقص',
-                    details: 'تم حذف الناقص: ${item.name}',
-                    screen: 'shortages',
-                  );
-                  if (mounted) showSnack(context, 'تم الحذف');
-                }
-              },
-              backgroundColor: AppColors.danger,
-              foregroundColor: Colors.white,
-              icon: Icons.delete_rounded,
-              label: 'حذف',
-            ),
-          ],
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.darkCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border(
-              right: BorderSide(
-                  color:
-                      item.isUrgent ? AppColors.danger : AppColors.darkBorder,
-                  width: 4),
-              top: BorderSide(
-                  color: item.isUrgent
-                      ? AppColors.danger.withValues(alpha: 0.3)
-                      : AppColors.darkBorder),
-              bottom: BorderSide(
-                  color: item.isUrgent
-                      ? AppColors.danger.withValues(alpha: 0.3)
-                      : AppColors.darkBorder),
-              left: BorderSide(
-                  color: item.isUrgent
-                      ? AppColors.danger.withValues(alpha: 0.3)
-                      : AppColors.darkBorder),
-            ),
-            boxShadow: item.isUrgent ? [
-              BoxShadow(
-                color: AppColors.danger.withValues(alpha: 0.1),
-                blurRadius: 10,
-                spreadRadius: 1,
-              )
-            ] : null,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.darkCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border(
+            right: BorderSide(
+                color: item.isUrgent ? AppColors.danger : AppColors.darkBorder,
+                width: 4),
+            top: BorderSide(
+                color: item.isUrgent
+                    ? AppColors.danger.withOpacity(0.2)
+                    : AppColors.darkBorder),
+            bottom: BorderSide(
+                color: item.isUrgent
+                    ? AppColors.danger.withOpacity(0.2)
+                    : AppColors.darkBorder),
+            left: BorderSide(
+                color: item.isUrgent
+                    ? AppColors.danger.withOpacity(0.2)
+                    : AppColors.darkBorder),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
+          boxShadow: item.isUrgent ? [
+            BoxShadow(
+              color: AppColors.danger.withOpacity(0.08),
+              blurRadius: 8,
+              spreadRadius: 1,
+            )
+          ] : null,
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                // Drag handle (Far Left)
+                const Icon(Icons.drag_handle_rounded, color: AppColors.textMuted, size: 20),
+                const SizedBox(width: 8),
+
+                // Urgency Badge (Middle-left)
+                if (item.isUrgent) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2D0A0A),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning_rounded, color: AppColors.danger, size: 10),
+                        SizedBox(width: 2),
+                        Text(
+                          'عاجل',
+                          style: TextStyle(
+                            color: AppColors.danger,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Cairo',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+
+                // Quantity Counter (Middle)
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.dark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove, color: AppColors.primary, size: 14),
+                        onPressed: () {
+                          if (item.quantity > 1) {
+                            _updateQuantity(item, item.quantity - 1);
+                          }
+                        },
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                      ),
+                      Text(
+                        '${item.quantity}',
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add, color: AppColors.primary, size: 14),
+                        onPressed: () {
+                          _updateQuantity(item, item.quantity + 1);
+                        },
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Medication Details (Middle-right)
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _showAddSheet(existing: item),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Flexible(
-                              child: Text(item.name,
-                                  style: const TextStyle(
-                                      color: AppColors.textColor,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15)),
-                            ),
                             IconButton(
-                              icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 18),
+                              icon: const Icon(Icons.search_rounded, color: AppColors.primary, size: 16),
                               onPressed: () => _searchGoogleImages(item.name),
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
                               constraints: const BoxConstraints(),
                               tooltip: 'بحث في جوجل (صور)',
                             ),
+                            Flexible(
+                              child: Text(
+                                item.name,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: AppColors.textColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 2),
                         Text(
-                            '${item.company} · ${item.quantity} علبة · ${item.timeAgo}',
+                          '${item.company} · ${item.timeAgo}',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontFamily: 'Cairo'),
+                        ),
+                        if (item.createdBy != null && item.createdBy!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'أضافه: ${item.createdBy}',
+                            textAlign: TextAlign.right,
                             style: const TextStyle(
-                                color: AppColors.textMuted, fontSize: 12)),
-                        if (item.createdBy != null && item.createdBy!.isNotEmpty) ...[ 
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              const Icon(Icons.person_outline_rounded,
-                                  color: AppColors.accent, size: 12),
-                              const SizedBox(width: 3),
-                              Text('أضافه: ${item.createdBy}',
-                                  style: const TextStyle(
-                                      color: AppColors.accent,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600)),
-                            ],
+                              color: AppColors.accent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Cairo',
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                  StatusBadge(status: item.status),
-                ],
+                ),
+
+                // Delete Button (Far Right)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20),
+                  onPressed: () => _deleteShortage(item),
+                ),
+              ],
+            ),
+            if (item.notes != null && item.notes!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  item.notes!,
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontFamily: 'Cairo'),
+                ),
               ),
-              if (item.isUrgent) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFF2D0A0A),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.warning_rounded,
-                          color: AppColors.danger, size: 14),
-                      SizedBox(width: 4),
-                      Text('عاجل',
-                          style: TextStyle(
-                              color: AppColors.danger,
+            ],
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: DatabaseHelper.instance.getAlternativesFor(item.name),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                final alts = snapshot.data!.map((row) {
+                  final med = row['medication_name']?.toString() ?? '';
+                  final alt = row['alternative_name']?.toString() ?? '';
+                  if (med.toLowerCase() == item.name.toLowerCase()) {
+                    return alt;
+                  }
+                  return med;
+                }).where((name) => name.isNotEmpty).toSet().toList();
+
+                if (alts.isEmpty) return const SizedBox.shrink();
+
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.swap_horiz_rounded, color: AppColors.primary, size: 14),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '💡 بدائل محلية مقترحة: ${alts.join(" ، ")}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
                               fontSize: 11,
-                              fontWeight: FontWeight.w700)),
-                    ],
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                StatusBadge(status: item.status),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AlternativesScreen(initialSearch: item.name),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 14, color: AppColors.accent),
+                  label: const Text(
+                    'البحث عن بديل 🔄',
+                    style: TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                   ),
                 ),
               ],
-              if (item.notes != null && item.notes!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(item.notes!,
-                    style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12)),
-              ],
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: DatabaseHelper.instance.getAlternativesFor(item.name),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  final alts = snapshot.data!.map((row) {
-                    final med = row['medication_name']?.toString() ?? '';
-                    final alt = row['alternative_name']?.toString() ?? '';
-                    if (med.toLowerCase() == item.name.toLowerCase()) {
-                      return alt;
-                    }
-                    return med;
-                  }).where((name) => name.isNotEmpty).toSet().toList();
-
-                  if (alts.isEmpty) return const SizedBox.shrink();
-
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.swap_horiz_rounded, color: AppColors.primary, size: 14),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '💡 بدائل محلية مقترحة: ${alts.join(" ، ")}',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 11,
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AlternativesScreen(initialSearch: item.name),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: AppColors.accent),
-                    label: const Text('البحث عن بديل 🔄', style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

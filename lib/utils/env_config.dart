@@ -29,15 +29,15 @@ class EnvConfig {
 
   // ── Developer Panel ──
   static const devPassword =
-      String.fromEnvironment('DEV_PASS', defaultValue: 'dev@saydali2026');
+      String.fromEnvironment('DEV_PASS', defaultValue: '');
 
   // ── Admin Bypass Codes ──
   static const adminCode1 =
-      String.fromEnvironment('ADMIN_CODE_1', defaultValue: 'ADMIN2026');
+      String.fromEnvironment('ADMIN_CODE_1', defaultValue: '');
 
   // ── Admin Bypass Codes ──
   static const adminCode2 =
-      String.fromEnvironment('ADMIN_CODE_2', defaultValue: 'DEV@SAYDALI2026');
+      String.fromEnvironment('ADMIN_CODE_2', defaultValue: '');
 
   // ── Web Portal ──
   static String webPortalBaseUrl =

@@ -1161,7 +1161,39 @@ class DatabaseHelper {
   }
 
   // ── الإحصائيات والأرباح ────────────────────────────────────
+
+  /// مبيعات آخر 7 أيام مجمعة بالتاريخ
+  Future<List<Map<String, dynamic>>> getDailySalesLastWeek() async {
+    final db = await database;
+    final List<Map<String, dynamic>> result = [];
+    try {
+      final rows = await db.rawQuery('''
+        SELECT substr(created_at, 1, 10) as day, SUM(total) as total
+        FROM invoices
+        WHERE created_at >= date('now', '-6 days')
+        GROUP BY day
+        ORDER BY day ASC
+      ''');
+      result.addAll(rows.map((r) => {
+        'day': r['day'] as String,
+        'total': (r['total'] as num?)?.toDouble() ?? 0.0,
+      }));
+    } catch (e) {
+      debugPrint('Error getDailySalesLastWeek: $e');
+    }
+    // fill missing days with zero
+    final List<Map<String, dynamic>> filled = [];
+    for (int i = 6; i >= 0; i--) {
+      final day = DateTime.now().subtract(Duration(days: i));
+      final key = '${day.year}-${day.month.toString().padLeft(2,'0')}-${day.day.toString().padLeft(2,'0')}';
+      final found = result.where((r) => r['day'] == key);
+      filled.add({'day': key, 'total': found.isNotEmpty ? found.first['total'] : 0.0});
+    }
+    return filled;
+  }
+
   Future<Map<String, dynamic>> getStatisticsSummary() async {
+
     final db = await database;
     double totalSales = 0;
     double totalCost = 0;

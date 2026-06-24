@@ -310,8 +310,8 @@ class Assistant {
         'subscription_duration_days': subscriptionDurationDays,
       };
 
-  bool get isSubscriptionExpired =>
-      subscriptionExpiry != null && DateTime.now().isAfter(subscriptionExpiry!);
+  // ── ميزة المساعدين مفتوحة للجميع مجاناً ──
+  bool get isSubscriptionExpired => false;
 
   String get roleLabel => role == 'owner' ? 'المالك 👑' : 'مساعد 👤';
 
