@@ -1,18 +1,26 @@
-name: Build Saydali APK
+﻿name: Build & Release Saydali APK
 
 on:
   push:
     branches: [main, master]
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'رقم الإصدار (مثلاً: 1.5.0)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'ملاحظات الإصدار'
+        required: false
+        default: 'تحديث جديد'
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK & AAB
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -40,6 +48,16 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//' | tr -d ' \r\n')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
       - name: Decode Keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
@@ -48,7 +66,7 @@ jobs:
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
           echo "storeFile=upload-keystore.jks" >> android/key.properties
 
-      - name: Build AppBundle for Play Store
+      - name: Build AppBundle (Play Store)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -56,25 +74,19 @@ jobs:
           ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
           ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
           WEB_PORTAL_URL: ${{ secrets.WEB_PORTAL_URL }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
         run: |
-          CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
-          CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
-          CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
-          CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
-          CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
-          CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
           flutter build appbundle --release \
             --obfuscate --split-debug-info=build/debug-info \
-            --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
-            --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
-            --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
-            --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
-            --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
-            --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
+            --dart-define="SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')" \
+            --dart-define="SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')" \
+            --dart-define="DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')" \
+            --dart-define="WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')" \
+            --dart-define="GITHUB_PAT=$(echo -n "$GITHUB_PAT" | tr -d '\n\r')"
 
-      # Removed actions/upload-artifact to save quota. Will upload to Release at the end.
-
-      - name: Build APK for Local Testing
+      - name: Build APK (Direct Install)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -82,29 +94,40 @@ jobs:
           ADMIN_CODE_1: ${{ secrets.ADMIN_CODE_1 }}
           ADMIN_CODE_2: ${{ secrets.ADMIN_CODE_2 }}
           WEB_PORTAL_URL: ${{ secrets.WEB_PORTAL_URL }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
         run: |
-          CLEAN_SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')
-          CLEAN_SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')
-          CLEAN_DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')
-          CLEAN_ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')
-          CLEAN_ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')
-          CLEAN_WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')
           flutter build apk --release \
             --obfuscate --split-debug-info=build/debug-info \
-            --dart-define="SUPABASE_URL=$CLEAN_SUPABASE_URL" \
-            --dart-define="SUPABASE_KEY=$CLEAN_SUPABASE_KEY" \
-            --dart-define="DEV_PASS=$CLEAN_DEV_PASS" \
-            --dart-define="ADMIN_CODE_1=$CLEAN_ADMIN_CODE_1" \
-            --dart-define="ADMIN_CODE_2=$CLEAN_ADMIN_CODE_2" \
-            --dart-define="WEB_PORTAL_URL=$CLEAN_WEB_PORTAL_URL"
+            --dart-define="SUPABASE_URL=$(echo -n "$SUPABASE_URL" | tr -d '\n\r')" \
+            --dart-define="SUPABASE_KEY=$(echo -n "$SUPABASE_KEY" | tr -d '\n\r')" \
+            --dart-define="DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_1=$(echo -n "$ADMIN_CODE_1" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_2=$(echo -n "$ADMIN_CODE_2" | tr -d '\n\r')" \
+            --dart-define="WEB_PORTAL_URL=$(echo -n "$WEB_PORTAL_URL" | tr -d '\n\r')" \
+            --dart-define="GITHUB_PAT=$(echo -n "$GITHUB_PAT" | tr -d '\n\r')"
 
-      - name: Create Release with APK and AAB
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             "build/app/outputs/flutter-apk/saydali-pro-v${{ steps.get_version.outputs.version }}.apk"
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: "Build #${{ github.run_number }}"
-          body: "Automated build. Download the APK or AAB below."
-          prerelease: true
+          tag_name: v${{ steps.get_version.outputs.version }}-build${{ github.run_number }}
+          name: "Saydali Pro v${{ steps.get_version.outputs.version }} (Build #${{ github.run_number }})"
+          body: |
+            ## صيدلي برو - الإصدار ${{ steps.get_version.outputs.version }}
+
+            ${{ github.event.inputs.release_notes || 'تحديث تلقائي' }}
+
+            ---
+            ### كيفية التثبيت
+            - **APK** — تثبيت مباشر على الهاتف
+            - **AAB** — رفع على متجر Google Play
+
+            > كل كود تفعيل صالح لجهاز واحد فقط
+          prerelease: false
           files: |
             build/app/outputs/bundle/release/app-release.aab
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/saydali-pro-v${{ steps.get_version.outputs.version }}.apk
