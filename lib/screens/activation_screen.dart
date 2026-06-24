@@ -3,12 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../utils/app_theme.dart';
 import '../database/database_helper.dart';
+import '../utils/activation_codes.dart';
 import 'cloud_setup_screen.dart';
 import 'assistant_pin_login_screen.dart';
-
-// ─── كل أكواد التفعيل الصالحة ───────────────────────────────────────────────
-// تُجلَب من GitHub أونلاين — هذه القائمة reserve فقط للوضع offline
-const List<String> kActivationCodes = [];
 
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
