@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, 'saydali_pro.db');
     return await openDatabase(
       path,
-      version: 17,
+      version: 18,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -196,12 +196,14 @@ class DatabaseHelper {
             expiry_date TEXT NOT NULL,
             supplier_name TEXT,
             notes TEXT,
-            cloud_id TEXT,
-            is_synced INTEGER DEFAULT 0,
-            created_by TEXT,
-            created_at TEXT NOT NULL
-          )
-        ''');
+        cloud_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
+
       } catch (_) {}
       try {
         await db.execute('''
@@ -260,6 +262,13 @@ class DatabaseHelper {
           used_at TEXT NOT NULL
         )
       ''');
+    }
+    if (oldVersion < 18) {
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_shortages_status ON shortages(status)'); } catch (_) {}
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_shortages_created ON shortages(created_at DESC)'); } catch (_) {}
+      try { await db.execute('CREATE INDEX IF NOT EXISTS idx_debt_customer ON debt_transactions(customer_id)'); } catch (_) {}
+      try { await db.execute("ALTER TABLE assistants ADD COLUMN updated_at TEXT"); } catch (_) {}
+      try { await db.execute("ALTER TABLE customers ADD COLUMN updated_at TEXT"); } catch (_) {}
     }
   }
 
@@ -361,7 +370,8 @@ class DatabaseHelper {
         photo_url TEXT,
         is_synced INTEGER DEFAULT 0,
         created_by TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        updated_at TEXT
       )
     ''');
 
@@ -491,10 +501,10 @@ class DatabaseHelper {
         is_active INTEGER DEFAULT 1,
         subscription_expiry TEXT,
         subscription_duration_days INTEGER DEFAULT 30,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        updated_at TEXT
       )
     ''');
-
     // جدول سجل الأنشطة
     await db.execute('''
       CREATE TABLE IF NOT EXISTS activity_log (
@@ -564,6 +574,11 @@ class DatabaseHelper {
         used_at TEXT NOT NULL
       )
     ''');
+
+    // ── الفهارس لتحسين أداء الاستعلامات ──
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_shortages_status ON shortages(status)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_shortages_created ON shortages(created_at DESC)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_debt_customer ON debt_transactions(customer_id)');
   }
 
 
@@ -594,13 +609,14 @@ class DatabaseHelper {
     final db = await database;
     final Map<String, dynamic> map = Map<String, dynamic>.from(data);
     map['updated_at'] = DateTime.now().toIso8601String();
-    map['created_by'] = await getCurrentUserName();
+    map.remove('created_by');
     map['is_synced'] = 0;
     return await db.update('shortages', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteShortage(int id) async {
     final db = await database;
+    await db.delete('rep_responses', where: 'shortage_id = ?', whereArgs: [id]);
     return await db.delete('shortages', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -1004,7 +1020,9 @@ class DatabaseHelper {
   Future<int> insertAssistant(Map<String, dynamic> data) async {
     final db = await database;
     final map = Map<String, dynamic>.from(data);
-    map['created_at'] = DateTime.now().toIso8601String();
+    final now = DateTime.now().toIso8601String();
+    map['created_at'] = now;
+    map['updated_at'] = now;
     map['subscription_duration_days'] ??= 30;
     map['subscription_expiry'] ??= DateTime.now()
         .add(Duration(days: map['subscription_duration_days'] as int))
@@ -1065,6 +1083,7 @@ class DatabaseHelper {
   Future<int> updateAssistant(int id, Map<String, dynamic> data) async {
     final db = await database;
     final map = Map<String, dynamic>.from(data);
+    map['updated_at'] = DateTime.now().toIso8601String();
     if (map['pin'] != null && !(map['pin'] as String).contains('\$')) {
       map['pin'] = SecurityHelper.hashPin(map['pin'] as String);
     }
@@ -1278,8 +1297,8 @@ class DatabaseHelper {
         totalSales = (salesResult.first['sum_total'] as num).toDouble();
       }
 
-      // 2. إجمالي الديون المستحقة
-      final debtsResult = await db.rawQuery('SELECT SUM(total_debt) as sum_debt FROM customers');
+      // 2. إجمالي الديون المستحقة (محسوب من debt_transactions لتجنب البيانات القديمة)
+      final debtsResult = await db.rawQuery("SELECT COALESCE(SUM(CASE WHEN type='debt' THEN amount ELSE -amount END), 0) as sum_debt FROM debt_transactions");
       if (debtsResult.isNotEmpty && debtsResult.first['sum_debt'] != null) {
         totalDebts = (debtsResult.first['sum_debt'] as num).toDouble();
       }
@@ -1798,9 +1817,9 @@ class DatabaseHelper {
         if (existing.isEmpty) {
           await db.insert('assistants', data);
         } else {
-          final localDate = existing.first['created_at']?.toString() ?? '';
-          final remoteDate = item['created_at']?.toString() ?? '';
-          if (remoteDate.compareTo(localDate) > 0) {
+          final localUpdated = existing.first['updated_at']?.toString() ?? existing.first['created_at']?.toString() ?? '';
+          final remoteUpdated = item['updated_at']?.toString() ?? item['created_at']?.toString() ?? '';
+          if (remoteUpdated.compareTo(localUpdated) > 0) {
             await db.update('assistants', data, where: 'cloud_id = ?', whereArgs: [cloudId]);
           }
         }

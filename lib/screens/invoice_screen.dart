@@ -30,15 +30,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   
   // ▌ اقتراحات الأصناف
   List<Map<String, dynamic>> _suggestions = [];
-  Timer? _refreshTimer;
+  StreamSubscription<void>? _syncSubscription;
 
   @override
   void initState() {
     super.initState();
     _load();
     _loadSuggestions();
-    // تحديث تلقائي كل 4 ثواني
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
       _load();
     });
   }
@@ -77,7 +76,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _syncSubscription?.cancel();
     super.dispose();
   }
 

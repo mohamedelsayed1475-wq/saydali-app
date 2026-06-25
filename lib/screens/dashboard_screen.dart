@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../database/database_helper.dart';
 import '../services/supabase_service.dart';
+import '../services/sync_service.dart';
 import '../utils/app_theme.dart';
 import 'shortages_screen.dart';
 import 'debts_screen.dart';
@@ -31,13 +32,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _currency = 'ج.م';
   List<Map<String, dynamic>> _alerts = [];
   Timer? _refreshTimer;
+  StreamSubscription<void>? _syncSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    // تحديث تلقائي كل 30 ثانية
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
       _loadData();
     });
     if (!_adShown) {
@@ -48,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    _syncSubscription?.cancel();
     super.dispose();
   }
 

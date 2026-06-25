@@ -129,7 +129,7 @@ class Representative {
         rating: map['rating'] ?? 5,
         totalCovered: map['total_covered'] ?? 0,
         notes: map['notes'],
-        createdAt: DateTime.parse(map['created_at']),
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
 
   Map<String, dynamic> toMap() => {
@@ -176,7 +176,7 @@ class Customer {
         dueDate: map['due_date'] != null ? DateTime.tryParse(map['due_date']) : null,
         photoUrl: map['photo_url'],
         createdBy: map['created_by'],
-        createdAt: DateTime.parse(map['created_at']),
+        createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
 
   Map<String, dynamic> toMap() => {

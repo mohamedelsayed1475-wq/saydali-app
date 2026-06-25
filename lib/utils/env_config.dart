@@ -18,21 +18,29 @@
 class EnvConfig {
   // ══════════════════════════════════════════════════════════════
   // القيم تُقرأ حصرياً من --dart-define (GitHub Secrets)
+  // وتُحمّل مرّة واحدة – لا يمكن تغييرها بعد التهيئة.
   // ══════════════════════════════════════════════════════════════
 
-  // ── Supabase ──
-  static String supabaseUrl =
-      const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+  static String? _supabaseUrl;
+  static String? _supabaseKey;
+  static String? _webPortalBaseUrl;
 
-  static String supabaseKey =
-      const String.fromEnvironment('SUPABASE_KEY', defaultValue: '');
+  // ── Supabase ──
+  static String get supabaseUrl {
+    _initFromEnv();
+    return _supabaseUrl ?? '';
+  }
+
+  static String get supabaseKey {
+    _initFromEnv();
+    return _supabaseKey ?? '';
+  }
 
   // ── Developer Panel ──
   static const devPassword =
       String.fromEnvironment('DEV_PASS', defaultValue: '');
 
   // ── Admin Bypass Codes (SHA-256 Hashes) ──
-  // القيمة المخزنة هنا يجب أن تكون الـ SHA-256 hash الخاص بالكود الإداري لمنع كشفه عند فك الـ APK
   static const adminCode1Hash =
       String.fromEnvironment('ADMIN_CODE_1_HASH', defaultValue: '');
 
@@ -40,8 +48,26 @@ class EnvConfig {
       String.fromEnvironment('ADMIN_CODE_2_HASH', defaultValue: '');
 
   // ── Web Portal ──
-  static String webPortalBaseUrl =
-      const String.fromEnvironment('WEB_PORTAL_URL', defaultValue: '');
+  static String get webPortalBaseUrl {
+    _initFromEnv();
+    return _webPortalBaseUrl ?? '';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // تهيئة لمرة واحدة – تُستدعى من SupabaseService.initializeDynamic
+  // لتعويض القيم بالقيم المخزنة في قاعدة البيانات.
+  // ══════════════════════════════════════════════════════════════
+  static void override({String? url, String? key, String? webUrl}) {
+    if (url != null && url.isNotEmpty) _supabaseUrl = url;
+    if (key != null && key.isNotEmpty) _supabaseKey = key;
+    if (webUrl != null && webUrl.isNotEmpty) _webPortalBaseUrl = webUrl;
+  }
+
+  static void _initFromEnv() {
+    _supabaseUrl ??= const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    _supabaseKey ??= const String.fromEnvironment('SUPABASE_KEY', defaultValue: '');
+    _webPortalBaseUrl ??= const String.fromEnvironment('WEB_PORTAL_URL', defaultValue: '');
+  }
 
   // ══════════════════════════════════════════════════════════════
   // فحص هل البيئة مُعدّة صح

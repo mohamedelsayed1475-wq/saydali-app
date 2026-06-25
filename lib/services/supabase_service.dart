@@ -23,15 +23,11 @@ class SupabaseService {
       final savedKey = await db.getSetting('supabase_key');
       final savedWebUrl = await db.getSetting('web_portal_url');
 
-      if (savedUrl != null && savedUrl.isNotEmpty) {
-        EnvConfig.supabaseUrl = savedUrl;
-      }
-      if (savedKey != null && savedKey.isNotEmpty) {
-        EnvConfig.supabaseKey = savedKey;
-      }
-      if (savedWebUrl != null && savedWebUrl.isNotEmpty) {
-        EnvConfig.webPortalBaseUrl = savedWebUrl;
-      }
+      EnvConfig.override(
+        url: savedUrl,
+        key: savedKey,
+        webUrl: savedWebUrl,
+      );
 
       await _ensurePharmacyId();
       debugPrint('Initialized dynamic configurations successfully: URL=${EnvConfig.supabaseUrl}');
@@ -349,15 +345,15 @@ class SupabaseService {
   }
 
   // ── جلب كل الجلسات النشطة للصيدلية ──────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> fetchPharmacySessions(
-      String pharmacyName) async {
+  Future<List<Map<String, dynamic>>> fetchPharmacySessions() async {
     await _ensurePharmacyId();
     if (!isConfigured) return [];
+    if (_pharmacyCloudId == null || _pharmacyCloudId!.isEmpty) return [];
     try {
       final res = await http
           .get(
             Uri.parse(
-                '$_url/rep_sessions?pharmacy_name=eq.${Uri.encodeComponent(pharmacyName)}&select=*'),
+                '$_url/rep_sessions?pharmacy_id=eq.$_pharmacyCloudId&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 10));
@@ -621,106 +617,14 @@ class SupabaseService {
   }
 
   // ── رفع صورة الإعلان ──────────────────────────────────────────────────
-  Future<String?> uploadAdImage(String filePath) async {
-    if (!isConfigured) return null;
-    try {
-      final file = File(filePath);
-      final fileName = 'ad_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final bytes = await file.readAsBytes();
+  Future<String?> uploadAdImage(String filePath) =>
+      _uploadFile(filePath, 'ads-images', 'ad');
 
-      final res = await http
-          .post(
-            Uri.parse(
-                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/ads-images/$fileName'),
-            headers: {
-              'apikey': EnvConfig.supabaseKey,
-              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-              'Content-Type': 'image/jpeg',
-            },
-            body: bytes,
-          )
-          .timeout(const Duration(seconds: 30));
+  Future<String?> uploadCustomerPhoto(String filePath, String customerId) =>
+      _uploadFile(filePath, 'customer-photos', 'customer_$customerId');
 
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/ads-images/$fileName';
-      }
-      debugPrint('❌ uploadAdImage failed: ${res.statusCode} - ${res.body}');
-      return null;
-    } catch (e) {
-      debugPrint('❌ uploadAdImage error: $e');
-      return null;
-    }
-  }
-
-  // ── رفع صورة العميل ──────────────────────────────────────────────────
-  Future<String?> uploadCustomerPhoto(
-      String filePath, String customerId) async {
-    if (!isConfigured) return null;
-    try {
-      final file = File(filePath);
-      final fileName =
-          'customer_${customerId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final bytes = await file.readAsBytes();
-
-      final res = await http
-          .post(
-            Uri.parse(
-                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/customer-photos/$fileName'),
-            headers: {
-              'apikey': EnvConfig.supabaseKey,
-              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-              'Content-Type': 'image/jpeg',
-            },
-            body: bytes,
-          )
-          .timeout(const Duration(seconds: 30));
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/customer-photos/$fileName';
-      }
-      debugPrint(
-          '❌ uploadCustomerPhoto failed: ${res.statusCode} - ${res.body}');
-      return null;
-    } catch (e) {
-      debugPrint('❌ uploadCustomerPhoto error: $e');
-      return null;
-    }
-  }
-
-  // ── رفع إيصال الدين ──────────────────────────────────────────────────
-  Future<String?> uploadReceiptPhoto(
-      String filePath, String transactionId) async {
-    if (!isConfigured) return null;
-    try {
-      final file = File(filePath);
-      final fileName =
-          'receipt_${transactionId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final bytes = await file.readAsBytes();
-
-      final res = await http
-          .post(
-            Uri.parse(
-                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/debt-receipts/$fileName'),
-            headers: {
-              'apikey': EnvConfig.supabaseKey,
-              'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
-              'Content-Type': 'image/jpeg',
-            },
-            body: bytes,
-          )
-          .timeout(const Duration(seconds: 30));
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/debt-receipts/$fileName';
-      }
-      debugPrint(
-          '❌ uploadReceiptPhoto failed: ${res.statusCode} - ${res.body}');
-      return null;
-    } catch (e) {
-      debugPrint('❌ uploadReceiptPhoto error: $e');
-      return null;
-    }
-  }
+  Future<String?> uploadReceiptPhoto(String filePath, String transactionId) =>
+      _uploadFile(filePath, 'debt-receipts', 'receipt_$transactionId');
 
   // ── رابط الصفحة الويب (الكود فقط — بدون تمرير المفاتيح) ──────────────
   // كل صيدلية تضيف السحابة الخاصة بها وتستضيف الصفحة بشكل مستقل
@@ -743,7 +647,7 @@ class SupabaseService {
     try {
       final cutoff = DateTime.now().subtract(const Duration(hours: 24));
 
-      final sessionsRes = await http
+      final sessionIdsRes = await http
           .get(
             Uri.parse(
                 '$_url/rep_sessions?expires_at=lt.${cutoff.toIso8601String()}&select=id'),
@@ -751,23 +655,41 @@ class SupabaseService {
           )
           .timeout(const Duration(seconds: 30));
 
-      if (sessionsRes.statusCode != 200) return 0;
-      final sessions = jsonDecode(sessionsRes.body) as List;
+      if (sessionIdsRes.statusCode != 200) return 0;
+      final sessions = jsonDecode(sessionIdsRes.body) as List;
 
       if (sessions.isEmpty) {
         debugPrint('✅ لا توجد جلسات منتهية للحذف');
         return 0;
       }
 
-      int deletedCount = 0;
-      for (final session in sessions) {
-        final sessionId = session['id'];
-        await deleteSession(sessionId.toString());
-        deletedCount++;
-      }
+      final ids = sessions.map((s) => s['id'].toString()).join(',');
+      final idFilter = 'in=($ids)';
 
-      debugPrint('✅ تم حذف $deletedCount جلسة منتهية');
-      return deletedCount;
+      await http
+          .delete(
+            Uri.parse('$_url/session_items?session_id.$idFilter'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      await http
+          .delete(
+            Uri.parse('$_url/response_codes?session_id.$idFilter'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      await http
+          .delete(
+            Uri.parse(
+                '$_url/rep_sessions?expires_at=lt.${cutoff.toIso8601String()}'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint('✅ تم حذف ${sessions.length} جلسة منتهية');
+      return sessions.length;
     } catch (e) {
       debugPrint('❌ cleanupExpiredSessions error: $e');
       return 0;
@@ -833,17 +755,21 @@ class SupabaseService {
   }
 
   // ── رفع صورة للمجتمع ──────────────────────────────────────────────────
-  Future<String?> uploadCommunityPhoto(String filePath) async {
+  Future<String?> uploadCommunityPhoto(String filePath) =>
+      _uploadFile(filePath, 'community-photos', 'community');
+
+  /// ── رفع ملف إلى Supabase Storage ───────────────────────────────────────
+  Future<String?> _uploadFile(String filePath, String bucket, String prefix) async {
     if (!isConfigured) return null;
     try {
       final file = File(filePath);
-      final fileName = 'community_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final bytes = await file.readAsBytes();
+      final storageUrl = EnvConfig.supabaseUrl.replaceAll('/rest/v1', '');
 
       final res = await http
           .post(
-            Uri.parse(
-                '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/community-photos/$fileName'),
+            Uri.parse('$storageUrl/storage/v1/object/$bucket/$fileName'),
             headers: {
               'apikey': EnvConfig.supabaseKey,
               'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
@@ -854,12 +780,12 @@ class SupabaseService {
           .timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        return '${EnvConfig.supabaseUrl.replaceAll('/rest/v1', '')}/storage/v1/object/public/community-photos/$fileName';
+        return '$storageUrl/storage/v1/object/public/$bucket/$fileName';
       }
-      debugPrint('❌ uploadCommunityPhoto failed: ${res.statusCode} - ${res.body}');
+      debugPrint('❌ upload to $bucket failed: ${res.statusCode} - ${res.body}');
       return null;
     } catch (e) {
-      debugPrint('❌ uploadCommunityPhoto error: $e');
+      debugPrint('❌ upload to $bucket error: $e');
       return null;
     }
   }
@@ -871,7 +797,7 @@ class SupabaseService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/pharmacy_community_posts?select=*&order=created_at.desc'),
+            Uri.parse('$_url/pharmacy_community_posts?pharmacy_id=eq.$_pharmacyCloudId&select=*&order=created_at.desc'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 15));

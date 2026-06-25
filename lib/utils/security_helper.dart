@@ -80,18 +80,29 @@ class SecurityHelper {
   /// ── الحصول على الوقت من السيرفر ──
   /// يمنع المستخدم من تغيير ساعة الجهاز لتمديد الاشتراك
   static Future<DateTime?> getServerTime() async {
-    try {
-      // استخدام WorldTimeAPI كمصدر موثوق للوقت
-      final res = await http
-          .get(Uri.parse('https://worldtimeapi.org/api/ip'))
-          .timeout(const Duration(seconds: 5));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        return DateTime.parse(data['datetime']);
-      }
-    } catch (_) {}
+    // 1. محاولة Supabase RPC (get_server_time يرجع NOW())
+    if (EnvConfig.supabaseUrl.isNotEmpty) {
+      try {
+        final res = await http
+            .post(
+              Uri.parse('${EnvConfig.supabaseUrl}/rpc/get_server_time'),
+              headers: {
+                'apikey': EnvConfig.supabaseKey,
+                'Authorization': 'Bearer ${EnvConfig.supabaseKey}',
+                'Content-Type': 'application/json',
+              },
+            )
+            .timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final serverTime = jsonDecode(res.body) as String?;
+          if (serverTime != null) {
+            return DateTime.tryParse(serverTime);
+          }
+        }
+      } catch (_) {}
+    }
 
-    // Fallback: محاولة Supabase
+    // Fallback: محاولة HEAD على Supabase
     if (EnvConfig.supabaseUrl.isNotEmpty) {
       try {
         final res = await http

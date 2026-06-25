@@ -31,13 +31,8 @@ class ShortagesScreen extends StatefulWidget {
 }
 
 class _ShortagesScreenState extends State<ShortagesScreen> {
-  String _filter = 'all';
-  String _search = '';
-
-
   List<Map<String, dynamic>> _suggestions = [];
   final _searchController = TextEditingController();
-  Timer? _refreshTimer;
 
   // Wizard quick add variables
   int _wizardStep = 1;
@@ -56,7 +51,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     _searchController.dispose();
     _wizardNameCtrl.dispose();
     super.dispose();
@@ -67,10 +61,6 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     super.initState();
     _loadShortages(silent: false);
     _loadSuggestions();
-    // تحديث تلقائي كل 30 ثانية
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      _loadShortages(silent: true);
-    });
   }
 
   Future<void> _loadSuggestions() async {
@@ -100,44 +90,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     await context.read<ShortagesProvider>().load(silent: silent);
   }
 
-  /// ▌ حساب درجة التطابق (كلما زادت كلما كان أفضل)
-  double _matchScore(String query, Shortage s) {
-    final q = query.toLowerCase().trim();
-    final name = s.name.toLowerCase();
-    final company = s.company.toLowerCase();
-
-    // تطابق تام = 100
-    if (name == q) return 100;
-    // يبدأ بالاستعلام = 80
-    if (name.startsWith(q)) return 80;
-    // يحتوي = 60
-    if (name.contains(q)) return 60;
-    // الشركة تطابق = 40
-    if (company.contains(q)) return 40;
-    // Fuzzy = 20
-    return 20;
-  }
-
-  List<Shortage> _getFiltered(List<Shortage> items) {
-    var result = items.where((s) {
-      final matchFilter = _filter == 'all' || s.status == _filter;
-      if (!matchFilter) return false;
-      if (_search.isEmpty) return true;
-
-      final terms = _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
-
-      // كل كلمة لازم تتطابق (الاسم أو الشركة)
-      return terms.every((term) =>
-          FuzzySearch.match(term, s.name) || FuzzySearch.match(term, s.company));
-    }).toList();
-
-    // ▌ ترتيب النتائج بالأهمية لو فيه بحث
-    if (_search.isNotEmpty) {
-      result.sort((a, b) => _matchScore(_search, b).compareTo(_matchScore(_search, a)));
-    }
-
-    return result;
-  }
+  // Filtering delegated to ShortagesProvider.filtered
 
   Future<void> _showSelectRepDialog() async {
     final reps = await DatabaseHelper.instance.getReps();
@@ -755,13 +708,13 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
       return;
     }
     final provider = context.read<ShortagesProvider>();
-    final filtered = _getFiltered(provider.shortages);
+    final filtered = provider.filtered;
     if (filtered.isEmpty) {
       showSnack(context, 'لا توجد أصناف للحذف', isError: true);
       return;
     }
 
-    final statusLabel = _filter == 'all' ? 'جميع الأصناف' : _filters.firstWhere((f) => f.$1 == _filter).$2;
+    final statusLabel = provider.filter == 'all' ? 'جميع الأصناف' : _filters.firstWhere((f) => f.$1 == provider.filter).$2;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -956,7 +909,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
     final provider = context.watch<ShortagesProvider>();
     final userProvider = context.watch<CurrentUserProvider>();
     final _shortages = provider.shortages;
-    final _filtered = _getFiltered(_shortages);
+    final _filtered = provider.filtered;
     final _loading = provider.loading;
 
     // حساب الإحصائيات
@@ -1339,7 +1292,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
               child: TextField(
-                onChanged: (v) => setState(() => _search = v),
+                onChanged: (v) => provider.setSearch(v),
                 controller: _searchController,
                 autofocus: true,
                 style: const TextStyle(color: AppColors.textColor),
@@ -1350,22 +1303,20 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_search.isNotEmpty)
+                      if (provider.search.isNotEmpty)
                         IconButton(
                           icon: const Icon(Icons.clear, color: AppColors.textMuted, size: 18),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() => _search = '');
+                            provider.setSearch('');
                           },
                         ),
                       IconButton(
                         icon: const Icon(Icons.close_rounded, color: AppColors.danger, size: 18),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {
-                            _search = '';
-                            _showSearchField = false;
-                          });
+                          provider.setSearch('');
+                          setState(() => _showSearchField = false);
                         },
                       ),
                     ],
@@ -1663,7 +1614,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
               child: Row(
                 children: [
                   // Bulk Delete - only show when a specific filter is active
-                  if (_filter != 'all' && _filtered.isNotEmpty)
+                  if (provider.filter != 'all' && _filtered.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: ActionChip(
@@ -1678,7 +1629,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       ),
                     ),
                   ..._filters.map((f) {
-                    final isActive = _filter == f.$1;
+                    final isActive = provider.filter == f.$1;
                     final count = f.$1 == 'all'
                         ? _shortages.length
                         : _shortages.where((s) => s.status == f.$1).length;
@@ -1687,7 +1638,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
                       child: FilterChip(
                         label: Text('${f.$2} ($count)'),
                         selected: isActive,
-                        onSelected: (_) => setState(() => _filter = f.$1),
+                        onSelected: (_) => provider.setFilter(f.$1),
                         selectedColor: AppColors.primary,
                         backgroundColor: AppColors.darkCard,
                         side: BorderSide(

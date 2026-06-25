@@ -112,17 +112,14 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
     final db = DatabaseHelper.instance;
 
-    // ── 1. تحميل الإعدادات الديناميكية للسحابة ──
-    try {
-      await SupabaseService.instance.initializeDynamic();
-    } catch (e) {
-      debugPrint('⚠️ خطأ في تحميل إعدادات السحابة: $e');
-    }
+    // ── 1. تحميل الإعدادات مع تأخير بصري قصير بالتوازي ──
+    await Future.wait([
+      SupabaseService.instance.initializeDynamic(),
+      Future.delayed(const Duration(milliseconds: 800)),
+    ]);
+    if (!mounted) return;
 
     // ── 2. فحص هل التطبيق مفعّل؟ ──
     String? isActivated = await db.getSetting('is_activated');
@@ -336,6 +333,25 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  String _planLabel = '🥈 احترافي';
+  bool _isActivated = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlan();
+  }
+
+  Future<void> _loadPlan() async {
+    final db = DatabaseHelper.instance;
+    final isActivated = await db.getSetting('is_activated');
+    if (mounted) {
+      setState(() {
+        _isActivated = isActivated == '1';
+        _planLabel = _isActivated ? '🥈 احترافي' : '🔴 تجريبي';
+      });
+    }
+  }
 
   final _screens = const [
     DashboardScreen(),
@@ -434,9 +450,9 @@ class _MainScreenState extends State<MainScreen> {
                 color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text('🥈 احترافي',
+              child: Text(_planLabel,
                   style: TextStyle(
-                      color: AppColors.primary,
+                      color: _isActivated ? AppColors.primary : AppColors.danger,
                       fontSize: 11,
                       fontWeight: FontWeight.w700)),
             ),

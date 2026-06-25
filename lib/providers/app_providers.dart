@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 import '../models/models.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
+import '../utils/fuzzy_search.dart';
 
 // ── Provider للثيم ──────────────────────────────────────────────────
 class ThemeProvider extends ChangeNotifier {
@@ -56,13 +57,41 @@ class ShortagesProvider extends ChangeNotifier {
   String get filter => _filter;
   String get search => _search;
 
-  List<Shortage> get filtered => _shortages.where((s) {
-        final matchFilter = _filter == 'all' || s.status == _filter;
-        final matchSearch = _search.isEmpty ||
-            s.name.contains(_search) ||
-            s.company.contains(_search);
-        return matchFilter && matchSearch;
-      }).toList();
+  List<Shortage> get filtered {
+    var result = _shortages.where((s) {
+      final matchFilter = _filter == 'all' || s.status == _filter;
+      if (!matchFilter) return false;
+      if (_search.isEmpty) return true;
+
+      final terms = _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+
+      return terms.every((term) =>
+          FuzzySearch.match(term, s.name) || FuzzySearch.match(term, s.company));
+    }).toList();
+
+    if (_search.isNotEmpty) {
+      final q = _search.toLowerCase().trim();
+      result.sort((a, b) {
+        final scoreA = _matchScore(q, a);
+        final scoreB = _matchScore(q, b);
+        return scoreB.compareTo(scoreA);
+      });
+    }
+
+    return result;
+  }
+
+  double _matchScore(String query, Shortage s) {
+    final q = query.toLowerCase().trim();
+    final name = s.name.toLowerCase();
+    final company = s.company.toLowerCase();
+
+    if (name == q) return 100;
+    if (name.startsWith(q)) return 80;
+    if (name.contains(q)) return 60;
+    if (company.contains(q)) return 40;
+    return 20;
+  }
 
   Map<String, int> get stats => {
         'total': _shortages.length,

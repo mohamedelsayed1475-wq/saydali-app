@@ -23,7 +23,6 @@ class RepsScreen extends StatefulWidget {
 class _RepsScreenState extends State<RepsScreen> {
   List<Representative> _reps = [];
   bool _loading = true;
-  Timer? _refreshTimer;
   String _search = '';
   final _searchController = TextEditingController();
 
@@ -31,15 +30,10 @@ class _RepsScreenState extends State<RepsScreen> {
   void initState() {
     super.initState();
     _loadReps();
-    // تحديث تلقائي كل 30 ثانية
-    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      _loadReps();
-    });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
