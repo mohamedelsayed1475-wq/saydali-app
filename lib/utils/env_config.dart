@@ -31,23 +31,17 @@ class EnvConfig {
   static const devPassword =
       String.fromEnvironment('DEV_PASS', defaultValue: '');
 
-  // ── Admin Bypass Codes ──
-  static const adminCode1 =
-      String.fromEnvironment('ADMIN_CODE_1', defaultValue: '');
+  // ── Admin Bypass Codes (SHA-256 Hashes) ──
+  // القيمة المخزنة هنا يجب أن تكون الـ SHA-256 hash الخاص بالكود الإداري لمنع كشفه عند فك الـ APK
+  static const adminCode1Hash =
+      String.fromEnvironment('ADMIN_CODE_1_HASH', defaultValue: '');
 
-  // ── Admin Bypass Codes ──
-  static const adminCode2 =
-      String.fromEnvironment('ADMIN_CODE_2', defaultValue: '');
+  static const adminCode2Hash =
+      String.fromEnvironment('ADMIN_CODE_2_HASH', defaultValue: '');
 
   // ── Web Portal ──
   static String webPortalBaseUrl =
       const String.fromEnvironment('WEB_PORTAL_URL', defaultValue: '');
-
-  // ── GitHub API (لحذف أكواد التفعيل بعد الاستخدام) ──
-  // أنشئ PAT من: GitHub → Settings → Developer Settings → Fine-grained tokens
-  // صلاحية مطلوبة: Contents → Read and Write على repo saydali-app فقط
-  static const githubPat =
-      String.fromEnvironment('GITHUB_PAT', defaultValue: '');
 
   // ══════════════════════════════════════════════════════════════
   // فحص هل البيئة مُعدّة صح

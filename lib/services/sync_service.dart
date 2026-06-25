@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
+import '../utils/security_helper.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 
@@ -70,7 +71,7 @@ class SyncService {
     if (pharmacyCode == null || pharmacyCode.isEmpty) {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       final rnd = Random.secure();
-      pharmacyCode = List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
+      pharmacyCode = List.generate(8, (_) => chars[rnd.nextInt(chars.length)]).join();
       await db.setSetting('pharmacy_code', pharmacyCode);
       debugPrint('🆕 تم توليد كود صيدلية جديد: \$pharmacyCode');
     }
@@ -98,11 +99,15 @@ class SyncService {
       }
 
       // تسجيل جديد
+      final pharmacyUuid = SecurityHelper.generateUUID();
+      final headers = _headers;
+      headers['x-pharmacy-id'] = pharmacyUuid;
       final res = await http
           .post(
             Uri.parse('$_url/pharmacies'),
-            headers: _headers,
+            headers: headers,
             body: jsonEncode({
+              'id': pharmacyUuid,
               'pharmacy_code': pharmacyCode,
               'name': pharmacyName,
             }),
@@ -133,10 +138,10 @@ class SyncService {
   Future<({bool success, String? error, List<Map<String, dynamic>> assistants})>
       joinPharmacy(String pharmacyCode) async {
     final code = pharmacyCode.trim().toUpperCase();
-    if (code.length != 6) {
+    if (code.length != 8) {
       return (
         success: false,
-        error: 'كود الصيدلية يجب أن يتكون من 6 رموز تماماً',
+        error: 'كود الصيدلية يجب أن يتكون من 8 رموز تماماً',
         assistants: <Map<String, dynamic>>[]
       );
     }
@@ -161,7 +166,10 @@ class SyncService {
           .get(
             Uri.parse(
                 '$_url/pharmacies?pharmacy_code=eq.$code&select=*'),
-            headers: _headers,
+            headers: {
+              ..._headers,
+              'x-pharmacy-code': code,
+            },
           )
           .timeout(const Duration(seconds: 10));
 
@@ -402,6 +410,9 @@ class SyncService {
       await DatabaseHelper.instance.setSetting(
           'last_sync_at', DateTime.now().toIso8601String());
 
+      // تنظيف ردود المندوبين القديمة محلياً (> 30 يوم)
+      await _cleanupOldRepResponses();
+
       // إرسال إشارة بنجاح المزامنة لتحديث الواجهات تلقائياً
       _syncCompleteController.add(null);
     } catch (e) {
@@ -417,6 +428,17 @@ class SyncService {
     debugPrint('🔄 بدء المزامنة الكاملة...');
     await syncAll();
     debugPrint('✅ تمت المزامنة الكاملة');
+  }
+
+  /// حذف ردود المندوبين القديمة (أكثر من 30 يوم) من SQLite المحلية
+  /// يمنع تضخم قاعدة البيانات مع الوقت
+  Future<void> _cleanupOldRepResponses() async {
+    try {
+      await DatabaseHelper.instance.deleteOldRepResponses(daysToKeep: 30);
+    } catch (e) {
+      // تنظيف صامت — أي خطأ لا يوقف المزامنة
+      debugPrint('⚠️ _cleanupOldRepResponses error: $e');
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -1144,63 +1166,65 @@ class SyncService {
     try {
       final res = await http
           .get(
-            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&pin=eq.$pin&is_active=eq.true&select=*'),
+            Uri.parse('$_url/pharmacy_assistants?pharmacy_id=eq.$_pharmacyCloudId&is_active=eq.true&select=*'),
             headers: _headers,
           )
           .timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
         final items = jsonDecode(res.body) as List;
-        if (items.isNotEmpty) {
-          final item = items.first;
-          final cloudId = item['id']?.toString();
-          final cloudName = item['name']?.toString().trim() ?? '';
-          
-          // حفظ/تحديث المساعد محلياً
-          final db = await DatabaseHelper.instance.database;
-          final Map<String, dynamic> localData = {
-            'cloud_id': cloudId,
-            'name': cloudName,
-            'phone': item['phone']?.toString() ?? '',
-            'role': item['role']?.toString() ?? 'assistant',
-            'pin': item['pin']?.toString() ?? '',
-            'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
-            'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
-            'can_delete': item['can_delete'] == true ? 1 : 0,
-            'can_view_reports': item['can_view_reports'] == true ? 1 : 0,
-            'can_manage_invoices': item['can_manage_invoices'] == true ? 1 : 0,
-            'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
-            'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
-            'is_active': item['is_active'] == true ? 1 : 0,
-            'subscription_expiry': item['subscription_expiry'] ?? DateTime.now().add(const Duration(days: 30)).toIso8601String(),
-            'subscription_duration_days': item['subscription_duration_days'] ?? 30,
-          };
-          
-          // نبحث بالـ cloud_id أولاً (أكثر دقة)
-          final existingByCloudId = await db.query('assistants', where: 'cloud_id = ?', whereArgs: [cloudId]);
-          if (existingByCloudId.isNotEmpty) {
-            await db.update('assistants', localData, where: 'cloud_id = ?', whereArgs: [cloudId]);
-            final Map<String, dynamic> result = Map<String, dynamic>.from(existingByCloudId.first);
-            result.addAll(localData);
-            return result;
-          }
-
-          // لو مش موجود بـ cloud_id، نبحث بالاسم (backward compatibility)
-          final existingByName = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
-          if (existingByName.isEmpty) {
-            final insertData = {
-              'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
-              ...localData,
+        for (final item in items) {
+          final storedPin = item['pin']?.toString() ?? '';
+          if (SecurityHelper.verifyPin(pin, storedPin)) {
+            final cloudId = item['id']?.toString();
+            final cloudName = item['name']?.toString().trim() ?? '';
+            
+            // حفظ/تحديث المساعد محلياً
+            final db = await DatabaseHelper.instance.database;
+            final Map<String, dynamic> localData = {
+              'cloud_id': cloudId,
+              'name': cloudName,
+              'phone': item['phone']?.toString() ?? '',
+              'role': item['role']?.toString() ?? 'assistant',
+              'pin': storedPin,
+              'can_add_debt': item['can_add_debt'] == true ? 1 : 0,
+              'can_edit_debt': item['can_edit_debt'] == true ? 1 : 0,
+              'can_delete': item['can_delete'] == true ? 1 : 0,
+              'can_view_reports': item['can_view_reports'] == true ? 1 : 0,
+              'can_manage_invoices': item['can_manage_invoices'] == true ? 1 : 0,
+              'can_manage_shortages': item['can_manage_shortages'] == true ? 1 : 0,
+              'can_manage_reps': item['can_manage_reps'] == true ? 1 : 0,
+              'is_active': item['is_active'] == true ? 1 : 0,
+              'subscription_expiry': item['subscription_expiry'] ?? DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+              'subscription_duration_days': item['subscription_duration_days'] ?? 30,
             };
-            final id = await db.insert('assistants', insertData);
-            final Map<String, dynamic> result = Map<String, dynamic>.from(insertData);
-            result['id'] = id;
-            return result;
-          } else {
-            await db.update('assistants', localData, where: 'name = ?', whereArgs: [cloudName]);
-            final Map<String, dynamic> result = Map<String, dynamic>.from(existingByName.first);
-            result.addAll(localData);
-            return result;
+            
+            // نبحث بالـ cloud_id أولاً (أكثر دقة)
+            final existingByCloudId = await db.query('assistants', where: 'cloud_id = ?', whereArgs: [cloudId]);
+            if (existingByCloudId.isNotEmpty) {
+              await db.update('assistants', localData, where: 'cloud_id = ?', whereArgs: [cloudId]);
+              final Map<String, dynamic> result = Map<String, dynamic>.from(existingByCloudId.first);
+              result.addAll(localData);
+              return result;
+            }
+
+            // لو مش موجود بـ cloud_id، نبحث بالاسم (backward compatibility)
+            final existingByName = await db.query('assistants', where: 'name = ?', whereArgs: [cloudName]);
+            if (existingByName.isEmpty) {
+              final insertData = {
+                'created_at': item['created_at'] ?? DateTime.now().toIso8601String(),
+                ...localData,
+              };
+              final id = await db.insert('assistants', insertData);
+              final Map<String, dynamic> result = Map<String, dynamic>.from(insertData);
+              result['id'] = id;
+              return result;
+            } else {
+              await db.update('assistants', localData, where: 'name = ?', whereArgs: [cloudName]);
+              final Map<String, dynamic> result = Map<String, dynamic>.from(existingByName.first);
+              result.addAll(localData);
+              return result;
+            }
           }
         }
       }

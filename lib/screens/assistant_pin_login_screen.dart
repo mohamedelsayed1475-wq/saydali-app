@@ -10,6 +10,8 @@ import '../services/scheduled_sync_service.dart';
 import 'subscription_screen.dart';
 import '../widgets/pharmacy_logo.dart';
 import '../main.dart';
+import '../utils/security_helper.dart';
+import '../services/notification_service.dart';
 
 class AssistantPinLoginScreen extends StatefulWidget {
   final String? initialErrorMessage;
@@ -212,14 +214,27 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
       return;
     }
 
+    final db = DatabaseHelper.instance;
+
+    // ── فحص القفل المؤقت أولاً ──
+    final lockedUntilStr = await db.getSetting('pin_locked_until');
+    if (lockedUntilStr != null && lockedUntilStr.isNotEmpty) {
+      final lockedUntil = DateTime.tryParse(lockedUntilStr);
+      if (lockedUntil != null && lockedUntil.isAfter(DateTime.now())) {
+        final remainingSecs = lockedUntil.difference(DateTime.now()).inSeconds;
+        setState(() {
+          _errorMessage = 'تم قفل المحاولات مؤقتاً لحماية الجهاز. يرجى الانتظار $remainingSecs ثانية.';
+        });
+        return;
+      }
+    }
+
     setState(() {
       _loading = true;
       _errorMessage = null;
     });
 
     try {
-      final db = DatabaseHelper.instance;
-      
       // ── خطوة 1: مزامنة المساعدين من السيرفر أولاً (لضمان أحدث بيانات) ──
       try {
         await SyncService.instance.pullAssistantsFromServer()
@@ -250,24 +265,61 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
       }
 
       if (assistantMap == null) {
-        // ── خطوة 4: تشخيص أدق للخطأ ──
-        // هل المساعد موجود بهذا الـ PIN لكن غير نشط؟
-        final allDbRes = await (await db.database).query(
-          'assistants',
-          where: 'pin = ?',
-          whereArgs: [pin],
-        );
-        String errMsg;
-        if (allDbRes.isNotEmpty) {
-          final a = allDbRes.first;
-          if ((a['is_active'] ?? 1) == 0) {
-            errMsg = 'الحساب معطل، يرجى التواصل مع صاحب الصيدلية';
-          } else {
-            errMsg = 'رمز PIN غير صحيح أو الحساب معطل';
+        // زيادة عداد الفشل والقفل
+        final failedCountStr = await db.getSetting('pin_failed_count') ?? '0';
+        final failedCount = (int.tryParse(failedCountStr) ?? 0) + 1;
+        await db.setSetting('pin_failed_count', failedCount.toString());
+
+        DateTime? lockUntil;
+        String errMsg = 'رمز PIN غير صحيح أو لم تتم المزامنة بعد، تأكد من الاتصال بالإنترنت وأعد المحاولة';
+
+        // ── خطوة 4: تشخيص أدق للخطأ هل هو معطل ──
+        final dbResult = await (await db.database).query('assistants');
+        Map<String, dynamic>? matchingAssistant;
+        for (final row in dbResult) {
+          if (SecurityHelper.verifyPin(pin, row['pin'] as String)) {
+            matchingAssistant = row;
+            break;
           }
-        } else {
-          errMsg = 'رمز PIN غير صحيح أو لم تتم المزامنة بعد، تأكد من الاتصال بالإنترنت وأعد المحاولة';
         }
+        if (matchingAssistant != null && (matchingAssistant['is_active'] ?? 1) == 0) {
+          errMsg = 'الحساب معطل، يرجى التواصل مع صاحب الصيدلية';
+        }
+
+        if (failedCount >= 10) {
+          lockUntil = DateTime.now().add(const Duration(hours: 1));
+          errMsg = '🚨 تم قفل المحاولات لمدة ساعة كاملة بسبب تكرار إدخال رمز PIN بشكل خاطئ.';
+          await db.logActivity(
+            assistantName: 'الجهاز',
+            action: 'محاولة اختراق / قفل PIN',
+            details: 'تم قفل محاولات PIN لمدة ساعة كاملة بعد 10 محاولات خاطئة متتالية.',
+            screen: 'assistant_login',
+          );
+          await NotificationService.instance.showNotification(
+            id: 999,
+            title: '🚨 تنبيه أمني: قفل محاولات الدخول',
+            body: 'تم قفل محاولات تسجيل الدخول للمساعدين لمدة ساعة بسبب 10 محاولات خاطئة.',
+          );
+        } else if (failedCount >= 5) {
+          lockUntil = DateTime.now().add(const Duration(minutes: 5));
+          errMsg = '⚠️ تم قفل المحاولات لمدة 5 دقائق بسبب تكرار إدخال رمز PIN بشكل خاطئ.';
+          await db.logActivity(
+            assistantName: 'الجهاز',
+            action: 'قفل PIN مؤقت',
+            details: 'تم قفل محاولات PIN لمدة 5 دقائق بعد 5 محاولات خاطئة متتالية.',
+            screen: 'assistant_login',
+          );
+          await NotificationService.instance.showNotification(
+            id: 998,
+            title: '🚨 تنبيه أمني: قفل مؤقت',
+            body: 'تم قفل محاولات تسجيل الدخول للمساعدين لمدة 5 دقائق بسبب 5 محاولات خاطئة.',
+          );
+        }
+
+        if (lockUntil != null) {
+          await db.setSetting('pin_locked_until', lockUntil.toIso8601String());
+        }
+
         setState(() {
           _loading = false;
           _errorMessage = errMsg;
@@ -275,6 +327,10 @@ class _AssistantPinLoginScreenState extends State<AssistantPinLoginScreen>
         });
         return;
       }
+
+      // تسجيل دخول ناجح: تصفير العداد والقفل
+      await db.setSetting('pin_failed_count', '0');
+      await db.setSetting('pin_locked_until', '');
 
       final assistant = Assistant.fromMap(assistantMap);
 

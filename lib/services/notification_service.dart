@@ -71,6 +71,28 @@ class NotificationService {
     }
   }
 
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'security_alerts_channel',
+        'تنبيهات الأمان',
+        channelDescription: 'تنبيهات أمنية حول تسجيل الدخول والعمليات الحساسة',
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      );
+
+      const NotificationDetails details = NotificationDetails(android: androidDetails);
+      await _notificationsPlugin.show(id, title, body, details);
+    } catch (e) {
+      debugPrint('Error showing immediate notification: $e');
+    }
+  }
+
   Future<void> cancelReminder(int id) async {
     await _notificationsPlugin.cancel(id);
   }

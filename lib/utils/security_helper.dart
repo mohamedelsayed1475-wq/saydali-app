@@ -168,4 +168,42 @@ class SecurityHelper {
 
     return warnings;
   }
+
+  /// ── تشفير PIN باستخدام PBKDF2-like SHA256 ──
+  static String hashPin(String pin, {String? salt}) {
+    final cleanSalt = salt ?? generateUUID().substring(0, 8);
+    var h = utf8.encode('$cleanSalt$pin');
+    for (var i = 0; i < 10000; i++) {
+      h = sha256.convert(h).bytes;
+    }
+    final hash = base64.encode(h);
+    return '$cleanSalt\$$hash'; // Salt inside the value itself
+  }
+
+  /// ── التحقق من صحة الـ PIN (مع دعم Plaintext القديم) ──
+  static bool verifyPin(String enteredPin, String storedPinValue) {
+    if (!storedPinValue.contains('\$')) {
+      // Legacy compatibility: Plaintext fallback
+      return enteredPin == storedPinValue;
+    }
+
+    final parts = storedPinValue.split('\$');
+    if (parts.length != 2) return false;
+
+    final salt = parts[0];
+    final expected = hashPin(enteredPin, salt: salt);
+    return expected == storedPinValue;
+  }
+
+  /// ── تشفير SHA-256 للنصوص ──
+  static String hashSHA256(String input) {
+    return sha256.convert(utf8.encode(input)).toString();
+  }
+
+  /// ── التحقق من كود الإدارة المشفر ──
+  static bool verifyAdminCode(String enteredCode, String storedHash) {
+    if (storedHash.isEmpty) return false;
+    final hashed = hashSHA256(enteredCode);
+    return hashed == storedHash;
+  }
 }

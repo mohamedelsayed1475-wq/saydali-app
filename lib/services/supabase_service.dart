@@ -159,8 +159,20 @@ class SupabaseService {
 
       debugPrint('✅ تم إنشاء الجلسة: $sessionCode (id: $sessionId)');
       return sessionCode;
+    } on TimeoutException {
+      lastError = 'انتهت مهلة الاتصال - تحقق من الإنترنت';
+      debugPrint('❌ createSession timeout');
+      return null;
+    } on SocketException {
+      lastError = 'لا يوجد اتصال بالإنترنت';
+      debugPrint('❌ createSession socket error');
+      return null;
+    } on HandshakeException {
+      lastError = 'خطأ في شهادة الأمان (SSL)';
+      debugPrint('❌ createSession handshake error');
+      return null;
     } catch (e) {
-      lastError = 'خطأ اتصال بالشبكة: $e';
+      lastError = 'خطأ غير متوقع: $e';
       debugPrint('❌ createSession error: $e');
       return null;
     }

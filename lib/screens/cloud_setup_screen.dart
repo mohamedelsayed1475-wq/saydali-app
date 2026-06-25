@@ -63,12 +63,7 @@ class _CloudSetupScreenState extends State<CloudSetupScreen> {
         await db.setSetting('supabase_key', key);
         await db.setSetting('web_portal_url', portal);
 
-        // توليد معرف سحابي فريد للصيدلية إذا لم يكن موجوداً
-        var pharmacyCloudId = await db.getSetting('pharmacy_cloud_id');
-        if (pharmacyCloudId == null || pharmacyCloudId.isEmpty) {
-          pharmacyCloudId = 'pharmacy_${DateTime.now().millisecondsSinceEpoch}_${url.hashCode.abs()}';
-          await db.setSetting('pharmacy_cloud_id', pharmacyCloudId);
-        }
+
 
         // تحديث تهيئة خدمات Supabase و Sync ديناميكياً
         await SupabaseService.instance.initializeDynamic();

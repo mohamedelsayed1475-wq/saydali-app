@@ -126,16 +126,6 @@ class _SplashScreenState extends State<SplashScreen>
 
     // ── 2. فحص هل التطبيق مفعّل؟ ──
     String? isActivated = await db.getSetting('is_activated');
-    if (isActivated != '1') {
-      // إذا كان هذا تحديثاً لتطبيق مثبت مسبقاً (أي توجد بيانات صيدلية مخزنة)، نقوم بالتفعيل التلقائي
-      final existingCloudId = await db.getSetting('pharmacy_cloud_id');
-      final existingName = await db.getSetting('pharmacy_name');
-      if ((existingCloudId != null && existingCloudId.isNotEmpty) || 
-          (existingName != null && existingName.isNotEmpty)) {
-        await db.setSetting('is_activated', '1');
-        isActivated = '1';
-      }
-    }
 
     if (isActivated != '1') {
       if (!mounted) return;

@@ -171,8 +171,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
             ElevatedButton(
               onPressed: isJoining ? null : () async {
                 final code = codeCtrl.text.trim().toUpperCase();
-                if (code.length != 6) {
-                  setDlg(() => error = 'كود الصيدلية يجب أن يكون 6 أرقام/حروف');
+                if (code.length != 8) {
+                  setDlg(() => error = 'كود الصيدلية يجب أن يكون 8 أرقام/حروف');
                   return;
                 }
                 setDlg(() { isJoining = true; error = ''; });
@@ -229,9 +229,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     }
 
 
-    // Admin bypass (من GitHub Secrets فقط)
-    if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
-        EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
+    // Admin bypass (عبر الهاش الآمن من Secrets)
+    if (SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode1Hash) ||
+        SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode2Hash)) {
       final expiry =
           DateTime.now().add(const Duration(days: 3650)).toIso8601String();
       await SecurityHelper.saveSignedSetting('subscription_expiry', expiry);

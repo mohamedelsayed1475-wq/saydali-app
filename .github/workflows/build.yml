@@ -61,12 +61,14 @@ jobs:
       - name: Build APK
         env:
           DEV_PASS: ${{ secrets.DEV_PASS }}
-          GITHUB_PAT: ${{ secrets.GH_PAT }}
+          ADMIN_CODE_1_HASH: ${{ secrets.ADMIN_CODE_1_HASH }}
+          ADMIN_CODE_2_HASH: ${{ secrets.ADMIN_CODE_2_HASH }}
         run: |
           flutter build apk --release \
             --obfuscate --split-debug-info=build/debug-info \
             --dart-define="DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')" \
-            --dart-define="GITHUB_PAT=$(echo -n "$GITHUB_PAT" | tr -d '\n\r')"
+            --dart-define="ADMIN_CODE_1_HASH=$(echo -n "$ADMIN_CODE_1_HASH" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_2_HASH=$(echo -n "$ADMIN_CODE_2_HASH" | tr -d '\n\r')"
 
       - name: Rename APK
         run: |

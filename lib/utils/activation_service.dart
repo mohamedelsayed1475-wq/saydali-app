@@ -1,64 +1,39 @@
-﻿import 'dart:convert';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'env_config.dart';
 
-/// يحذف الكود المستخدم من activation_codes.txt على GitHub
-/// حتى لا تستطيع صيدلية أخرى استخدام نفس الكود.
+/// خدمة التفعيل السحابي الآمن عبر Edge Function
 class ActivationService {
-  static const _owner = 'mohamedelsayed1475-wq';
-  static const _repo  = 'saydali-app';
-  static const _path  = 'activation_codes.txt';
-  static const _apiBase = 'https://api.github.com';
-
-  /// يحذف [code] من الملف على GitHub.
-  /// لا يوقف التفعيل إذا فشل الحذف (مجرد حماية إضافية).
-  static Future<void> removeCodeFromRemote(String code) async {
-    final pat = EnvConfig.githubPat;
-    if (pat.isEmpty) return;
+  /// يتحقق من كود التفعيل ويقوم بتمييزه كمستخدم في الخادم في طلب واحد آمن ومحمي
+  static Future<bool> activateCode(String code) async {
+    final url = EnvConfig.supabaseUrl;
+    final key = EnvConfig.supabaseKey;
+    if (url.isEmpty || key.isEmpty) {
+      debugPrint('⚠️ إعدادات السحابة الافتراضية فارغة، لا يمكن إجراء التفعيل.');
+      return false;
+    }
 
     try {
-      // 1 - جلب الملف الحالي + SHA
-      final getResp = await http.get(
-        Uri.parse('$_apiBase/repos/$_owner/$_repo/contents/$_path'),
+      final cleanUrl = url.endsWith('/') ? url : '$url/';
+      final response = await http.post(
+        Uri.parse('${cleanUrl}functions/v1/activate-code'),
         headers: {
-          'Authorization': 'Bearer $pat',
-          'Accept': 'application/vnd.github+json',
-        },
-      ).timeout(const Duration(seconds: 15));
-
-      if (getResp.statusCode != 200) return;
-
-      final jsonData = jsonDecode(getResp.body) as Map<String, dynamic>;
-      final sha = jsonData['sha'] as String;
-      final rawContent = utf8.decode(
-          base64.decode((jsonData['content'] as String).replaceAll('\n', '')));
-
-      // 2 - حذف الكود من القائمة
-      final updatedLines = rawContent
-          .split('\n')
-          .map((l) => l.trim())
-          .where((l) => l.isNotEmpty && l != code)
-          .toList();
-
-      final updatedContent =
-          base64.encode(utf8.encode(updatedLines.join('\n')));
-
-      // 3 - رفع الملف المحدث
-      await http.put(
-        Uri.parse('$_apiBase/repos/$_owner/$_repo/contents/$_path'),
-        headers: {
-          'Authorization': 'Bearer $pat',
-          'Accept': 'application/vnd.github+json',
+          'apikey': key,
+          'Authorization': 'Bearer $key',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'message': 'chore: remove used activation code',
-          'content': updatedContent,
-          'sha': sha,
-        }),
-      ).timeout(const Duration(seconds: 15));
-    } catch (_) {
-      // فشل الحذف لا يوقف التفعيل - الحماية المحلية كافية
+        body: jsonEncode({'code': code}),
+      ).timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        return body['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error during activation call: $e');
+      return false;
     }
   }
 }

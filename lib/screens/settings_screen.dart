@@ -953,10 +953,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
                           bool valid = false;
 
-                          if (EnvConfig.adminCode1.isNotEmpty &&
-                                  code == EnvConfig.adminCode1 ||
-                              EnvConfig.adminCode2.isNotEmpty &&
-                                  code == EnvConfig.adminCode2) {
+                          if (SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode1Hash) ||
+                              SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode2Hash)) {
                             valid = true;
                           }
 

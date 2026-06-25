@@ -73,7 +73,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   Future<void> _showAddAssistant({Assistant? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name);
     final phoneCtrl = TextEditingController(text: existing?.phone);
-    final pinCtrl = TextEditingController(text: existing?.pin);
+    final pinCtrl = TextEditingController(text: existing != null ? '****' : '');
     bool canAddDebt = existing?.canAddDebt ?? true;
     bool canEditDebt = existing?.canEditDebt ?? false;
     bool canDelete = existing?.canDelete ?? false;
@@ -398,21 +398,25 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                       showSnack(ctx, 'أدخل اسم المساعد', isError: true);
                       return;
                     }
-                    if (pin.length != 4 || int.tryParse(pin) == null) {
-                      showSnack(ctx, 'رمز PIN يجب أن يكون 4 أرقام',
-                          isError: true);
-                      return;
-                    }
-
-                    // فحص تكرار PIN
-                    final isDuplicate = await DatabaseHelper.instance
-                        .isPinDuplicate(pin, excludeId: existing?.id);
-                    if (isDuplicate) {
-                      if (ctx.mounted) {
-                        showSnack(ctx, '⚠️ رمز PIN مستخدم بالفعل لمساعد آخر',
+                    
+                    final bool isPinChanged = existing == null || (pin != '****' && pin != existing.pin);
+                    if (isPinChanged) {
+                      if (pin.length != 4 || int.tryParse(pin) == null) {
+                        showSnack(ctx, 'رمز PIN يجب أن يكون 4 أرقام',
                             isError: true);
+                        return;
                       }
-                      return;
+
+                      // فحص تكرار PIN
+                      final isDuplicate = await DatabaseHelper.instance
+                          .isPinDuplicate(pin, excludeId: existing?.id);
+                      if (isDuplicate) {
+                        if (ctx.mounted) {
+                          showSnack(ctx, '⚠️ رمز PIN مستخدم بالفعل لمساعد آخر',
+                              isError: true);
+                        }
+                        return;
+                      }
                     }
 
                     // فحص الحد الأقصى للمساعدين النشطين عند التفعيل أو الإضافة كنشط
@@ -430,7 +434,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
                     final data = {
                       'name': name,
                       'phone': phoneCtrl.text.trim(),
-                      'pin': pin,
+                      'pin': isPinChanged ? pin : existing.pin,
                       'role': 'assistant',
                       'can_add_debt': canAddDebt ? 1 : 0,
                       'can_edit_debt': canEditDebt ? 1 : 0,
@@ -640,7 +644,7 @@ class _AssistantsScreenState extends State<AssistantsScreen>
   String _generatePharmacyCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rnd = Random.secure();
-    return List.generate(6, (_) => chars[rnd.nextInt(chars.length)]).join();
+    return List.generate(8, (_) => chars[rnd.nextInt(chars.length)]).join();
   }
 
   /// التحقق من الحد الأقصى قبل إضافة مساعد
@@ -928,9 +932,9 @@ class _AssistantsScreenState extends State<AssistantsScreen>
       }
     }
 
-    // Admin bypass (من GitHub Secrets فقط)
-    if (EnvConfig.adminCode1.isNotEmpty && code == EnvConfig.adminCode1 ||
-        EnvConfig.adminCode2.isNotEmpty && code == EnvConfig.adminCode2) {
+    // Admin bypass (عبر الهاش الآمن من Secrets)
+    if (SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode1Hash) ||
+        SecurityHelper.verifyAdminCode(code, EnvConfig.adminCode2Hash)) {
       await db.addAssistantSlots(slotsToAdd);
       await db.setSetting('assistants_activated', '1');
       return true;

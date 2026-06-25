@@ -551,7 +551,7 @@ class DatabaseHelper {
     ''');
 
     // إضافة إعدادات افتراضية
-    await db.insert('settings', {'key': 'pharmacy_name', 'value': 'صيدليتي'});
+
     await db.insert('settings', {'key': 'pharmacist_name', 'value': 'الصيدلي'});
     await db.insert('settings', {'key': 'theme_color', 'value': '00C896'});
     await db.insert('settings', {'key': 'notifications_enabled', 'value': '1'});
@@ -1010,6 +1010,9 @@ class DatabaseHelper {
         .add(Duration(days: map['subscription_duration_days'] as int))
         .toIso8601String();
     map['cloud_id'] ??= SecurityHelper.generateUUID();
+    if (map['pin'] != null && !(map['pin'] as String).contains('\$')) {
+      map['pin'] = SecurityHelper.hashPin(map['pin'] as String);
+    }
     return await db.insert('assistants', map);
   }
 
@@ -1044,14 +1047,28 @@ class DatabaseHelper {
       return null;
     }
 
-    final result = await db.query('assistants',
-        where: 'pin = ? AND is_active = 1', whereArgs: [pin]);
-    return result.isNotEmpty ? result.first : null;
+    final results = await db.query('assistants', where: 'is_active = 1');
+    for (final row in results) {
+      final storedPin = row['pin'] as String;
+      if (SecurityHelper.verifyPin(pin, storedPin)) {
+        // ترقية تلقائية للـ PIN القديم المكتوب بشكل نصي غير مشفر
+        if (!storedPin.contains('\$')) {
+          final hashed = SecurityHelper.hashPin(pin);
+          await db.update('assistants', {'pin': hashed}, where: 'id = ?', whereArgs: [row['id']]);
+        }
+        return row;
+      }
+    }
+    return null;
   }
 
   Future<int> updateAssistant(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return await db.update('assistants', data, where: 'id = ?', whereArgs: [id]);
+    final map = Map<String, dynamic>.from(data);
+    if (map['pin'] != null && !(map['pin'] as String).contains('\$')) {
+      map['pin'] = SecurityHelper.hashPin(map['pin'] as String);
+    }
+    return await db.update('assistants', map, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteAssistant(int id) async {
@@ -1062,14 +1079,19 @@ class DatabaseHelper {
   /// التحقق من تكرار رمز PIN بين المساعدين النشطين
   Future<bool> isPinDuplicate(String pin, {int? excludeId}) async {
     final db = await database;
-    final result = excludeId != null
+    final results = excludeId != null
         ? await db.query('assistants',
-            where: 'pin = ? AND is_active = 1 AND id != ?',
-            whereArgs: [pin, excludeId])
+            where: 'is_active = 1 AND id != ?',
+            whereArgs: [excludeId])
         : await db.query('assistants',
-            where: 'pin = ? AND is_active = 1',
-            whereArgs: [pin]);
-    return result.isNotEmpty;
+            where: 'is_active = 1');
+    for (final row in results) {
+      final storedPin = row['pin'] as String;
+      if (SecurityHelper.verifyPin(pin, storedPin)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── سجل الأنشطة (Activity Log) ────────────────────────────────────────────
@@ -1847,5 +1869,23 @@ class DatabaseHelper {
     await db.update('debt_transactions', {'is_synced': 1});
     await db.update('invoices', {'is_synced': 1});
     await db.update('medication_expiries', {'is_synced': 1});
+  }
+
+  /// حذف ردود المندوبين القديمة من قاعدة البيانات المحلية
+  /// يُستدعى بعد نجاح رفعها للسحابة لمنع التضخم غير المحدود
+  Future<int> deleteOldRepResponses({int daysToKeep = 30}) async {
+    final db = await database;
+    final cutoff = DateTime.now()
+        .subtract(Duration(days: daysToKeep))
+        .toIso8601String();
+    final deleted = await db.delete(
+      'rep_responses',
+      where: "responded_at < ?",
+      whereArgs: [cutoff],
+    );
+    if (deleted > 0) {
+      debugPrint('🗑️ تم حذف $deleted سجل قديم من ردود المندوبين (أقدم من $daysToKeep يوم)');
+    }
+    return deleted;
   }
 }

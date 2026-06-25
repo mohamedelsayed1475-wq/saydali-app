@@ -71,9 +71,24 @@ FOR SELECT TO anon USING (
   id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
 );
 
+-- القراءة للـ anon عند الانضمام بكود الصيدلية (8 حروف) عبر الهيدر x-pharmacy-code
+-- يُستخدم فقط في خطوة joinPharmacy ويقتصر على جلب صف واحد مطابق للكود
+DROP POLICY IF EXISTS "secure_select_pharmacies_anon_bycode" ON pharmacies;
+CREATE POLICY "secure_select_pharmacies_anon_bycode" ON pharmacies
+FOR SELECT TO anon USING (
+  pharmacy_code = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-code', '')
+  AND length(coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-code', '')) = 8
+);
+
 -- الإضافة للـ authenticated والـ service_role
 CREATE POLICY "secure_insert_pharmacies" ON pharmacies
 FOR INSERT TO authenticated, service_role WITH CHECK (auth.uid() IS NOT NULL);
+
+-- الإضافة للـ anon فقط عند إرسال الهيدر الصحيح المطابق لمعرف الصيدلية
+CREATE POLICY "secure_insert_pharmacies_anon" ON pharmacies
+FOR INSERT TO anon WITH CHECK (
+  id::text = coalesce(current_setting('request.headers', true)::json->>'x-pharmacy-id', '')
+);
 
 -- التعديل للـ authenticated والـ service_role
 CREATE POLICY "secure_update_pharmacies" ON pharmacies

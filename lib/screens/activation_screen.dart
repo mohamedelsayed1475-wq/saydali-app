@@ -73,30 +73,17 @@ class _ActivationScreenState extends State<ActivationScreen>
         return;
       }
 
-      // ── التحقق أونلاين من GitHub ──────────────────────────────────────────
-      final response = await http
-          .get(Uri.parse(
-              'https://raw.githubusercontent.com/mohamedelsayed1475-wq/saydali-app/main/activation_codes.txt'))
-          .timeout(const Duration(seconds: 15));
+      // ── التحقق أونلاين عبر خادم التفعيل ──────────────────────────────────
+      final success = await ActivationService.activateCode(enteredCode);
 
-      if (response.statusCode == 200) {
-        final codes = response.body
-            .split('\n')
-            .map((c) => c.trim())
-            .where((c) => c.isNotEmpty)
-            .toList();
-
-        if (codes.contains(enteredCode)) {
-          await _completeActivation(enteredCode);
-        } else {
-          setState(() => _errorMessage = 'كود التفعيل غير صالح أو تم استخدامه من قبل.');
-        }
+      if (success) {
+        await _completeActivation(enteredCode);
       } else {
-        setState(() => _errorMessage = 'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.');
+        setState(() => _errorMessage = 'كود التفعيل غير صالح أو تم استخدامه من قبل.');
       }
     } catch (_) {
       setState(() => _errorMessage =
-          'لا يوجد اتصال بالإنترنت. يرجى الاتصال بالإنترنت لتفعيل التطبيق.');
+          'تعذر الاتصال بالخادم. يرجى الاتصال بالإنترنت لتفعيل التطبيق.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -107,8 +94,6 @@ class _ActivationScreenState extends State<ActivationScreen>
     await DatabaseHelper.instance.setSetting('activation_code', code);
     // تسجيل الكود محلياً (حماية على نفس الجهاز)
     await DatabaseHelper.instance.markActivationCodeUsed(code);
-    // حذف الكود من GitHub (حماية ضد الاستخدام على أجهزة أخرى)
-    await ActivationService.removeCodeFromRemote(code);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(

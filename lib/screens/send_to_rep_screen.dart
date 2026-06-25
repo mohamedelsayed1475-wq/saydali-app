@@ -184,6 +184,19 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
 
   /// ▌ حوار: فشل الإرسال مع تفاصيل
   void _showSendFailedDialog({String? error}) {
+    final isNetworkError = error != null && (
+        error.contains('مهلة') ||
+        error.contains('اتصال') ||
+        error.contains('SSL') ||
+        error.contains('شهادة')
+    );
+    final isServerError = error != null && (
+        error.contains('403') ||
+        error.contains('401') ||
+        error.contains('500') ||
+        error.contains('فشل إنشاء جلسة')
+    );
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -215,16 +228,25 @@ class _SendToRepScreenState extends State<SendToRepScreen> {
                 children: [
                   const Text('جرب الآتي:', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                   const SizedBox(height: 6),
-                  _tipRow('📶', 'تأكد من اتصالك بالإنترنت'),
-                  _tipRow('🔄', 'أغلق التطبيق وافتحه مجدداً'),
-                  _tipRow('⏰', 'انتظر دقيقة وحاول مجدداً'),
+                  if (isServerError) ...[
+                    _tipRow('☁️', 'تحقق من إعدادات السحابة والمفاتيح'),
+                    _tipRow('🔄', 'تأكد من صحة رابط Supabase'),
+                  ] else if (isNetworkError) ...[
+                    _tipRow('📶', 'تأكد من اتصالك بالإنترنت'),
+                    _tipRow('🔄', 'أغلق التطبيق وافتحه مجدداً'),
+                    _tipRow('⏰', 'انتظر دقيقة وحاول مجدداً'),
+                  ] else ...[
+                    _tipRow('📶', 'تأكد من اتصالك بالإنترنت'),
+                    _tipRow('🔄', 'أغلق التطبيق وافتحه مجدداً'),
+                    _tipRow('⏰', 'انتظر دقيقة وحاول مجدداً'),
+                  ],
                 ],
               ),
             ),
             if (error != null) ...[
               const SizedBox(height: 8),
               Text('تفاصيل: $error',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
             ],
           ],
         ),
