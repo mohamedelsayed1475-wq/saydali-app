@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'package:flutter_slidable/flutter_slidable.dart';

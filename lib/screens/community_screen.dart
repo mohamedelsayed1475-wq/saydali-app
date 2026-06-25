@@ -336,12 +336,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final imageUrl = post['image_url']?.toString();
     final createdAtStr = post['created_at']?.toString();
     
-    DateTime? createdAt;
-    if (createdAtStr != null) {
-      try {
-        createdAt = DateTime.parse(createdAtStr).toLocal();
-      } catch (_) {}
-    }
+    final createdAt = DateTime.tryParse(createdAtStr ?? '')?.toLocal();
 
     final timeFormatted = createdAt != null
         ? DateFormat('yyyy-MM-dd hh:mm a').format(createdAt)

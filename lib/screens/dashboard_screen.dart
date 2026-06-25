@@ -31,7 +31,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static bool _adShown = false;
   String _currency = 'ج.م';
   List<Map<String, dynamic>> _alerts = [];
-  Timer? _refreshTimer;
   StreamSubscription<void>? _syncSubscription;
 
   @override

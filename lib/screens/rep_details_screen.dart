@@ -302,7 +302,7 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
       itemBuilder: (ctx, i) {
         final order = _orders[i];
         final isPaid = (order['is_paid'] ?? 0) == 1;
-        final date = DateTime.parse(order['created_at']);
+        final date = DateTime.tryParse(order['created_at']?.toString() ?? '') ?? DateTime.now();
         final items = jsonDecode(order['items']) as List;
 
         return Card(
@@ -403,8 +403,8 @@ class _RepDetailsScreenState extends State<RepDetailsScreen> with SingleTickerPr
       itemBuilder: (ctx, i) {
         final ret = _returns[i];
         final isReturned = (ret['is_returned'] ?? 0) == 1;
-        final date = DateTime.parse(ret['created_at']);
-        final reminderTime = ret['reminder_time'] != null ? DateTime.parse(ret['reminder_time']) : null;
+        final date = DateTime.tryParse(ret['created_at']?.toString() ?? '') ?? DateTime.now();
+        final reminderTime = DateTime.tryParse(ret['reminder_time']?.toString() ?? '');
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),

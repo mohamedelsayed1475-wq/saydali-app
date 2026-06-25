@@ -324,9 +324,7 @@ class SupabaseService {
           repName: session['rep_name']?.toString() ?? 'غير معروف',
           repPhone: session['rep_phone']?.toString() ?? '',
           pharmacyName: session['pharmacy_name']?.toString() ?? '',
-          respondedAt: session['responded_at'] != null
-              ? DateTime.parse(session['responded_at'])
-              : DateTime.now(),
+          respondedAt: DateTime.tryParse(session['responded_at']?.toString() ?? '') ?? DateTime.now(),
           availableItems: availableList,
           unavailableItems: unavailableList,
         ),

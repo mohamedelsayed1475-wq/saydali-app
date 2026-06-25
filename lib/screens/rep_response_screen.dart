@@ -464,11 +464,12 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                       // عرض التاريخ
                       String dateText = '';
                       try {
-                        final d = DateTime.parse(offer['date'] as String);
-                        final now = DateTime.now();
-                        final diff = now.difference(d).inDays;
-                        dateText = diff == 0 ? 'اليوم' : 'من $diff يوم';
-                      } catch (_) {}
+                        final d = DateTime.tryParse(offer['date']?.toString() ?? '');
+                        if (d != null) {
+                          final diff = DateTime.now().difference(d).inDays;
+                          dateText = diff == 0 ? 'اليوم' : 'من $diff يوم';
+                        }
+                      }
                       return Container(
                         margin: const EdgeInsets.only(bottom: 4),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -664,12 +665,8 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                       final idx = e.key;
                       final offer = e.value;
                       String dateText = '';
-                      try {
-                        final d = DateTime.parse(offer['date'] as String);
-                        dateText = '${d.day}/${d.month}/${d.year}';
-                      } catch (_) {
-                        dateText = '-';
-                      }
+                      final d = DateTime.tryParse(offer['date']?.toString() ?? '');
+                      dateText = d != null ? '${d.day}/${d.month}/${d.year}' : '-';
                       final isBest = idx == 0;
                       return pw.TableRow(
                         decoration: isBest ? const pw.BoxDecoration(color: PdfColors.green50) : null,
@@ -760,11 +757,11 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
         final isBest = offer == allOffers.first;
         final icon = isBest ? '👑' : '  ';
         String dateText = '';
-        try {
-          final d = DateTime.parse(offer['date'] as String);
+        final d = DateTime.tryParse(offer['date']?.toString() ?? '');
+        if (d != null) {
           final diff = DateTime.now().difference(d).inDays;
           dateText = diff == 0 ? '(اليوم)' : '(من $diff يوم)';
-        } catch (_) {}
+        }
         msg += '$icon ${offer['repName']} - خصم ${(offer['discount'] as double).toStringAsFixed(0)}% - ${(offer['finalPrice'] as double).toStringAsFixed(2)} $_currency $dateText\n';
       }
       msg += '💡 توفير: ${(a['saving'] as double).toStringAsFixed(2)} $_currency/علبة\n\n';

@@ -12,13 +12,11 @@ import 'expenses_screen.dart';
 const List<String> _kArabicDays = ['إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت', 'أحد'];
 
 String _dayLabel(String isoDate) {
-  try {
-    final d = DateTime.parse(isoDate);
-    // weekday: 1=Mon … 7=Sun
+  final d = DateTime.tryParse(isoDate);
+  if (d != null) {
     return _kArabicDays[(d.weekday - 1) % 7];
-  } catch (_) {
-    return isoDate;
   }
+  return isoDate;
 }
 
 // ─────────────────────────────────────────────────────────

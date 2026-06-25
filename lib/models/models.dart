@@ -220,7 +220,7 @@ class DebtTransaction {
         description: map['description'],
         receiptUrl: map['receipt_url'],
         createdBy: map['created_by'],
-        transactionDate: DateTime.parse(map['transaction_date']),
+        transactionDate: DateTime.tryParse(map['transaction_date']?.toString() ?? '') ?? DateTime.now(),
       );
 
   Map<String, dynamic> toMap() => {

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'package:http/http.dart' as http;
+import 'package:pointycastle/export.dart';
 import 'env_config.dart';
 import '../database/database_helper.dart';
 
@@ -180,15 +181,22 @@ class SecurityHelper {
     return warnings;
   }
 
-  /// ── تشفير PIN باستخدام PBKDF2-like SHA256 ──
-  static String hashPin(String pin, {String? salt}) {
-    final cleanSalt = salt ?? generateUUID().substring(0, 8);
-    var h = utf8.encode('$cleanSalt$pin');
-    for (var i = 0; i < 10000; i++) {
-      h = sha256.convert(h).bytes;
-    }
-    final hash = base64.encode(h);
-    return '$cleanSalt\$$hash'; // Salt inside the value itself
+  /// ── تشفير PIN باستخدام PBKDF2-SHA256 حقيقي ──
+  /// salt = 16 bytes random, iterations = 200000, dkLen = 32 bytes
+  static String hashPin(String pin, {String? saltBase64}) {
+    final rng = SecureRandom("Fortuna")
+      ..seed(KeyParameter(utf8.encode(generateUUID())));
+    final salt = saltBase64 != null
+        ? base64.decode(saltBase64)
+        : rng.nextBytes(16);
+
+    final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64));
+    derivator.init(Pbkdf2Parameters(salt, 200000, 32));
+    final derived = derivator.process(utf8.encode(pin));
+
+    final saltEncoded = base64.encode(salt);
+    final hashEncoded = base64.encode(derived);
+    return '$saltEncoded\$$hashEncoded';
   }
 
   /// ── التحقق من صحة الـ PIN (مع دعم Plaintext القديم) ──
@@ -201,9 +209,17 @@ class SecurityHelper {
     final parts = storedPinValue.split('\$');
     if (parts.length != 2) return false;
 
-    final salt = parts[0];
-    final expected = hashPin(enteredPin, salt: salt);
-    return expected == storedPinValue;
+    final saltB64 = parts[0];
+    final storedHash = parts[1];
+    final expected = hashPin(enteredPin, saltBase64: saltB64);
+    final expectedHash = expected.split('\$')[1];
+    // Timing-safe comparison
+    if (storedHash.length != expectedHash.length) return false;
+    int result = 0;
+    for (int i = 0; i < storedHash.length; i++) {
+      result |= storedHash.codeUnitAt(i) ^ expectedHash.codeUnitAt(i);
+    }
+    return result == 0;
   }
 
   /// ── تشفير SHA-256 للنصوص ──
