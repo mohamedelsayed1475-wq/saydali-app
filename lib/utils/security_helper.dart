@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/export.dart';
 import 'env_config.dart';
@@ -24,25 +25,35 @@ class SecurityHelper {
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
   }
 
-  // مفتاح التوقيع (مزيج من مفاتيح البيئة + ثابت)
-  static String get _secretKey {
-    const salt = 'SaYdAlI_pRo_2026_sEcUrE';
-    final envPart = EnvConfig.supabaseKey.isNotEmpty
-        ? EnvConfig.supabaseKey.substring(0, 8)
-        : 'fallback';
-    return '$salt$envPart';
+  // ── HMAC signing key (device-specific, stored in secure storage) ──
+  static String? _cachedHmacKey;
+
+  static Future<String> _getHmacKey() async {
+    if (_cachedHmacKey != null) return _cachedHmacKey!;
+    const storage = FlutterSecureStorage(
+      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    );
+    var key = await storage.read(key: 'hmac_signing_key');
+    if (key == null || key.isEmpty) {
+      final bytes = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+      key = base64.encode(bytes);
+      await storage.write(key: 'hmac_signing_key', value: key);
+    }
+    _cachedHmacKey = key;
+    return key;
   }
 
   /// ── توقيع قيمة بـ HMAC-SHA256 ──
-  static String signValue(String key, String value) {
-    final hmac = Hmac(sha256, utf8.encode(_secretKey));
+  static Future<String> signValue(String key, String value) async {
+    final secretKey = await _getHmacKey();
+    final hmac = Hmac(sha256, utf8.encode(secretKey));
     final digest = hmac.convert(utf8.encode('$key:$value'));
     return digest.toString();
   }
 
   /// ── التحقق من صحة التوقيع ──
-  static bool verifyValue(String key, String value, String signature) {
-    final expected = signValue(key, value);
+  static Future<bool> verifyValue(String key, String value, String signature) async {
+    final expected = await signValue(key, value);
     return expected == signature;
   }
 
@@ -122,12 +133,44 @@ class SecurityHelper {
   /// ── فحص الاشتراك المحلي مع حماية ──
   /// يرجع true لو الاشتراك صالح وما تمش التلاعب بيه
   static Future<bool> isSubscriptionValid() async {
-    return true; // تفعيل دائم مدى الحياة للمشتري محلياً
+    try {
+      final db = DatabaseHelper.instance;
+      final isActivated = await db.getSetting('is_activated');
+      if (isActivated != '1') return false;
+
+      final expiry = await readSignedSetting('subscription_expiry');
+      if (expiry == null || expiry.isEmpty) return true; // lifetime activation
+
+      final expiryDate = DateTime.tryParse(expiry);
+      if (expiryDate == null) return false;
+
+      // Use server time if available, fall back to device time
+      final now = await getServerTime() ?? DateTime.now();
+      return now.isBefore(expiryDate);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// ── التحقق السحابي من الاشتراك ──
   static Future<bool?> verifySubscriptionCloud() async {
-    return true; // تفعيل دائم
+    try {
+      if (EnvConfig.supabaseUrl.isEmpty) return null;
+      final db = DatabaseHelper.instance;
+      final isActivated = await db.getSetting('is_activated');
+      if (isActivated != '1') return false;
+
+      final expiry = await readSignedSetting('subscription_expiry');
+      if (expiry == null || expiry.isEmpty) return true; // lifetime
+
+      final expiryDate = DateTime.tryParse(expiry);
+      if (expiryDate == null) return false;
+
+      final now = await getServerTime() ?? DateTime.now();
+      return now.isBefore(expiryDate);
+    } catch (_) {
+      return null;
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -168,7 +211,7 @@ class SecurityHelper {
     final expiry = await db.getSetting('subscription_expiry');
     final sig = await db.getSetting('subscription_expiry_sig');
     if (expiry != null && expiry.isNotEmpty && sig != null) {
-      if (!verifyValue('subscription_expiry', expiry, sig)) {
+      if (!await verifyValue('subscription_expiry', expiry, sig)) {
         warnings.add('🔐 تم اكتشاف تلاعب في بيانات الاشتراك');
       }
     }
@@ -199,27 +242,42 @@ class SecurityHelper {
     return '$saltEncoded\$$hashEncoded';
   }
 
-  /// ── التحقق من صحة الـ PIN (مع دعم Plaintext القديم) ──
+  /// ── التحقق من صحة الـ PIN (مع دعم Plaintext والـ SHA-256 القديم) ──
   static bool verifyPin(String enteredPin, String storedPinValue) {
     if (!storedPinValue.contains('\$')) {
-      // Legacy compatibility: Plaintext fallback
+      // Legacy compatibility: Plaintext or old SHA-256 fallback
+      if (storedPinValue.length == 64 && RegExp(r'^[0-9a-f]+$').hasMatch(storedPinValue)) {
+        // Old SHA-256 format: sha256(pin + salt).toString()
+        return storedPinValue == _hashPinLegacy(enteredPin);
+      }
       return enteredPin == storedPinValue;
     }
 
     final parts = storedPinValue.split('\$');
     if (parts.length != 2) return false;
 
-    final saltB64 = parts[0];
-    final storedHash = parts[1];
-    final expected = hashPin(enteredPin, saltBase64: saltB64);
-    final expectedHash = expected.split('\$')[1];
-    // Timing-safe comparison
-    if (storedHash.length != expectedHash.length) return false;
-    int result = 0;
-    for (int i = 0; i < storedHash.length; i++) {
-      result |= storedHash.codeUnitAt(i) ^ expectedHash.codeUnitAt(i);
+    // Try new PBKDF2 format (base64 salt)
+    try {
+      base64.decode(parts[0]); // valid base64 = new format
+      final expected = hashPin(enteredPin, saltBase64: parts[0]);
+      final expectedHash = expected.split('\$')[1];
+      final storedHash = parts[1];
+      // Timing-safe comparison
+      if (storedHash.length != expectedHash.length) return false;
+      int result = 0;
+      for (int i = 0; i < storedHash.length; i++) {
+        result |= storedHash.codeUnitAt(i) ^ expectedHash.codeUnitAt(i);
+      }
+      return result == 0;
+    } catch (_) {
+      // Unknown format
+      return false;
     }
-    return result == 0;
+  }
+
+  // Legacy SHA-256 hash for migration (old pin_lock_screen format)
+  static String _hashPinLegacy(String pin) {
+    return sha256.convert(utf8.encode(pin + 'saydali_salt_2024')).toString();
   }
 
   /// ── تشفير SHA-256 للنصوص ──

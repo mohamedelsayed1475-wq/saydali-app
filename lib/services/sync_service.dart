@@ -9,6 +9,16 @@ import '../utils/security_helper.dart';
 import '../database/database_helper.dart';
 import '../models/models.dart';
 
+List<Map<String, dynamic>> _asList(dynamic raw) {
+  if (raw is! List) return [];
+  return raw.whereType<Map<String, dynamic>>().toList();
+}
+
+Map<String, dynamic>? _asMap(dynamic raw) {
+  if (raw is! Map) return null;
+  return Map<String, dynamic>.from(raw);
+}
+
 /// خدمة المزامنة متعددة الأجهزة عبر Supabase
 /// تعمل بنظام Local-First: حفظ محلي أولاً ثم رفع للسحابة
 class SyncService {
@@ -89,7 +99,7 @@ class SyncService {
           .timeout(const Duration(seconds: 10));
 
       if (checkRes.statusCode == 200) {
-        final existing = jsonDecode(checkRes.body) as List;
+        final existing = _asList(jsonDecode(checkRes.body));
         if (existing.isNotEmpty) {
           _pharmacyCloudId = existing[0]['id'];
           await db.setSetting('pharmacy_cloud_id', _pharmacyCloudId!);
@@ -181,7 +191,7 @@ class SyncService {
         );
       }
 
-      final pharmacies = jsonDecode(res.body) as List;
+      final pharmacies = _asList(jsonDecode(res.body));
       if (pharmacies.isEmpty) {
         return (
           success: false,
@@ -519,11 +529,10 @@ class SyncService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return;
-      final items = jsonDecode(res.body) as List;
+      final items = _asList(jsonDecode(res.body));
 
       for (final item in items) {
         final cloudId = item['id'];
-        // تحقق هل موجود محلياً
         final local = await db.query('shortages',
             where: 'cloud_id = ?', whereArgs: [cloudId]);
 
@@ -645,7 +654,7 @@ class SyncService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return;
-      final items = jsonDecode(res.body) as List;
+      final items = _asList(jsonDecode(res.body));
 
       for (final item in items) {
         final cloudId = item['id'];
@@ -742,7 +751,7 @@ class SyncService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return;
-      final items = jsonDecode(res.body) as List;
+      final items = _asList(jsonDecode(res.body));
 
       for (final item in items) {
         final cloudId = item['id'];
@@ -843,7 +852,7 @@ class SyncService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return;
-      final items = jsonDecode(res.body) as List;
+      final items = _asList(jsonDecode(res.body));
 
       for (final item in items) {
         final cloudId = item['id'];
@@ -912,7 +921,7 @@ class SyncService {
             .timeout(const Duration(seconds: 10));
 
         if (checkRes.statusCode == 200) {
-          final existing = jsonDecode(checkRes.body) as List;
+          final existing = _asList(jsonDecode(checkRes.body));
           final data = {
             'pharmacy_id': _pharmacyCloudId,
             'name': a['name'],
@@ -1102,7 +1111,7 @@ class SyncService {
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
-        final items = jsonDecode(res.body) as List;
+        final items = _asList(jsonDecode(res.body));
         for (final item in items) {
           final cloudId = item['id']?.toString();
           final cloudName = item['name']?.toString().trim();
@@ -1172,7 +1181,7 @@ class SyncService {
           .timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
-        final items = jsonDecode(res.body) as List;
+        final items = _asList(jsonDecode(res.body));
         for (final item in items) {
           final storedPin = item['pin']?.toString() ?? '';
           if (SecurityHelper.verifyPin(pin, storedPin)) {
@@ -1308,7 +1317,7 @@ class SyncService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode != 200) return;
-      final items = jsonDecode(res.body) as List;
+      final items = _asList(jsonDecode(res.body));
 
       for (final item in items) {
         final cloudId = item['id'];

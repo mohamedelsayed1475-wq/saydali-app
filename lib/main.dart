@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -26,35 +27,42 @@ import 'services/sync_service.dart';
 import 'services/scheduled_sync_service.dart';
 import 'services/notification_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    // تهيئة قاعدة البيانات
-    await DatabaseHelper.instance.database;
-  } catch (e) {
-    // في حالة فشل تهيئة قاعدة البيانات، نستمر comunque لتجنب تعطل التطبيق تمامًا
-    debugPrint('خطأ في تهيئة قاعدة البيانات: $e');
-  }
-  try {
-    await NotificationService.instance.initialize();
-  } catch (e) {
-    debugPrint('خطأ في تهيئة الإشعارات: $e');
-  }
-  try {
-    await ScheduledSyncService.initialize();
-  } catch (e) {
-    debugPrint('خطأ في تهيئة WorkManager: $e');
-  }
-  try {
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-    ));
-  } catch (e) {
-    debugPrint('خطأ في إعداد واجهة النظام: $e');
-  }
-  runApp(const SaydaliApp());
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    FlutterError.onError = (FlutterErrorDetails details) {
+      debugPrint('Flutter error: ${details.exceptionAsString()}');
+      debugPrint('Stack: ${details.stack}');
+    };
+    try {
+      await DatabaseHelper.instance.database;
+    } catch (e) {
+      debugPrint('خطأ في تهيئة قاعدة البيانات: $e');
+    }
+    try {
+      await NotificationService.instance.initialize();
+    } catch (e) {
+      debugPrint('خطأ في تهيئة الإشعارات: $e');
+    }
+    try {
+      await ScheduledSyncService.initialize();
+    } catch (e) {
+      debugPrint('خطأ في تهيئة WorkManager: $e');
+    }
+    try {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ));
+    } catch (e) {
+      debugPrint('خطأ في إعداد واجهة النظام: $e');
+    }
+    runApp(const SaydaliApp());
+  }, (Object error, StackTrace stack) {
+    debugPrint('Unhandled error: $error');
+    debugPrint('Stack: $stack');
+  });
 }
 
 class SaydaliApp extends StatelessWidget {
@@ -245,7 +253,6 @@ class _SplashScreenState extends State<SplashScreen>
             if (result.isNotEmpty) {
               final assistant = Assistant.fromMap(result.first);
               if (assistant.isActive && !assistant.isSubscriptionExpired) {
-                // Auto login session matches and is valid!
                 ctx.read<CurrentUserProvider>().loginAsAssistant(assistant);
                 SyncService.instance.startPeriodicSync();
                 ScheduledSyncService.registerDevice();
@@ -260,7 +267,6 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
 
-      // If no valid session, redirect to the password/PIN entry screen
       Navigator.pushReplacement(
         ctx,
         MaterialPageRoute(builder: (_) => const AssistantPinLoginScreen()),
@@ -268,18 +274,20 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    // دخول مباشر كمالك
+    // Owner flow: ensure pharmacy registered before sync/navigation
     if (ctx.mounted) {
       ctx.read<CurrentUserProvider>().loginAsOwner();
-      // تسجيل الصيدلية وبدء المزامنة
-      SyncService.instance.registerPharmacy().then((_) {
+      final registered = await SyncService.instance.registerPharmacy();
+      if (registered) {
         SyncService.instance.startPeriodicSync();
         ScheduledSyncService.registerDevice();
-      });
-      Navigator.pushReplacement(
-        ctx,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+      }
+      if (ctx.mounted) {
+        Navigator.pushReplacement(
+          ctx,
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+        );
+      }
     }
   }
 

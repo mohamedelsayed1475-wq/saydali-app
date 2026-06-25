@@ -1,25 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import '../utils/app_theme.dart';
+import '../utils/security_helper.dart';
+
+class _PinStorage {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  static const _key = 'app_pin_hash';
+
+  static Future<void> save(String hash) => _storage.write(key: _key, value: hash);
+  static Future<String?> read() => _storage.read(key: _key);
+  static Future<void> delete() => _storage.delete(key: _key);
+  static Future<bool> exists() async => (await _storage.read(key: _key)) != null;
+}
 
 class PinLockScreen extends StatefulWidget {
-  final bool isSetup; // true = إنشاء PIN جديد, false = التحقق
+  final bool isSetup;
   final VoidCallback onSuccess;
   const PinLockScreen({super.key, this.isSetup = false, required this.onSuccess});
 
   @override
   State<PinLockScreen> createState() => _PinLockScreenState();
 
-  /// تحقق إذا كان PIN مفعل
   static Future<bool> isPinEnabled() async {
+    if (await _PinStorage.exists()) return true;
+    // Migration: check old SharedPreferences
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('app_pin_hash') != null;
+    final oldHash = prefs.getString('app_pin_hash');
+    if (oldHash != null) {
+      await _PinStorage.save(oldHash);
+      await prefs.remove('app_pin_hash');
+      return true;
+    }
+    return false;
   }
 
-  /// حذف PIN
   static Future<void> removePin() async {
+    await _PinStorage.delete();
+    // Also clean up legacy storage
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('app_pin_hash');
   }
@@ -48,16 +68,8 @@ class _PinLockScreenState extends State<PinLockScreen>
     super.dispose();
   }
 
-  String _hashPin(String pin) {
-    final bytes = utf8.encode(pin + 'saydali_salt_2024');
-    return sha256.convert(bytes).toString();
-  }
-
   Future<void> _onPinComplete(String pin) async {
-    final prefs = await SharedPreferences.getInstance();
-
     if (widget.isSetup) {
-      // إنشاء PIN جديد
       if (!_isConfirming) {
         setState(() {
           _confirmPin = pin;
@@ -67,9 +79,8 @@ class _PinLockScreenState extends State<PinLockScreen>
         });
         return;
       }
-      // تأكيد PIN
       if (pin == _confirmPin) {
-        await prefs.setString('app_pin_hash', _hashPin(pin));
+        await _PinStorage.save(SecurityHelper.hashPin(pin));
         widget.onSuccess();
       } else {
         _shakeCtrl.forward(from: 0);
@@ -81,9 +92,12 @@ class _PinLockScreenState extends State<PinLockScreen>
         });
       }
     } else {
-      // التحقق
-      final saved = prefs.getString('app_pin_hash') ?? '';
-      if (_hashPin(pin) == saved) {
+      final saved = await _PinStorage.read() ?? '';
+      if (SecurityHelper.verifyPin(pin, saved)) {
+        // Migrate: if stored as legacy SHA-256, re-hash with PBKDF2
+        if (!saved.contains('\$')) {
+          await _PinStorage.save(SecurityHelper.hashPin(pin));
+        }
         widget.onSuccess();
       } else {
         _shakeCtrl.forward(from: 0);
@@ -127,7 +141,6 @@ class _PinLockScreenState extends State<PinLockScreen>
         child: Column(
           children: [
             const Spacer(flex: 2),
-            // أيقونة القفل
             Container(
               width: 70,
               height: 70,
@@ -165,7 +178,6 @@ class _PinLockScreenState extends State<PinLockScreen>
             ),
             const SizedBox(height: 30),
 
-            // نقاط PIN
             AnimatedBuilder(
               animation: _shakeCtrl,
               builder: (_, child) {
@@ -210,7 +222,6 @@ class _PinLockScreenState extends State<PinLockScreen>
               ),
             ),
 
-            // رسالة خطأ
             const SizedBox(height: 16),
             SizedBox(
               height: 20,
@@ -222,7 +233,6 @@ class _PinLockScreenState extends State<PinLockScreen>
             ),
             const Spacer(),
 
-            // لوحة الأرقام
             _buildKeypad(),
             const SizedBox(height: 20),
             const Spacer(),

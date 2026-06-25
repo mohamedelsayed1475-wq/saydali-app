@@ -7,6 +7,16 @@ import 'package:http/http.dart' as http;
 import '../utils/env_config.dart';
 import '../database/database_helper.dart';
 
+List<Map<String, dynamic>> _asList(dynamic raw) {
+  if (raw is! List) return [];
+  return raw.whereType<Map<String, dynamic>>().toList();
+}
+
+Map<String, dynamic>? _asMap(dynamic raw) {
+  if (raw is! Map) return null;
+  return Map<String, dynamic>.from(raw);
+}
+
 class SupabaseService {
   static final SupabaseService instance = SupabaseService._internal();
   SupabaseService._internal();
@@ -238,7 +248,7 @@ class SupabaseService {
         );
       }
 
-      final codes = jsonDecode(codeRes.body) as List;
+      final codes = _asList(jsonDecode(codeRes.body));
       String? sessionId;
 
       if (codes.isNotEmpty) {
@@ -254,7 +264,7 @@ class SupabaseService {
             .timeout(const Duration(seconds: 10));
 
         if (sessionByCodeRes.statusCode == 200) {
-          final sessions = jsonDecode(sessionByCodeRes.body) as List;
+          final sessions = _asList(jsonDecode(sessionByCodeRes.body));
           if (sessions.isNotEmpty) {
             sessionId = sessions[0]['id']?.toString();
           }
@@ -277,7 +287,7 @@ class SupabaseService {
         return (response: null, error: 'خطأ في جلب بيانات الجلسة');
       }
 
-      final sessions = jsonDecode(sessionRes.body) as List;
+      final sessions = _asList(jsonDecode(sessionRes.body));
       if (sessions.isEmpty) {
         return (response: null, error: 'لم يتم العثور على الجلسة');
       }
@@ -301,7 +311,7 @@ class SupabaseService {
         return (response: null, error: 'خطأ في جلب الأصناف');
       }
 
-      final items = jsonDecode(itemsRes.body) as List;
+      final items = _asList(jsonDecode(itemsRes.body));
 
       // تصفية مرنة تدعم Integer وBoolean
       final availableList = items.where((i) {
@@ -357,8 +367,8 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        return data.cast<Map<String, dynamic>>();
+        final data = _asList(jsonDecode(res.body));
+        return data;
       }
       return [];
     } catch (e) {
@@ -391,7 +401,7 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (sessionRes.statusCode == 200) {
-        final sessions = jsonDecode(sessionRes.body) as List;
+        final sessions = _asList(jsonDecode(sessionRes.body));
         if (sessions.isNotEmpty) {
           final sessionId = sessions[0]['id'];
           await http
@@ -483,9 +493,9 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return null;
-      final data = jsonDecode(res.body) as List;
+      final data = _asList(jsonDecode(res.body));
       if (data.isEmpty) return null;
-      return data[0] as Map<String, dynamic>;
+      return _asMap(data[0]);
     } catch (e) {
       debugPrint('❌ checkSubscriptionCode error: $e');
       return null;
@@ -654,7 +664,7 @@ class SupabaseService {
           .timeout(const Duration(seconds: 30));
 
       if (sessionIdsRes.statusCode != 200) return 0;
-      final sessions = jsonDecode(sessionIdsRes.body) as List;
+      final sessions = _asList(jsonDecode(sessionIdsRes.body));
 
       if (sessions.isEmpty) {
         debugPrint('✅ لا توجد جلسات منتهية للحذف');
@@ -716,7 +726,7 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return [];
-      final data = jsonDecode(res.body) as List;
+      final data = _asList(jsonDecode(res.body));
       final activeCodes = data.where((c) {
         final val = c['is_active'];
         return val == 1 || val == '1' || val == true || val == 'true';
@@ -740,7 +750,7 @@ class SupabaseService {
           .timeout(const Duration(seconds: 10));
 
       if (res.statusCode != 200) return null;
-      final data = jsonDecode(res.body) as List;
+      final data = _asList(jsonDecode(res.body));
       final activeAds = data.where((a) {
         final val = a['is_active'];
         return val == 1 || val == '1' || val == true || val == 'true';
@@ -801,8 +811,8 @@ class SupabaseService {
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        return data.cast<Map<String, dynamic>>();
+        final data = _asList(jsonDecode(res.body));
+        return data;
       }
       debugPrint('❌ fetchCommunityPosts failed: ${res.statusCode} - ${res.body}');
       return [];
