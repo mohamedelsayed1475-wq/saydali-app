@@ -623,7 +623,7 @@ class _ShortagesScreenState extends State<ShortagesScreen> {
 
   Future<void> _shareShortages() async {
     final provider = context.read<ShortagesProvider>();
-    final filtered = _getFiltered(provider.shortages);
+    final filtered = provider.filtered;
     if (filtered.isEmpty) {
       showSnack(context, 'لا توجد نواقص للمشاركة', isError: true);
       return;

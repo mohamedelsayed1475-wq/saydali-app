@@ -10,6 +10,7 @@ import '../widgets/common_widgets.dart';
 import 'subscription_screen.dart';
 import '../services/sync_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/security_helper.dart';
 
 
 class AssistantsScreen extends StatefulWidget {

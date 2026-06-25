@@ -61,7 +61,7 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
     if (_pharmacyName.isEmpty) return;
     if (mounted) setState(() => _loadingSessions = true);
     try {
-      final sessions = await SupabaseService.instance.fetchPharmacySessions(_pharmacyName);
+      final sessions = await SupabaseService.instance.fetchPharmacySessions();
       if (mounted) {
         setState(() {
           _sentSessions = sessions;
@@ -469,6 +469,8 @@ class _RepResponseScreenState extends State<RepResponseScreen> {
                           final diff = DateTime.now().difference(d).inDays;
                           dateText = diff == 0 ? 'اليوم' : 'من $diff يوم';
                         }
+                      } catch (e) {
+                        debugPrint('Error: $e');
                       }
                       return Container(
                         margin: const EdgeInsets.only(bottom: 4),

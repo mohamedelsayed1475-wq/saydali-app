@@ -61,7 +61,7 @@ class SecurityHelper {
   static Future<void> saveSignedSetting(String key, String value) async {
     final db = DatabaseHelper.instance;
     await db.setSetting(key, value);
-    await db.setSetting('${key}_sig', signValue(key, value));
+    await db.setSetting('${key}_sig', await signValue(key, value));
   }
 
   /// ── قراءة قيمة موقعة والتحقق منها ──
@@ -74,11 +74,11 @@ class SecurityHelper {
     final signature = await db.getSetting('${key}_sig');
     if (signature == null) {
       // لو مفيش توقيع (مستخدم قديم) → نوقع ونرجع القيمة
-      await db.setSetting('${key}_sig', signValue(key, value));
+      await db.setSetting('${key}_sig', await signValue(key, value));
       return value;
     }
 
-    if (verifyValue(key, value, signature)) {
+    if (await verifyValue(key, value, signature)) {
       return value; // التوقيع صحيح
     }
 
