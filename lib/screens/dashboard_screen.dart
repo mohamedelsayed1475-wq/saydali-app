@@ -9,8 +9,6 @@ import '../services/sync_service.dart';
 import '../utils/app_theme.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_providers.dart';
-import 'shortages_screen.dart';
-import 'debts_screen.dart';
 import 'rep_response_screen.dart';
 import 'invoice_screen.dart';
 import 'documents_screen.dart';

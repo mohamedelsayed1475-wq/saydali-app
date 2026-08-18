@@ -2271,7 +2271,7 @@ class DatabaseHelper {
     await updateInventorySessionStats(sessionId);
 
     final session = await getInventorySession(sessionId);
-    debugPrint('🔄 جرد: طلب إعادة عد لجلسة ${session?['title'] ?? '#$sessionId'}');
+    debugPrint('🔄 جرد: طلب إعادة عد لجلسة ${session?['title'] ?? '#$sessionId'} بواسطة $userName');
   }
 
   /// استيراد قائمة الأصناف من قاموس الأدوية المسجل لتسهيل إنشاء جلسة جرد

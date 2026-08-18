@@ -23,7 +23,6 @@ class _RapidShortagesEntryScreenState extends State<RapidShortagesEntryScreen> {
   List<Map<String, dynamic>> _drugDictionary = [];
   List<Map<String, dynamic>> _filteredSuggestions = [];
   final List<Map<String, dynamic>> _recentAddedItems = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -56,10 +55,6 @@ class _RapidShortagesEntryScreenState extends State<RapidShortagesEntryScreen> {
         }).toList();
       }
     } catch (_) {}
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
   }
 
   void _onNameChanged(String query) {

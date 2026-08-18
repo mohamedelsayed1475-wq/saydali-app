@@ -14,11 +14,6 @@ List<Map<String, dynamic>> _asList(dynamic raw) {
   return raw.whereType<Map<String, dynamic>>().toList();
 }
 
-Map<String, dynamic>? _asMap(dynamic raw) {
-  if (raw is! Map) return null;
-  return Map<String, dynamic>.from(raw);
-}
-
 /// خدمة المزامنة متعددة الأجهزة عبر Supabase
 /// تعمل بنظام Local-First: حفظ محلي أولاً ثم رفع للسحابة
 class SyncService {

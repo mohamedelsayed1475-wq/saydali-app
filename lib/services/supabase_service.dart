@@ -421,7 +421,7 @@ class SupabaseService {
         }
       }
 
-      return createSession(
+      return await createSession(
         repName: repName,
         repPhone: repPhone,
         pharmacyName: pharmacyName,
@@ -430,7 +430,7 @@ class SupabaseService {
       );
     } catch (e) {
       debugPrint('❌ renewSession error: $e');
-      return createSession(
+      return await createSession(
         repName: repName,
         repPhone: repPhone,
         pharmacyName: pharmacyName,
