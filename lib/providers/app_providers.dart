@@ -138,10 +138,11 @@ class ShortagesProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(Map<String, dynamic> data) async {
-    await DatabaseHelper.instance.insertShortage(data);
+  Future<int> add(Map<String, dynamic> data) async {
+    final id = await DatabaseHelper.instance.insertShortage(data);
     await load();
     SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+    return id;
   }
 
   Future<void> update(int id, Map<String, dynamic> data) async {
