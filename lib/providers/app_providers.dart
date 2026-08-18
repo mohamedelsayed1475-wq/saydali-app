@@ -1,0 +1,284 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../database/database_helper.dart';
+import '../models/models.dart';
+import '../services/supabase_service.dart';
+import '../services/sync_service.dart';
+import '../utils/fuzzy_search.dart';
+
+// ── Provider للثيم ──────────────────────────────────────────────────
+class ThemeProvider extends ChangeNotifier {
+  ThemeMode _mode = ThemeMode.dark;
+  ThemeMode get mode => _mode;
+  bool get isDark => _mode == ThemeMode.dark;
+
+  ThemeProvider() {
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('app_theme') ?? 'dark';
+    _mode = saved == 'light' ? ThemeMode.light : ThemeMode.dark;
+    notifyListeners();
+  }
+
+  Future<void> toggle() async {
+    _mode = isDark ? ThemeMode.light : ThemeMode.dark;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_theme', isDark ? 'dark' : 'light');
+    notifyListeners();
+  }
+}
+
+// ── Provider للتنقل وتبديل التابات ─────────────────────────────────────
+class NavigationProvider extends ChangeNotifier {
+  int _currentIndex = 0;
+  int get currentIndex => _currentIndex;
+
+  void setTab(int index) {
+    if (_currentIndex != index) {
+      _currentIndex = index;
+      notifyListeners();
+    }
+  }
+}
+
+// ── Provider للنواقص ──────────────────────────────────────────────────
+class ShortagesProvider extends ChangeNotifier {
+  List<Shortage> _shortages = [];
+  bool _loading = false;
+  String _filter = 'all';
+  String _search = '';
+  StreamSubscription<void>? _syncSubscription;
+
+  ShortagesProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
+
+  List<Shortage> get shortages => _shortages;
+  bool get loading => _loading;
+  String get filter => _filter;
+  String get search => _search;
+
+  List<Shortage> get filtered {
+    var result = _shortages.where((s) {
+      final matchFilter = _filter == 'all' || s.status == _filter;
+      if (!matchFilter) return false;
+      if (_search.isEmpty) return true;
+
+      final terms = _search.split(RegExp(r'[\s/]+')).where((t) => t.isNotEmpty);
+
+      return terms.every((term) =>
+          FuzzySearch.match(term, s.name) || FuzzySearch.match(term, s.company));
+    }).toList();
+
+    if (_search.isNotEmpty) {
+      final q = _search.toLowerCase().trim();
+      result.sort((a, b) {
+        final scoreA = _matchScore(q, a);
+        final scoreB = _matchScore(q, b);
+        return scoreB.compareTo(scoreA);
+      });
+    }
+
+    return result;
+  }
+
+  double _matchScore(String query, Shortage s) {
+    final q = query.toLowerCase().trim();
+    final name = s.name.toLowerCase();
+    final company = s.company.toLowerCase();
+
+    if (name == q) return 100;
+    if (name.startsWith(q)) return 80;
+    if (name.contains(q)) return 60;
+    if (company.contains(q)) return 40;
+    return 20;
+  }
+
+  Map<String, int> get stats => {
+        'total': _shortages.length,
+        'pending': _shortages.where((s) => s.status == 'pending').length,
+        'offered': _shortages.where((s) => s.status == 'offered').length,
+        'covered': _shortages.where((s) => s.status == 'covered').length,
+        'stubborn': _shortages.where((s) => s.status == 'stubborn').length,
+      };
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
+    await DatabaseHelper.instance.autoCloseOldPendingShortages();
+    final data = await DatabaseHelper.instance.getShortages();
+    _shortages = data.map(Shortage.fromMap).toList();
+    if (!silent) {
+      _loading = false;
+    }
+    notifyListeners();
+  }
+
+  void setFilter(String f) {
+    _filter = f;
+    notifyListeners();
+  }
+
+  void setSearch(String s) {
+    _search = s;
+    notifyListeners();
+  }
+
+  Future<void> add(Map<String, dynamic> data) async {
+    await DatabaseHelper.instance.insertShortage(data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> update(int id, Map<String, dynamic> data) async {
+    await DatabaseHelper.instance.updateShortage(id, data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> delete(int id) async {
+    await DatabaseHelper.instance.deleteShortage(id);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+}
+
+// ── Provider للعملاء ──────────────────────────────────────────────────
+class CustomersProvider extends ChangeNotifier {
+  List<Customer> _customers = [];
+  bool _loading = false;
+  StreamSubscription<void>? _syncSubscription;
+
+  CustomersProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
+
+  List<Customer> get customers => _customers;
+  bool get loading => _loading;
+  double get totalDebt => _customers.fold(0, (sum, c) => sum + c.totalDebt);
+
+  Future<void> load() async {
+    _loading = true;
+    notifyListeners();
+    final data = await DatabaseHelper.instance.getCustomers();
+    _customers = data.map(Customer.fromMap).toList();
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> add(Map<String, dynamic> data) async {
+    if (data['photo_url'] != null && !data['photo_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadCustomerPhoto(
+        data['photo_url'],
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+      if (url != null) data['photo_url'] = url;
+    }
+    await DatabaseHelper.instance.insertCustomer(data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> update(int id, Map<String, dynamic> data) async {
+    if (data['photo_url'] != null && !data['photo_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadCustomerPhoto(
+        data['photo_url'],
+        id.toString(),
+      );
+      if (url != null) data['photo_url'] = url;
+    }
+    await DatabaseHelper.instance.updateCustomer(id, data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> delete(int id) async {
+    await DatabaseHelper.instance.deleteCustomer(id);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> addTransaction(Map<String, dynamic> data) async {
+    if (data['receipt_url'] != null && !data['receipt_url'].startsWith('http')) {
+      final url = await SupabaseService.instance.uploadReceiptPhoto(
+        data['receipt_url'],
+        DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+      if (url != null) data['receipt_url'] = url;
+    }
+    await DatabaseHelper.instance.addDebtTransaction(data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+}
+
+// ── Provider للمندوبين ──────────────────────────────────────────────────
+class RepsProvider extends ChangeNotifier {
+  List<Representative> _reps = [];
+  bool _loading = false;
+  StreamSubscription<void>? _syncSubscription;
+
+  RepsProvider() {
+    _syncSubscription = SyncService.instance.onSyncComplete.listen((_) {
+      load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
+
+  List<Representative> get reps => _reps;
+  bool get loading => _loading;
+
+  Future<void> load() async {
+    _loading = true;
+    notifyListeners();
+    final data = await DatabaseHelper.instance.getReps();
+    _reps = data.map(Representative.fromMap).toList();
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> add(Map<String, dynamic> data) async {
+    await DatabaseHelper.instance.insertRep(data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> update(int id, Map<String, dynamic> data) async {
+    await DatabaseHelper.instance.updateRep(id, data);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+
+  Future<void> delete(int id) async {
+    await DatabaseHelper.instance.deleteRep(id);
+    await load();
+    SyncService.instance.syncAll(); // مزامنة فورية في الخلفية
+  }
+}

@@ -1,0 +1,95 @@
+name: Build & Release Saydali APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'رقم الإصدار (مثلاً: 1.5.0)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'ملاحظات الإصدار'
+        required: false
+        default: 'تحديث جديد'
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | sed 's/+.*//' | tr -d ' \r\n')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+
+      - name: Build APK
+        env:
+          DEV_PASS: ${{ secrets.DEV_PASS }}
+          ADMIN_CODE_1_HASH: ${{ secrets.ADMIN_CODE_1_HASH }}
+          ADMIN_CODE_2_HASH: ${{ secrets.ADMIN_CODE_2_HASH }}
+        run: |
+          flutter build apk --release \
+            --obfuscate --split-debug-info=build/debug-info \
+            --dart-define="DEV_PASS=$(echo -n "$DEV_PASS" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_1_HASH=$(echo -n "$ADMIN_CODE_1_HASH" | tr -d '\n\r')" \
+            --dart-define="ADMIN_CODE_2_HASH=$(echo -n "$ADMIN_CODE_2_HASH" | tr -d '\n\r')"
+
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             "build/app/outputs/flutter-apk/saydali-pro-v${{ steps.get_version.outputs.version }}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}-build${{ github.run_number }}
+          name: "Saydali Pro v${{ steps.get_version.outputs.version }} (Build #${{ github.run_number }})"
+          body: |
+            ## صيدلي برو - الإصدار ${{ steps.get_version.outputs.version }}
+
+            ${{ github.event.inputs.release_notes || 'تحديث تلقائي' }}
+
+            ---
+            ### تثبيت التطبيق
+            حمّل ملف APK وثبّته مباشرة على الهاتف
+
+            > كل كود تفعيل صالح لجهاز واحد فقط
+          prerelease: false
+          files: |
+            build/app/outputs/flutter-apk/saydali-pro-v${{ steps.get_version.outputs.version }}.apk

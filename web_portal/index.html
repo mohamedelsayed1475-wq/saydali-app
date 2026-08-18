@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صيدلي برو - رد المندوب</title>
+  <meta name="description" content="بوابة ردود مندوبي المبيعات - صيدلي برو" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">💊</div>
+    <div>
+      <h1>صيدلي برو</h1>
+      <p>بوابة ردود المندوبين</p>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- LOADING -->
+  <div id="loading-screen">
+    <div class="spinner"></div>
+    <p class="loading-text">جاري تحميل بيانات الجلسة...</p>
+  </div>
+
+  <!-- NO CODE -->
+  <div class="state-screen" id="nocode-screen">
+    <div class="state-icon">🔗</div>
+    <div class="state-title" style="color:var(--warning)">رابط غير صحيح</div>
+    <p class="state-msg">هذا الرابط لا يحتوي على كود جلسة صحيح.<br/>يرجى التواصل مع الصيدلية للحصول على الرابط الصحيح.</p>
+  </div>
+
+  <!-- ERROR -->
+  <div class="state-screen" id="error-screen">
+    <div class="state-icon">❌</div>
+    <div class="state-title" style="color:var(--danger)">حدث خطأ</div>
+    <p class="state-msg" id="error-message">تعذّر تحميل البيانات.</p>
+    <button class="action-btn" onclick="location.reload()">🔄 إعادة المحاولة</button>
+  </div>
+
+  <!-- EXPIRED -->
+  <div class="state-screen" id="expired-screen">
+    <div class="state-icon">⏰</div>
+    <div class="state-title" style="color:var(--warning)">انتهت الصلاحية</div>
+    <p class="state-msg">انتهت صلاحية هذا الطلب. تواصل مع الصيدلية لإعادة الإرسال.</p>
+  </div>
+
+  <!-- ALREADY RESPONDED -->
+  <div class="state-screen" id="responded-screen">
+    <div class="state-icon">✅</div>
+    <div class="state-title" style="color:var(--success)">تم الرد مسبقاً</div>
+    <p class="state-msg">لقد قمت بالرد على هذا الطلب من قبل.<br/>إذا أردت تجديد الجلسة، تواصل مع الصيدلية.</p>
+    <button class="action-btn" id="renew-btn">🔄 طلب تجديد الجلسة</button>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="state-screen" id="success-screen">
+    <div class="state-icon" style="animation:bounce .6s ease">🎉</div>
+    <div class="state-title" style="color:var(--success)">شكراً! تم إرسال ردك</div>
+    <p class="state-msg" id="pharmacy-success">استلمت الصيدلية ردك بنجاح</p>
+    <div class="code-card">
+      <div class="code-label">كود الاستلام (أرسله للصيدلية)</div>
+      <span class="code-value" id="code-display">--------</span>
+      <div class="code-hint">📋 احفظ هذا الكود — الصيدلية ستطلبه لاستلام ردك</div>
+    </div>
+    <button class="copy-btn" id="copy-btn"><span>📋</span><span>نسخ الكود</span></button>
+  </div>
+
+  <!-- MAIN FORM -->
+  <div id="main-screen" style="display:none">
+
+    <div class="session-card">
+      <div class="live-badge"><div class="live-dot"></div><span>جلسة نشطة</span></div>
+      <div class="pharmacy-name" id="pharm-name">...</div>
+      <div class="session-meta">
+        <div class="meta-chip">👤 <span id="rep-name">...</span></div>
+        <div class="meta-chip">💰 <span id="currency">ج.م</span></div>
+        <div class="meta-chip">📦 <span id="items-count">0</span> صنف</div>
+      </div>
+    </div>
+
+    <div class="progress-box">
+      <div class="progress-label"><span>تقدم الرد</span><span id="prog-text">0 / 0</span></div>
+      <div class="progress-track"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="section-header">
+      <span>📋</span>
+      <span class="section-title">قائمة الأصناف المطلوبة</span>
+      <span class="section-count" id="total-count">0</span>
+    </div>
+
+    <div id="items-list"></div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- SUBMIT BAR -->
+<div class="submit-bar" id="submit-bar" style="display:none">
+  <div class="submit-inner">
+    <button class="submit-btn" id="submit-btn" onclick="submitResponse()">
+      <div class="btn-spinner"></div>
+      <span class="btn-text">✅ إرسال الردود</span>
+    </button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

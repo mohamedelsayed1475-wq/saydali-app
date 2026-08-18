@@ -1,0 +1,97 @@
+name: saydali_pro
+description: تطبيق صيدلي - نظام إدارة متكامل
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # قاعدة البيانات المحلية
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+
+  # State Management
+  provider: ^6.1.2
+
+  # خطوط
+  google_fonts: ^6.2.1
+
+  # HTTP للاتصال بـ Supabase
+  http: ^1.2.2
+
+  # التاريخ
+  intl: ^0.19.0
+
+  # PDF
+  pdf: ^3.10.8
+  printing: ^5.13.1
+
+  # Excel
+  excel: ^4.0.2
+  file_picker: ^8.3.7
+
+  # مشاركة
+  share_plus: ^7.2.2
+  path_provider: ^2.1.4
+
+  # الإشعارات
+  flutter_local_notifications: ^18.0.1
+
+  # الباركود
+  mobile_scanner: ^5.2.3
+  qr_flutter: ^4.1.0
+
+  # رسوم بيانية
+  fl_chart: ^0.68.0
+
+  # تمرير البطاقات
+  flutter_slidable: ^3.1.1
+  url_launcher: ^6.3.2
+
+  # الشات بوت الذكي
+  shared_preferences: ^2.2.2
+
+  # قفل التطبيق
+  crypto: ^3.0.7
+  image_picker: ^1.2.2
+  workmanager: ^0.9.0+3
+  syncfusion_flutter_pdf: ^33.2.5
+  archive: ^3.6.1
+  timezone: ^0.10.1
+  flutter_jailbreak_detection: ^1.10.0
+  flutter_contacts: ^1.1.9+2
+  flutter_secure_storage: ^9.2.4
+  pointycastle: ^3.9.1
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+  flutter_launcher_icons: ^0.13.1
+  sqflite_common_ffi: ^2.3.3+1
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/logo.png"
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+dependency_overrides:
+  flutter_jailbreak_detection:
+    git:
+      url: https://github.com/pdurasie-ecovery/flutter_jailbreak_detection.git
+      ref: add-namespace
+
